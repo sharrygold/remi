@@ -1,0 +1,14 @@
+# macOS / Xcode
+.DS_Store
+build/
+.build/
+DerivedData/
+xcuserdata/
+*.xcuserstate
+*.xcodeproj/project.xcworkspace/xcuserdata/
+# secrets
+.env
+.env.*
+!.env.example
+*.pem
+*.key
