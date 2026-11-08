@@ -4,12 +4,14 @@ cd "$(dirname "$0")/.."
 BIN=build/Build/Products/Debug/Perch.app/Contents/MacOS/Perch
 OUT=docs/phase1
 mkdir -p "$OUT"
+HELPER=$(mktemp -d)/window-region
+swiftc -O Scripts/window-region.swift -o "$HELPER" || exit 1
 shot() {
   local name=$1; shift
   "$BIN" --open --allow-capture "$@" &
   local pid=$!
   sleep 2
-  local region=$(swift Scripts/window-region.swift $pid)
+  local region=$($HELPER $pid)
   echo "$name region=$region alive=$(kill -0 $pid 2>/dev/null && echo yes || echo no)"
   [[ -z "$DRY" ]] && screencapture -x -R "$region" "$OUT/$name.png"
   kill $pid; wait $pid 2>/dev/null
