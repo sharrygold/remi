@@ -52,6 +52,15 @@ struct PanelView: View {
                 spaceChip(name: "All", symbol: "square.grid.2x2", tint: .accentColor, id: nil)
                 ForEach(Sample.spaces) { spaceChip(name: $0.name, symbol: $0.symbol, tint: $0.tint, id: $0.name) }
             }
+            .padding(.trailing, Tokens.Spacing.l)
+        }
+        .mask {
+            // Fades the trailing edge so a cut-off Space reads as scrollable.
+            HStack(spacing: 0) {
+                Color.black
+                LinearGradient(colors: [.black, .clear], startPoint: .leading, endPoint: .trailing)
+                    .frame(width: Tokens.Spacing.l)
+            }
         }
     }
 
@@ -98,7 +107,7 @@ struct PanelView: View {
             .padding(Tokens.Spacing.m)
             .frame(maxWidth: .infinity, alignment: .leading)
         }
-        .background(Color(nsColor: .textBackgroundColor).opacity(reduceTransparency ? 1 : 0.72),
+        .background(Color(nsColor: .textBackgroundColor).opacity(reduceTransparency ? 1 : Tokens.Surface.contentOpacity),
                     in: RoundedRectangle(cornerRadius: Tokens.Radius.large, style: .continuous))
     }
 

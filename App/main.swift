@@ -83,6 +83,8 @@ final class AppController: NSObject, NSApplicationDelegate {
         panel = PanelWindow(contentRect: rect, styleMask: [.borderless, .nonactivatingPanel], backing: .buffered, defer: false)
         configure(panel)
         panel.onCancel = { [weak self] in self?.panel.orderOut(nil) }
+        // The system window shadow draws square dark corners around the glass in dark mode.
+        panel.hasShadow = false
         panel.contentView = FirstMouseHostingView(rootView: PanelView(density: options.density, tab: options.tab))
     }
 
@@ -104,10 +106,11 @@ final class AppController: NSObject, NSApplicationDelegate {
         let anchor = handle.frame
         let size = panel.frame.size
         let gap = Tokens.Size.handleGap
+        let bounds = visible.insetBy(dx: gap, dy: gap)
         let x = anchor.midX > visible.midX ? anchor.minX - size.width - gap : anchor.maxX + gap
         let y = anchor.midY - size.height / 2
-        panel.setFrameOrigin(NSPoint(x: min(max(x, visible.minX), visible.maxX - size.width),
-                                     y: min(max(y, visible.minY), visible.maxY - size.height)))
+        panel.setFrameOrigin(NSPoint(x: min(max(x, bounds.minX), bounds.maxX - size.width),
+                                     y: min(max(y, bounds.minY), bounds.maxY - size.height)))
         panel.makeKeyAndOrderFront(nil)
     }
 }

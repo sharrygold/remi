@@ -23,6 +23,10 @@ enum Tokens {
         static let handleGap: CGFloat = 8
     }
 
+    enum Surface {
+        static let contentOpacity: Double = 0.94
+    }
+
     enum Motion {
         static let quick = Animation.spring(response: 0.28, dampingFraction: 0.82)
     }
