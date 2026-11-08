@@ -1,0 +1,27 @@
+name: Perch
+options:
+  bundleIdPrefix: com.example
+  deploymentTarget:
+    macOS: "26.0"
+settings:
+  base:
+    # The user-facing name lives here. Change it and regenerate to rename the app.
+    APP_DISPLAY_NAME: Perch
+targets:
+  Perch:
+    type: application
+    platform: macOS
+    sources: [App]
+    settings:
+      base:
+        PRODUCT_NAME: $(APP_DISPLAY_NAME)
+        PRODUCT_BUNDLE_IDENTIFIER: com.example.oldapp
+        GENERATE_INFOPLIST_FILE: YES
+        INFOPLIST_KEY_LSUIElement: YES
+        INFOPLIST_KEY_CFBundleDisplayName: $(APP_DISPLAY_NAME)
+        MARKETING_VERSION: "0.1"
+        CURRENT_PROJECT_VERSION: "1"
+        SWIFT_VERSION: "5.0"
+        CODE_SIGN_STYLE: Manual
+        CODE_SIGN_IDENTITY: "-"
+        ENABLE_HARDENED_RUNTIME: NO
