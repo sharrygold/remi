@@ -11,7 +11,9 @@ struct Options {
     private static func value(_ key: String) -> String? {
         CommandLine.arguments.first { $0.hasPrefix("--\(key)=") }?.split(separator: "=").last.map(String.init)
     }
-    let handle = value("handle").flatMap(HandleStyle.init) ?? .pebble
+    let handle = value("handle").flatMap(HandleStyle.init)
+    let widget = value("widget").flatMap(WidgetPrototype.init)
+    let colour = value("colour").flatMap(WidgetColour.init)
     let density = value("density").flatMap(Density.init) ?? .comfortable
     let tab = value("tab").flatMap { name in PanelTab.allCases.first { $0.rawValue.lowercased() == name } } ?? .today
     let appearance = value("appearance")
@@ -73,6 +75,9 @@ final class AppController: NSObject, NSApplicationDelegate {
     private var panel: PanelWindow!
     private var statusItem: NSStatusItem!
     private var outsideClickMonitor: Any?
+    private lazy var debug = WidgetDebug(prototype: options.widget, colour: options.colour)
+    private let widgetMenu = NSMenu()
+    private let colourMenu = NSMenu()
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         if let name = options.appearance {
@@ -82,7 +87,7 @@ final class AppController: NSObject, NSApplicationDelegate {
             buildGallery()
             return
         }
-        buildHandle()
+        if let style = options.handle { buildGalleryHandle(style) } else { buildWidget() }
         buildPanel()
         buildStatusItem()
         if options.open { showPanel() }
@@ -100,20 +105,46 @@ final class AppController: NSObject, NSApplicationDelegate {
         window.sharingType = options.allowCapture ? .readOnly : .none
     }
 
-    private func buildHandle() {
-        let screen = NSScreen.screens[0].visibleFrame
-        let size = options.handle.size
-        let inset = options.handle.attachesToEdge ? 0 : Tokens.Size.handleGap
-        let frame = NSRect(x: screen.maxX - size.width - inset, y: screen.maxY - screen.height / 3 - size.height / 2,
-                           width: size.width, height: size.height)
-        handle = HandleWindow(contentRect: frame, styleMask: [.borderless, .nonactivatingPanel], backing: .buffered, defer: false)
-        configure(handle)
-        let count = Sample.today.count + Sample.overdue.count
-        let hosting = HandleHostingView(rootView: HandleView(style: options.handle, count: count, nextTitle: Sample.today[0].title))
+    private func makeHandleWindow(frame: NSRect) -> HandleWindow {
+        let window = HandleWindow(contentRect: frame, styleMask: [.borderless, .nonactivatingPanel], backing: .buffered, defer: false)
+        configure(window)
+        window.hasShadow = false
+        // Without this, macOS lets clicks fall through wherever the window's pixels read as transparent.
+        window.ignoresMouseEvents = false
+        return window
+    }
+
+    private func widgetFrame() -> NSRect {
+        let visible = NSScreen.screens[0].visibleFrame
+        return NSRect(origin: debug.prototype.origin(in: visible), size: debug.prototype.windowSize)
+    }
+
+    private func buildWidget() {
+        handle = makeHandleWindow(frame: widgetFrame())
+        let hosting = HandleHostingView(rootView: WidgetView(debug: debug, count: Sample.today.count))
         hosting.onClick = { [weak self] in self?.togglePanel() }
         handle.contentView = hosting
-        // Without this, macOS lets clicks fall through wherever the window's pixels read as transparent.
-        handle.ignoresMouseEvents = false
+        handle.orderFrontRegardless()
+    }
+
+    private func applyPrototype() {
+        guard options.handle == nil else { return }
+        handle.setFrame(widgetFrame(), display: true)
+        refreshDebugMenu()
+    }
+
+    /// Reached with --handle=name: the Phase 1 gallery styles.
+    private func buildGalleryHandle(_ style: HandleStyle) {
+        let screen = NSScreen.screens[0].visibleFrame
+        let size = style.size
+        let inset = style.attachesToEdge ? 0 : Tokens.Size.handleGap
+        let frame = NSRect(x: screen.maxX - size.width - inset, y: screen.maxY - screen.height / 3 - size.height / 2,
+                           width: size.width, height: size.height)
+        handle = makeHandleWindow(frame: frame)
+        let count = Sample.today.count + Sample.overdue.count
+        let hosting = HandleHostingView(rootView: HandleView(style: style, count: count, nextTitle: Sample.today[0].title))
+        hosting.onClick = { [weak self] in self?.togglePanel() }
+        handle.contentView = hosting
         handle.orderFrontRegardless()
     }
 
@@ -143,9 +174,47 @@ final class AppController: NSObject, NSApplicationDelegate {
         statusItem = NSStatusBar.system.statusItem(withLength: NSStatusItem.squareLength)
         statusItem.button?.image = NSImage(systemSymbolName: "checklist", accessibilityDescription: AppInfo.displayName)
         let menu = NSMenu()
+        if options.handle == nil {
+            let debugItem = menu.addItem(withTitle: "Debug", action: nil, keyEquivalent: "")
+            let debugMenu = NSMenu()
+            debugMenu.addItem(withTitle: "Widget", action: nil, keyEquivalent: "").submenu = widgetMenu
+            debugMenu.addItem(withTitle: "Colour", action: nil, keyEquivalent: "").submenu = colourMenu
+            debugItem.submenu = debugMenu
+            refreshDebugMenu()
+            menu.addItem(.separator())
+        }
         let quit = menu.addItem(withTitle: "Quit \(AppInfo.displayName)", action: #selector(NSApplication.terminate(_:)), keyEquivalent: "q")
         quit.target = NSApp
         statusItem.menu = menu
+    }
+
+    private func refreshDebugMenu() {
+        widgetMenu.removeAllItems()
+        for prototype in WidgetPrototype.allCases {
+            let item = widgetMenu.addItem(withTitle: prototype.title, action: #selector(chooseWidget(_:)), keyEquivalent: "")
+            item.target = self
+            item.representedObject = prototype.rawValue
+            item.state = prototype == debug.prototype ? .on : .off
+        }
+        colourMenu.removeAllItems()
+        for colour in WidgetColour.allCases {
+            let item = colourMenu.addItem(withTitle: colour.title, action: #selector(chooseColour(_:)), keyEquivalent: "")
+            item.target = self
+            item.representedObject = colour.rawValue
+            item.state = colour == debug.colour ? .on : .off
+        }
+    }
+
+    @objc private func chooseWidget(_ sender: NSMenuItem) {
+        guard let raw = sender.representedObject as? String, let prototype = WidgetPrototype(rawValue: raw) else { return }
+        debug.prototype = prototype
+        applyPrototype()
+    }
+
+    @objc private func chooseColour(_ sender: NSMenuItem) {
+        guard let raw = sender.representedObject as? String, let colour = WidgetColour(rawValue: raw) else { return }
+        debug.colour = colour
+        refreshDebugMenu()
     }
 
     private func togglePanel() {
