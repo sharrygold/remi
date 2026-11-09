@@ -57,14 +57,9 @@ enum WidgetPrototype: String, CaseIterable, Identifiable {
         }
     }
 
-    /// Where the widget starts on a display's visible area, in AppKit coordinates.
-    func origin(in visible: NSRect) -> NSPoint {
-        switch self {
-        case .cord:
-            NSPoint(x: visible.maxX - windowSize.width - 40, y: visible.maxY - windowSize.height)
-        case .pebble, .bird:
-            NSPoint(x: visible.maxX - windowSize.width, y: visible.maxY - visible.height / 3 - windowSize.height / 2)
-        }
+    /// How far idle tucking slides the widget out of view.
+    var tuckDistance: CGFloat {
+        self == .cord ? 90 : windowSize.width * 0.45
     }
 }
 
@@ -86,6 +81,8 @@ final class WidgetDebug: ObservableObject {
     var previewLook: CGPoint?
     /// The pointer in the bird's window coordinates (y down) while it is close enough to notice.
     @Published var birdPointer: CGPoint?
+    @Published var onLeftEdge = false
+    @Published var tucked = false
     let cord = CordSimulation()
 
     init(prototype: WidgetPrototype?, colour: WidgetColour?) {
@@ -99,6 +96,14 @@ final class WidgetDebug: ObservableObject {
 struct WidgetView: View {
     @ObservedObject var debug: WidgetDebug
     let count: Int
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+
+    private var tuckOffset: CGSize {
+        guard debug.tucked else { return .zero }
+        let distance = debug.prototype.tuckDistance
+        if debug.prototype == .cord { return CGSize(width: 0, height: -distance) }
+        return CGSize(width: debug.onLeftEdge ? -distance : distance, height: 0)
+    }
 
     var body: some View {
         Group {
@@ -106,12 +111,16 @@ struct WidgetView: View {
             case .pebble:
                 PebbleWidget(colour: debug.colour, count: count, previewHover: debug.previewHover)
             case .bird:
-                BirdWidget(colour: debug.colour, count: count, target: debug.previewLook ?? debug.birdPointer)
+                BirdWidget(colour: debug.colour, count: count, target: debug.previewLook ?? debug.birdPointer, mirrored: debug.onLeftEdge)
             case .cord:
                 CordWidget(colour: debug.colour, count: count, simulation: debug.cord)
             }
         }
         .frame(width: debug.prototype.windowSize.width, height: debug.prototype.windowSize.height)
+        .offset(tuckOffset)
+        .animation(reduceMotion ? nil : Tokens.Motion.tuck, value: debug.tucked)
+        .frame(width: debug.prototype.windowSize.width, height: debug.prototype.windowSize.height)
+        .clipped()
         .accessibilityElement()
         .accessibilityLabel("\(AppInfo.displayName), \(count) tasks today")
         .accessibilityAddTraits(.isButton)
@@ -195,6 +204,7 @@ struct BirdWidget: View {
     let colour: WidgetColour
     let count: Int
     let target: CGPoint?
+    let mirrored: Bool
     @State private var headAngle = lookingAtEgg
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
@@ -210,7 +220,8 @@ struct BirdWidget: View {
             headAngle = Self.lookingAtEgg
             return
         }
-        var degrees = atan2(target.y - Self.headCenter.y, target.x - Self.headCenter.x) * 180 / .pi
+        let x = mirrored ? 104 - target.x : target.x
+        var degrees = atan2(target.y - Self.headCenter.y, x - Self.headCenter.x) * 180 / .pi
         if degrees > 90 { degrees -= 360 }
         if degrees > 30 || degrees < -225 { return }
         headAngle = degrees
@@ -225,6 +236,7 @@ struct BirdWidget: View {
             BirdBodyShape().fill(colour.fill)
             Ellipse().fill(colour.ink).frame(width: 26, height: 32).offset(x: 59, y: 30)
             Text("\(count)").font(.caption.bold()).monospacedDigit().foregroundStyle(colour.fill)
+                .scaleEffect(x: mirrored ? -1 : 1)
                 .frame(width: 26, height: 32).offset(x: 59, y: 30)
             head
                 .frame(width: 60, height: 60)
@@ -233,6 +245,7 @@ struct BirdWidget: View {
                 .animation(reduceMotion ? nil : (target == nil ? Self.settle : Self.follow), value: headAngle)
         }
         .frame(width: 104, height: 108, alignment: .topLeading)
+        .scaleEffect(x: mirrored ? -1 : 1)
         .compositingGroup()
         .shadow(color: .black.opacity(0.22), radius: 4, y: 2)
         .contentShape(Rectangle())

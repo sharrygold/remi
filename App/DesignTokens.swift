@@ -29,6 +29,9 @@ enum Tokens {
 
     enum Motion {
         static let quick = Animation.spring(response: 0.28, dampingFraction: 0.82)
+        static let tuck = Animation.spring(response: 0.35, dampingFraction: 0.86)
+        static let panel = Animation.spring(response: 0.3, dampingFraction: 0.84)
+        static let panelCloseSeconds = 0.22
     }
 
     enum TextRole {

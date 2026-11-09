@@ -5,13 +5,22 @@ enum PanelTab: String, CaseIterable, Identifiable {
     var id: String { rawValue }
 }
 
+/// Drives the panel growing out of, and shrinking back into, the widget.
+final class PanelPresentation: ObservableObject {
+    @Published var presented = false
+    @Published var pinned = false
+    @Published var anchor = UnitPoint.trailing
+}
+
 struct PanelView: View {
     let density: Density
+    @ObservedObject var presentation: PanelPresentation
     @State var tab: PanelTab
     @State private var capture = ""
     @State private var selectedSpace: String? = nil
     @FocusState private var captureFocused: Bool
     @Environment(\.accessibilityReduceTransparency) private var reduceTransparency
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     private let shape = RoundedRectangle(cornerRadius: Tokens.Radius.panel, style: .continuous)
 
@@ -29,7 +38,16 @@ struct PanelView: View {
             if reduceTransparency { shape.fill(Color(nsColor: .windowBackgroundColor)) }
         }
         .glassEffect(reduceTransparency ? .identity : .regular, in: shape)
+        // A growing mask rather than scaling the content, which knocks the text field out of position.
+        .mask {
+            shape.scaleEffect(presentation.presented || reduceMotion ? 1 : 0.08, anchor: presentation.anchor)
+        }
+        .opacity(presentation.presented ? 1 : 0)
+        .animation(Tokens.Motion.panel, value: presentation.presented)
         .onAppear { captureFocused = true }
+        .onChange(of: presentation.presented) { _, presented in
+            if presented { captureFocused = true }
+        }
     }
 
     private var captureBar: some View {
@@ -191,6 +209,11 @@ struct PanelView: View {
             Label("Search", systemImage: "magnifyingglass")
             Text("⌘F").foregroundStyle(.tertiary)
             Spacer()
+            Button { presentation.pinned.toggle() } label: {
+                Image(systemName: presentation.pinned ? "pin.fill" : "pin")
+            }
+            .buttonStyle(.plain)
+            .accessibilityLabel(presentation.pinned ? "Unpin panel" : "Pin panel open")
             Image(systemName: "gearshape").accessibilityLabel("Settings")
         }
         .font(Tokens.TextRole.detail)

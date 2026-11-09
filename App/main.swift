@@ -1,4 +1,6 @@
 import AppKit
+import Carbon.HIToolbox
+import ServiceManagement
 import SwiftUI
 
 enum AppInfo {
@@ -53,6 +55,8 @@ final class HandleHostingView<Content: View>: NSHostingView<Content> {
     var onPullEnd: (() -> Void)?
     /// Receives the window's new left edge when a cord drag goes sideways.
     var onSlide: ((CGFloat) -> Void)?
+    var onDragEnd: (() -> Void)?
+    var onRightClick: ((NSEvent, NSView) -> Void)?
     private var sliding = false
     private var grabOffset = NSPoint.zero
     private var downMouse = NSPoint.zero
@@ -61,6 +65,10 @@ final class HandleHostingView<Content: View>: NSHostingView<Content> {
 
     override func acceptsFirstMouse(for event: NSEvent?) -> Bool { true }
     override func hitTest(_ point: NSPoint) -> NSView? { frame.contains(point) ? self : nil }
+
+    override func rightMouseDown(with event: NSEvent) {
+        onRightClick?(event, self)
+    }
 
     override func mouseDown(with event: NSEvent) {
         let origin = window?.frame.origin ?? .zero
@@ -87,7 +95,11 @@ final class HandleHostingView<Content: View>: NSHostingView<Content> {
 
     override func mouseUp(with event: NSEvent) {
         if isPullMode() && dragged {
-            if !sliding { onPullEnd?() }
+            if sliding { onDragEnd?() } else { onPullEnd?() }
+            return
+        }
+        if dragged {
+            onDragEnd?()
             return
         }
         if !dragged && event.clickCount == 1 { onClick?() }
@@ -110,6 +122,14 @@ final class AppController: NSObject, NSApplicationDelegate {
     }()
     private let widgetMenu = NSMenu()
     private let colourMenu = NSMenu()
+    private let presentation = PanelPresentation()
+    private var hotKey: HotKey?
+    private var hotKeyRegistered = false
+    private var lastActivity = Date()
+    private var hiddenUntil: Date?
+    private let showNowItem = NSMenuItem(title: "Show Widget Now", action: #selector(showWidgetNow), keyEquivalent: "")
+    private let loginItem = NSMenuItem(title: "Launch at Login", action: #selector(toggleLaunchAtLogin), keyEquivalent: "")
+    private static let idleSecondsBeforeTuck: TimeInterval = 4
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         if let name = options.appearance {
@@ -126,7 +146,13 @@ final class AppController: NSObject, NSApplicationDelegate {
         if let style = options.handle { buildGalleryHandle(style) } else { buildWidget() }
         buildPanel()
         buildStatusItem()
+        registerHotKey()
+        NotificationCenter.default.addObserver(self, selector: #selector(screensChanged),
+                                               name: NSApplication.didChangeScreenParametersNotification, object: nil)
+        Timer.scheduledTimer(withTimeInterval: 1, repeats: true) { [weak self] _ in self?.idleTick() }
         if options.open { showPanel() }
+        if CommandLine.arguments.contains("--preview-tuck") { debug.tucked = true }
+        if CommandLine.arguments.contains("--m1-selftest") { runShellSelfTest() }
     }
 
     private func configure(_ window: NSPanel) {
@@ -150,9 +176,126 @@ final class AppController: NSObject, NSApplicationDelegate {
         return window
     }
 
+    /// Puts the widget back where it last was on the best available display.
     private func widgetFrame() -> NSRect {
-        let visible = NSScreen.screens[0].visibleFrame
-        return NSRect(origin: debug.prototype.origin(in: visible), size: debug.prototype.windowSize)
+        let prototype = debug.prototype
+        let screen = PlacementStore.preferredScreen(for: prototype)
+        var placement = PlacementStore.load(prototype: prototype, on: screen) ?? .standard(for: prototype)
+        if CommandLine.arguments.contains("--preview-left") { placement.onLeftEdge = true }
+        debug.onLeftEdge = placement.onLeftEdge
+        return placement.frame(for: prototype, on: screen.visibleFrame)
+    }
+
+    @objc private func screensChanged() {
+        guard options.handle == nil else { return }
+        handle.setFrame(widgetFrame(), display: true)
+    }
+
+    /// Snaps to the nearest edge with a soft overshoot, then remembers the spot.
+    private func finishDrag() {
+        lastActivity = Date()
+        let prototype = debug.prototype
+        let screen = handle.screen ?? NSScreen.screens[0]
+        let placement = WidgetPlacement.nearest(to: handle.frame, prototype: prototype, on: screen.visibleFrame)
+        PlacementStore.save(placement, prototype: prototype, on: screen)
+        debug.onLeftEdge = placement.onLeftEdge
+        let target = placement.frame(for: prototype, on: screen.visibleFrame)
+        if NSWorkspace.shared.accessibilityDisplayShouldReduceMotion {
+            handle.setFrame(target, display: true)
+            return
+        }
+        NSAnimationContext.runAnimationGroup { context in
+            context.duration = 0.32
+            context.timingFunction = CAMediaTimingFunction(controlPoints: 0.3, 1.25, 0.5, 1)
+            handle.animator().setFrame(target, display: true)
+        }
+    }
+
+    private func idleTick() {
+        if let until = hiddenUntil, Date() >= until { showWidgetNow() }
+        guard options.handle == nil, !debug.tucked, !presentation.presented, NSEvent.pressedMouseButtons == 0,
+              UserDefaults.standard.object(forKey: "autoTuck") as? Bool ?? true,
+              !isPointerNearWidget(), Date().timeIntervalSince(lastActivity) >= Self.idleSecondsBeforeTuck else { return }
+        debug.tucked = true
+    }
+
+    private func isPointerNearWidget() -> Bool {
+        var zone = handle.frame
+        if debug.prototype == .cord {
+            zone = NSRect(x: zone.midX - 40, y: zone.maxY - 170, width: 80, height: 170)
+        }
+        return zone.insetBy(dx: -48, dy: -48).contains(NSEvent.mouseLocation)
+    }
+
+    private func registerHotKey() {
+        let key = HotKey { [weak self] in DispatchQueue.main.async { self?.togglePanel() } }
+        hotKeyRegistered = key.register(keyCode: kVK_Space, modifiers: controlKey)
+        hotKey = key
+    }
+
+    private func showRightClickMenu(event: NSEvent, view: NSView) {
+        let menu = NSMenu()
+        menu.addItem(withTitle: "New Task", action: #selector(openPanelFromMenu), keyEquivalent: "").target = self
+        menu.addItem(withTitle: "Hide for 1 Hour", action: #selector(hideForAnHour), keyEquivalent: "").target = self
+        menu.addItem(.separator())
+        menu.addItem(withTitle: "Quit \(AppInfo.displayName)", action: #selector(NSApplication.terminate(_:)), keyEquivalent: "").target = NSApp
+        NSMenu.popUpContextMenu(menu, with: event, for: view)
+    }
+
+    @objc private func openPanelFromMenu() { showPanel() }
+
+    @objc private func hideForAnHour() {
+        hiddenUntil = Date().addingTimeInterval(3600)
+        handle.orderOut(nil)
+        showNowItem.isHidden = false
+    }
+
+    @objc private func showWidgetNow() {
+        hiddenUntil = nil
+        handle.orderFrontRegardless()
+        showNowItem.isHidden = true
+        lastActivity = Date()
+    }
+
+    @objc private func toggleLaunchAtLogin() {
+        let service = SMAppService.mainApp
+        do {
+            if service.status == .enabled { try service.unregister() } else { try service.register() }
+        } catch {
+            NSLog("Launch at login change failed: \(error.localizedDescription)")
+        }
+        loginItem.state = service.status == .enabled ? .on : .off
+    }
+
+    private func runShellSelfTest() {
+        print("hotkey registered=\(hotKeyRegistered) loginStatus=\(SMAppService.mainApp.status.rawValue)")
+        DispatchQueue.main.asyncAfter(deadline: .now() + 1) { [self] in
+            let start = CACurrentMediaTime()
+            showPanel()
+            print(String(format: "first open ms=%.1f", (CACurrentMediaTime() - start) * 1000))
+            print("immediately isKey=\(panel.isKeyWindow) canBecomeKey=\(panel.canBecomeKey) visible=\(panel.isVisible) frontmost=\(NSWorkspace.shared.frontmostApplication?.bundleIdentifier ?? "nil")")
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.6) { [self] in
+                print("after 0.6s isKey=\(panel.isKeyWindow) responder=\(panel.firstResponder.map { String(describing: type(of: $0)) } ?? "nil") presented=\(presentation.presented)")
+                hidePanel()
+                DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) { [self] in
+                    let reopen = CACurrentMediaTime()
+                    print("closed visible=\(panel.isVisible)")
+                    showPanel()
+                    print(String(format: "second open ms=%.1f isKey=%d", (CACurrentMediaTime() - reopen) * 1000, panel.isKeyWindow))
+                    hidePanel()
+                    let screen = handle.screen ?? NSScreen.screens[0]
+                    let visible = screen.visibleFrame
+                    handle.setFrameOrigin(NSPoint(x: visible.minX + 100, y: visible.minY + 200))
+                    finishDrag()
+                    let stored = PlacementStore.load(prototype: debug.prototype, on: screen)
+                    print("snap left=\(stored?.onLeftEdge ?? false) fraction=\(stored?.fraction ?? -1) mirrored=\(debug.onLeftEdge)")
+                    let restored = widgetFrame()
+                    print("restored minX-visibleMinX=\(restored.minX - visible.minX) onLeft=\(debug.onLeftEdge)")
+                    PlacementStore.clear(prototype: debug.prototype, on: screen)
+                    NSApp.terminate(nil)
+                }
+            }
+        }
     }
 
     private func buildWidget() {
@@ -169,6 +312,8 @@ final class AppController: NSObject, NSApplicationDelegate {
             self.togglePanel()
         }
         hosting.onSlide = { [weak self] left in self?.slideCord(toLeft: left) }
+        hosting.onDragEnd = { [weak self] in self?.finishDrag() }
+        hosting.onRightClick = { [weak self] event, view in self?.showRightClickMenu(event: event, view: view) }
         handle.contentView = hosting
         handle.acceptsMouseMovedEvents = true
         installCordHitTesting()
@@ -191,6 +336,10 @@ final class AppController: NSObject, NSApplicationDelegate {
 
     private func pointerMoved(_ event: NSEvent) {
         updateCordHitTesting()
+        if isPointerNearWidget() {
+            lastActivity = Date()
+            if debug.tucked { debug.tucked = false }
+        }
         let mouse = NSEvent.mouseLocation
         let point = CGPoint(x: mouse.x - handle.frame.minX, y: handle.frame.maxY - mouse.y)
         switch debug.prototype {
@@ -227,7 +376,8 @@ final class AppController: NSObject, NSApplicationDelegate {
         }
         guard NSEvent.pressedMouseButtons == 0 else { return }
         let mouse = NSEvent.mouseLocation
-        let point = CGPoint(x: mouse.x - handle.frame.minX, y: handle.frame.maxY - mouse.y)
+        let lifted = debug.tucked ? debug.prototype.tuckDistance : 0
+        let point = CGPoint(x: mouse.x - handle.frame.minX, y: handle.frame.maxY - mouse.y + lifted)
         handle.ignoresMouseEvents = !debug.cord.isNear(point)
     }
 
@@ -282,7 +432,13 @@ final class AppController: NSObject, NSApplicationDelegate {
         panel.onCancel = { [weak self] in self?.hidePanel() }
         // The system window shadow draws square dark corners around the glass in dark mode.
         panel.hasShadow = false
-        panel.contentView = FirstMouseHostingView(rootView: PanelView(density: options.density, tab: options.tab))
+        panel.contentView = FirstMouseHostingView(rootView: PanelView(density: options.density, presentation: presentation, tab: options.tab))
+        // Lays the panel out once while invisible, so the first real open is as quick as later ones.
+        panel.alphaValue = 0
+        panel.orderFrontRegardless()
+        panel.displayIfNeeded()
+        panel.orderOut(nil)
+        panel.alphaValue = 1
     }
 
     private func buildStatusItem() {
@@ -298,6 +454,13 @@ final class AppController: NSObject, NSApplicationDelegate {
             refreshDebugMenu()
             menu.addItem(.separator())
         }
+        showNowItem.target = self
+        showNowItem.isHidden = true
+        menu.addItem(showNowItem)
+        loginItem.target = self
+        loginItem.state = SMAppService.mainApp.status == .enabled ? .on : .off
+        menu.addItem(loginItem)
+        menu.addItem(.separator())
         let quit = menu.addItem(withTitle: "Quit \(AppInfo.displayName)", action: #selector(NSApplication.terminate(_:)), keyEquivalent: "q")
         quit.target = NSApp
         statusItem.menu = menu
@@ -371,11 +534,17 @@ final class AppController: NSObject, NSApplicationDelegate {
     }
 
     private func togglePanel() {
-        panel.isVisible ? hidePanel() : showPanel()
+        presentation.presented ? hidePanel() : showPanel()
     }
 
     private func hidePanel() {
-        panel.orderOut(nil)
+        lastActivity = Date()
+        presentation.presented = false
+        presentation.pinned = false
+        DispatchQueue.main.asyncAfter(deadline: .now() + Tokens.Motion.panelCloseSeconds) { [weak self] in
+            guard let self, !self.presentation.presented else { return }
+            self.panel.orderOut(nil)
+        }
         if let monitor = outsideClickMonitor {
             NSEvent.removeMonitor(monitor)
             outsideClickMonitor = nil
@@ -383,6 +552,8 @@ final class AppController: NSObject, NSApplicationDelegate {
     }
 
     private func showPanel() {
+        debug.tucked = false
+        lastActivity = Date()
         let visible = (handle.screen ?? NSScreen.screens[0]).visibleFrame
         let anchor = handle.frame
         let size = panel.frame.size
@@ -392,9 +563,14 @@ final class AppController: NSObject, NSApplicationDelegate {
         let y = anchor.midY - size.height / 2
         panel.setFrameOrigin(NSPoint(x: min(max(x, bounds.minX), bounds.maxX - size.width),
                                      y: min(max(y, bounds.minY), bounds.maxY - size.height)))
+        let origin = panel.frame.origin
+        presentation.anchor = UnitPoint(x: min(max((anchor.midX - origin.x) / size.width, 0), 1),
+                                        y: min(max(1 - (anchor.midY - origin.y) / size.height, 0), 1))
         panel.makeKeyAndOrderFront(nil)
+        presentation.presented = true
         // Global monitors only see clicks in other apps, so the handle can still toggle the panel.
         outsideClickMonitor = outsideClickMonitor ?? NSEvent.addGlobalMonitorForEvents(matching: [.leftMouseDown, .rightMouseDown]) { [weak self] _ in
+            guard self?.presentation.pinned == false else { return }
             self?.hidePanel()
         }
     }
