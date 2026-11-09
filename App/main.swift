@@ -14,6 +14,7 @@ struct Options {
     let handle = value("handle").flatMap(HandleStyle.init)
     let widget = value("widget").flatMap(WidgetPrototype.init)
     let colour = value("colour").flatMap(WidgetColour.init)
+    let previewPull = value("preview-pull").flatMap { Double($0) }.map { CGFloat($0) }
     let previewLook: CGPoint? = value("preview-look").flatMap { text in
         let parts = text.split(separator: ",").compactMap { Double($0) }
         return parts.count == 2 ? CGPoint(x: parts[0], y: parts[1]) : nil
@@ -46,6 +47,10 @@ final class FirstMouseHostingView<Content: View>: NSHostingView<Content> {
 /// or on how see-through the glass is at the pointer.
 final class HandleHostingView<Content: View>: NSHostingView<Content> {
     var onClick: (() -> Void)?
+    /// When this returns true, dragging pulls instead of moving the window.
+    var isPullMode: () -> Bool = { false }
+    var onPull: ((CGFloat, CGFloat) -> Void)?
+    var onPullEnd: (() -> Void)?
     private var grabOffset = NSPoint.zero
     private var downMouse = NSPoint.zero
     private var dragged = false
@@ -65,10 +70,18 @@ final class HandleHostingView<Content: View>: NSHostingView<Content> {
         let mouse = NSEvent.mouseLocation
         if !dragged && hypot(mouse.x - downMouse.x, mouse.y - downMouse.y) < dragThreshold { return }
         dragged = true
+        if isPullMode() {
+            onPull?(mouse.x - downMouse.x, downMouse.y - mouse.y)
+            return
+        }
         window?.setFrameOrigin(NSPoint(x: mouse.x - grabOffset.x, y: mouse.y - grabOffset.y))
     }
 
     override func mouseUp(with event: NSEvent) {
+        if isPullMode() && dragged {
+            onPullEnd?()
+            return
+        }
         if !dragged && event.clickCount == 1 { onClick?() }
     }
 }
@@ -91,6 +104,10 @@ final class AppController: NSObject, NSApplicationDelegate {
     func applicationDidFinishLaunching(_ notification: Notification) {
         if let name = options.appearance {
             NSApp.appearance = NSAppearance(named: name == "dark" ? .darkAqua : .aqua)
+        }
+        if CommandLine.arguments.contains("--cord-selftest") {
+            runCordSelfTest()
+            exit(0)
         }
         if options.gallery {
             buildGallery()
@@ -131,9 +148,22 @@ final class AppController: NSObject, NSApplicationDelegate {
     private func buildWidget() {
         handle = makeHandleWindow(frame: widgetFrame())
         let hosting = HandleHostingView(rootView: WidgetView(debug: debug, count: Sample.today.count))
-        hosting.onClick = { [weak self] in self?.togglePanel() }
+        hosting.onClick = { [weak self] in
+            guard let self else { return }
+            if self.debug.prototype == .cord { self.debug.cord.nudge() } else { self.togglePanel() }
+        }
+        hosting.isPullMode = { [weak self] in self?.debug.prototype == .cord }
+        hosting.onPull = { [weak self] dx, dy in self?.debug.cord.pull(dx: dx, dy: dy) }
+        hosting.onPullEnd = { [weak self] in
+            guard let self, self.debug.cord.release() else { return }
+            self.togglePanel()
+        }
         handle.contentView = hosting
         handle.orderFrontRegardless()
+        if let pull = options.previewPull {
+            debug.cord.configure(knots: Sample.today.count)
+            debug.cord.pull(dx: 0, dy: pull)
+        }
     }
 
     private func applyPrototype() {
@@ -224,6 +254,27 @@ final class AppController: NSObject, NSApplicationDelegate {
         guard let raw = sender.representedObject as? String, let colour = WidgetColour(rawValue: raw) else { return }
         debug.colour = colour
         refreshDebugMenu()
+    }
+
+    private func runCordSelfTest() {
+        let cord = CordSimulation()
+        cord.windEnabled = false
+        cord.configure(knots: 4)
+        func run(_ frames: Int) { (0..<frames).forEach { _ in cord.stepOnce() } }
+        run(240)
+        print("rest tip y=\(cord.tip.y) rope=\(cord.length) knots=\(cord.knotIndices(count: 4))")
+        cord.pull(dx: 0, dy: 10)
+        run(60)
+        print("short pull tip y=\(cord.tip.y) opens=\(cord.release())")
+        run(240)
+        cord.pull(dx: 8, dy: 40)
+        run(60)
+        print("long pull tip x=\(cord.tip.x) y=\(cord.tip.y) opens=\(cord.release())")
+        run(300)
+        print("after release tip x=\(cord.tip.x) y=\(cord.tip.y)")
+        cord.pull(dx: 0, dy: 500)
+        run(60)
+        print("over pull tip y=\(cord.tip.y) window=240")
     }
 
     private func togglePanel() {

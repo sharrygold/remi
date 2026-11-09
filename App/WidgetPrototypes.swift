@@ -37,7 +37,7 @@ enum WidgetColour: String, CaseIterable, Identifiable {
 
 /// The widget designs under comparison, switched live from the debug menu.
 enum WidgetPrototype: String, CaseIterable, Identifiable {
-    case pebble, bird
+    case pebble, bird, cord
 
     var id: String { rawValue }
 
@@ -45,6 +45,7 @@ enum WidgetPrototype: String, CaseIterable, Identifiable {
         switch self {
         case .pebble: "Pebble"
         case .bird: "Sankofa bird"
+        case .cord: "Knotted cord"
         }
     }
 
@@ -52,12 +53,15 @@ enum WidgetPrototype: String, CaseIterable, Identifiable {
         switch self {
         case .pebble: CGSize(width: 96, height: 88)
         case .bird: CGSize(width: 104, height: 108)
+        case .cord: CGSize(width: 64, height: 240)
         }
     }
 
     /// Where the widget starts on a display's visible area, in AppKit coordinates.
     func origin(in visible: NSRect) -> NSPoint {
         switch self {
+        case .cord:
+            NSPoint(x: visible.maxX - windowSize.width - 72, y: visible.maxY - windowSize.height)
         case .pebble, .bird:
             NSPoint(x: visible.maxX - windowSize.width, y: visible.maxY - visible.height / 3 - windowSize.height / 2)
         }
@@ -80,6 +84,7 @@ final class WidgetDebug: ObservableObject {
     var previewHover = false
     /// Set by --preview-look=x,y so the bird's head turn can be captured without a mouse.
     var previewLook: CGPoint?
+    let cord = CordSimulation()
 
     init(prototype: WidgetPrototype?, colour: WidgetColour?) {
         let defaults = UserDefaults.standard
@@ -100,6 +105,8 @@ struct WidgetView: View {
                 PebbleWidget(colour: debug.colour, count: count, previewHover: debug.previewHover)
             case .bird:
                 BirdWidget(colour: debug.colour, count: count, previewLook: debug.previewLook)
+            case .cord:
+                CordWidget(colour: debug.colour, count: count, simulation: debug.cord)
             }
         }
         .frame(width: debug.prototype.windowSize.width, height: debug.prototype.windowSize.height)
@@ -233,5 +240,131 @@ struct BirdWidget: View {
             BirdHeadShape().fill(colour.fill)
             Circle().fill(colour.ink).frame(width: 5, height: 5).offset(x: 5, y: -4)
         }
+    }
+}
+
+/// A verlet rope pinned at the top. Pulling stretches it; letting go springs it back.
+final class CordSimulation {
+    static let width: CGFloat = 64
+    static let pullToOpen: CGFloat = 28
+    private static let segments = 17
+    private static let maxPull: CGFloat = 50
+    private static let step: Double = 1.0 / 60
+    private static let gravity: CGFloat = 900
+
+    private(set) var points: [CGPoint] = []
+    private var previous: [CGPoint] = []
+    private(set) var length: CGFloat = 0
+    private var target: CGPoint?
+    private var lastDate: Date?
+    private var leftover: Double = 0
+    private var time: Double = 0
+    var windEnabled = true
+
+    var pin: CGPoint { CGPoint(x: Self.width / 2, y: 0) }
+    var tip: CGPoint { points.last ?? pin }
+
+    func configure(knots: Int) {
+        let newLength = 56 + CGFloat(knots) * min(24, 114 / CGFloat(max(knots, 1)))
+        guard newLength != length else { return }
+        length = newLength
+        points = (0...Self.segments).map { CGPoint(x: pin.x, y: length * CGFloat($0) / CGFloat(Self.segments)) }
+        previous = points
+    }
+
+    /// Follows the pointer by its travel since the press; y grows downward.
+    func pull(dx: CGFloat, dy: CGFloat) {
+        target = CGPoint(x: min(max(pin.x + dx, 10), Self.width - 10),
+                         y: length + min(max(dy, 0), Self.maxPull))
+    }
+
+    /// Lets go. Returns true when the pull went far enough to open the panel.
+    @discardableResult
+    func release() -> Bool {
+        defer { target = nil }
+        guard let target else { return false }
+        return target.y - length >= Self.pullToOpen
+    }
+
+    func nudge(_ amount: CGFloat = 5) {
+        guard let last = points.indices.last else { return }
+        points[last].x += amount
+    }
+
+    func advance(to date: Date) {
+        defer { lastDate = date }
+        guard let lastDate else { return }
+        leftover += min(date.timeIntervalSince(lastDate), 0.1)
+        while leftover >= Self.step {
+            stepOnce()
+            leftover -= Self.step
+        }
+    }
+
+    func stepOnce() {
+        time += Self.step
+        let dt2 = CGFloat(Self.step * Self.step)
+        let wind = windEnabled ? CGFloat(sin(time * 1.1) * 40 + sin(time * 0.37) * 20) : 0
+        for index in points.indices.dropFirst() {
+            let velocity = CGPoint(x: (points[index].x - previous[index].x) * 0.985,
+                                   y: (points[index].y - previous[index].y) * 0.985)
+            previous[index] = points[index]
+            points[index].x += velocity.x + wind * dt2
+            points[index].y += velocity.y + Self.gravity * dt2
+        }
+        let span = target.map { max(length, hypot($0.x - pin.x, $0.y - pin.y)) } ?? length
+        let segment = span / CGFloat(Self.segments)
+        for _ in 0..<24 {
+            points[0] = pin
+            if let target { points[Self.segments] = target }
+            for index in 0..<Self.segments {
+                let a = points[index], b = points[index + 1]
+                let distance = max(hypot(b.x - a.x, b.y - a.y), 0.0001)
+                let correction = (distance - segment) / distance / 2
+                let shift = CGPoint(x: (b.x - a.x) * correction, y: (b.y - a.y) * correction)
+                if index > 0 { points[index] = CGPoint(x: a.x + shift.x, y: a.y + shift.y) }
+                if index + 1 < Self.segments || target == nil {
+                    let doubled: CGFloat = index == 0 ? 2 : 1
+                    points[index + 1] = CGPoint(x: b.x - shift.x * doubled, y: b.y - shift.y * doubled)
+                }
+            }
+        }
+    }
+
+    func knotIndices(count: Int) -> [Int] {
+        guard count > 0 else { return [] }
+        let first = Double(Self.segments) * 0.3
+        guard count > 1 else { return [Self.segments] }
+        return (0..<count).map { Int((first + (Double(Self.segments) - first) * Double($0) / Double(count - 1)).rounded()) }
+    }
+}
+
+/// One knot per task due today. Sways on its own and opens the panel when pulled.
+struct CordWidget: View {
+    let colour: WidgetColour
+    let count: Int
+    let simulation: CordSimulation
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+
+    var body: some View {
+        TimelineView(.animation) { context in
+            Canvas { canvas, _ in
+                simulation.windEnabled = !reduceMotion
+                simulation.advance(to: context.date)
+                let points = simulation.points
+                guard let first = points.first else { return }
+                canvas.addFilter(.shadow(color: .black.opacity(0.25), radius: 3, y: 2))
+                var rope = Path()
+                rope.move(to: first)
+                points.dropFirst().forEach { rope.addLine(to: $0) }
+                canvas.stroke(rope, with: .color(colour.fill), style: StrokeStyle(lineWidth: 3.5, lineCap: .round, lineJoin: .round))
+                for index in simulation.knotIndices(count: count) {
+                    let point = points[index]
+                    canvas.fill(Path(ellipseIn: CGRect(x: point.x - 7, y: point.y - 7, width: 14, height: 14)), with: .color(colour.fill))
+                }
+            }
+        }
+        .onAppear { simulation.configure(knots: count) }
+        .onHover { if $0 { simulation.nudge() } }
     }
 }
