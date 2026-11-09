@@ -17,6 +17,7 @@ struct Options {
     let appearance = value("appearance")
     let open = CommandLine.arguments.contains("--open")
     let allowCapture = CommandLine.arguments.contains("--allow-capture")
+    let gallery = CommandLine.arguments.contains("--gallery")
 }
 
 final class HandleWindow: NSPanel {
@@ -45,6 +46,10 @@ final class AppController: NSObject, NSApplicationDelegate {
         if let name = options.appearance {
             NSApp.appearance = NSAppearance(named: name == "dark" ? .darkAqua : .aqua)
         }
+        if options.gallery {
+            buildGallery()
+            return
+        }
         buildHandle()
         buildPanel()
         buildStatusItem()
@@ -65,17 +70,29 @@ final class AppController: NSObject, NSApplicationDelegate {
 
     private func buildHandle() {
         let screen = NSScreen.screens[0].visibleFrame
-        let size = options.handle == .edgeTab ? Tokens.Size.edgeTab : Tokens.Size.tile
-        let inset = options.handle == .edgeTab ? 0 : Tokens.Size.handleGap
+        let size = options.handle.size
+        let inset = options.handle.attachesToEdge ? 0 : Tokens.Size.handleGap
         let frame = NSRect(x: screen.maxX - size.width - inset, y: screen.maxY - screen.height / 3 - size.height / 2,
                            width: size.width, height: size.height)
         handle = HandleWindow(contentRect: frame, styleMask: [.borderless, .nonactivatingPanel], backing: .buffered, defer: false)
         configure(handle)
         let count = Sample.today.count + Sample.overdue.count
-        handle.contentView = FirstMouseHostingView(rootView: HandleView(style: options.handle, count: count) { [weak self] in
+        handle.contentView = FirstMouseHostingView(rootView: HandleView(style: options.handle, count: count, nextTitle: Sample.today[0].title) { [weak self] in
             self?.togglePanel()
         })
         handle.orderFrontRegardless()
+    }
+
+    private func buildGallery() {
+        let screen = NSScreen.screens[0].visibleFrame
+        let size = NSSize(width: 1140, height: 520)
+        let frame = NSRect(x: screen.midX - size.width / 2, y: screen.midY - size.height / 2, width: size.width, height: size.height)
+        let window = HandleWindow(contentRect: frame, styleMask: [.borderless, .nonactivatingPanel], backing: .buffered, defer: false)
+        configure(window)
+        window.hasShadow = false
+        window.contentView = FirstMouseHostingView(rootView: HandleGalleryView())
+        window.orderFrontRegardless()
+        handle = window
     }
 
     private func buildPanel() {
