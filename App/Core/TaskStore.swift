@@ -2,8 +2,7 @@ import Combine
 import Foundation
 import SwiftData
 
-/// The one place tasks and Spaces are read and changed. The UI only talks to this.
-@MainActor
+/// The one place tasks and Spaces are read and changed. The UI only talks to this, on the main thread.
 final class TaskStore: ObservableObject {
     static let lingerSeconds: TimeInterval = 1.2
     private static let symbols = ["folder", "star", "leaf", "flag", "bolt", "heart"]

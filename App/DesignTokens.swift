@@ -42,6 +42,16 @@ enum Tokens {
     }
 
     enum Tint {
+        static func named(_ name: String) -> Color {
+            switch name {
+            case "clients": clients
+            case "personal": personal
+            case "learning": learning
+            case "homeReno": homeReno
+            default: work
+            }
+        }
+
         static let clients = Color(red: 0.36, green: 0.58, blue: 0.42)
         static let work = Color(red: 0.36, green: 0.50, blue: 0.70)
         static let personal = Color(red: 0.72, green: 0.52, blue: 0.38)

@@ -95,8 +95,10 @@ final class WidgetDebug: ObservableObject {
 /// Renders whichever prototype the debug menu has selected. Solid fills only; glass stays on the panel.
 struct WidgetView: View {
     @ObservedObject var debug: WidgetDebug
-    let count: Int
+    @ObservedObject var store: TaskStore
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
+
+    private var count: Int { store.todayOpenCount() }
 
     private var tuckOffset: CGSize {
         guard debug.tucked else { return .zero }

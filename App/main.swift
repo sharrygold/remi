@@ -112,7 +112,7 @@ final class AppController: NSObject, NSApplicationDelegate {
     private var panel: PanelWindow!
     private var statusItem: NSStatusItem!
     private var outsideClickMonitor: Any?
-    private static let birdNoticeRadius: CGFloat = 260
+    private static let birdNoticeRadius: CGFloat = 130
     private var birdLookAway: DispatchWorkItem?
     private lazy var debug: WidgetDebug = {
         let debug = WidgetDebug(prototype: options.widget, colour: options.colour)
@@ -123,6 +123,13 @@ final class AppController: NSObject, NSApplicationDelegate {
     private let widgetMenu = NSMenu()
     private let colourMenu = NSMenu()
     private let presentation = PanelPresentation()
+    private let capture = CaptureText()
+    private lazy var store: TaskStore = {
+        let usesMemory = CommandLine.arguments.contains("--demo-data") || CommandLine.arguments.contains("--m2-selftest")
+        let store = TaskStore(directory: usesMemory ? nil : TaskStore.defaultDirectory)
+        if CommandLine.arguments.contains("--demo-data") { seedDemo(store) }
+        return store
+    }()
     private var hotKey: HotKey?
     private var hotKeyRegistered = false
     private var lastActivity = Date()
@@ -147,12 +154,16 @@ final class AppController: NSObject, NSApplicationDelegate {
         buildPanel()
         buildStatusItem()
         registerHotKey()
+        installEditMenu()
+        installUndoKey()
+        NotificationCenter.default.addObserver(self, selector: #selector(dayChanged), name: .NSCalendarDayChanged, object: nil)
         NotificationCenter.default.addObserver(self, selector: #selector(screensChanged),
                                                name: NSApplication.didChangeScreenParametersNotification, object: nil)
         Timer.scheduledTimer(withTimeInterval: 1, repeats: true) { [weak self] _ in self?.idleTick() }
         if options.open { showPanel() }
         if CommandLine.arguments.contains("--preview-tuck") { debug.tucked = true }
         if CommandLine.arguments.contains("--m1-selftest") { runShellSelfTest() }
+        if CommandLine.arguments.contains("--m2-selftest") { runCaptureSelfTest() }
     }
 
     private func configure(_ window: NSPanel) {
@@ -225,6 +236,81 @@ final class AppController: NSObject, NSApplicationDelegate {
             zone = NSRect(x: zone.midX - 40, y: zone.maxY - 170, width: 80, height: 170)
         }
         return zone.insetBy(dx: -48, dy: -48).contains(NSEvent.mouseLocation)
+    }
+
+    /// Without a main menu, ⌘C, ⌘V and friends do nothing in text fields.
+    private func installEditMenu() {
+        let main = NSMenu()
+        let editItem = main.addItem(withTitle: "Edit", action: nil, keyEquivalent: "")
+        let edit = NSMenu(title: "Edit")
+        edit.addItem(withTitle: "Undo", action: Selector(("undo:")), keyEquivalent: "z")
+        edit.addItem(withTitle: "Redo", action: Selector(("redo:")), keyEquivalent: "Z")
+        edit.addItem(withTitle: "Cut", action: #selector(NSText.cut(_:)), keyEquivalent: "x")
+        edit.addItem(withTitle: "Copy", action: #selector(NSText.copy(_:)), keyEquivalent: "c")
+        edit.addItem(withTitle: "Paste", action: #selector(NSText.paste(_:)), keyEquivalent: "v")
+        edit.addItem(withTitle: "Select All", action: #selector(NSText.selectAll(_:)), keyEquivalent: "a")
+        editItem.submenu = edit
+        NSApp.mainMenu = main
+    }
+
+    /// With the capture field empty, ⌘Z undoes the last task change; while typing it edits the text.
+    private func installUndoKey() {
+        NSEvent.addLocalMonitorForEvents(matching: .keyDown) { [weak self] event in
+            guard let self, event.modifierFlags.intersection(.deviceIndependentFlagsMask) == .command,
+                  event.charactersIgnoringModifiers == "z", self.panel.isKeyWindow,
+                  self.capture.text.isEmpty, self.store.canUndo else { return event }
+            self.store.undo()
+            return nil
+        }
+    }
+
+    @objc private func dayChanged() {
+        DispatchQueue.main.async { self.store.reload() }
+    }
+
+    private func seedDemo(_ store: TaskStore) {
+        let names = store.spaces.map(\.name)
+        for line in ["Book dentist appointment #personal today", "Prepare sprint review notes #work today",
+                     "Send design dashboard invoice #clients today", "Record Loom intro for invoice #clients today !",
+                     "Tidy the shared drive #clients fri", "Finish SwiftUI layout module #learning tomorrow"] {
+            store.add(CaptureParser.parse(line, spaceNames: names), currentSpace: nil)
+        }
+        let yesterday = Calendar.current.date(byAdding: .day, value: -1, to: Calendar.current.startOfDay(for: Date()))
+        store.add(ParsedCapture(title: "Reply to Dana about the project timeline", space: .existing("Work"), due: yesterday), currentSpace: nil)
+    }
+
+    private func postKey(_ characters: String, code: UInt16, flags: NSEvent.ModifierFlags = []) {
+        guard let event = NSEvent.keyEvent(with: .keyDown, location: .zero, modifierFlags: flags, timestamp: ProcessInfo.processInfo.systemUptime,
+                                           windowNumber: panel.windowNumber, context: nil, characters: characters,
+                                           charactersIgnoringModifiers: characters, isARepeat: false, keyCode: code) else { return }
+        NSApp.postEvent(event, atStart: false)
+    }
+
+    /// Types into the real capture field and presses real keys through the app's event loop.
+    private func runCaptureSelfTest() {
+        func describe() -> String {
+            store.tasks.map { "\($0.title)|\($0.space?.name ?? "-")|due=\($0.dueDate != nil)|important=\($0.isImportant)" }.joined(separator: "; ")
+        }
+        DispatchQueue.main.asyncAfter(deadline: .now() + 1) { [self] in
+            showPanel()
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) { [self] in
+                let editor = panel.firstResponder as? NSTextView
+                print("field focused=\(editor != nil) widgetCount=\(store.todayOpenCount())")
+                editor?.insertText("Send invoice today #newclient !", replacementRange: NSRange(location: NSNotFound, length: 0))
+                DispatchQueue.main.asyncAfter(deadline: .now() + 0.2) { [self] in
+                    print("typed binding=\(capture.text)")
+                    postKey("\r", code: 36)
+                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.4) { [self] in
+                        print("after Return: \(describe()) spaces=\(store.spaces.count) widgetCount=\(store.todayOpenCount()) field=[\(capture.text)]")
+                        postKey("z", code: 6, flags: .command)
+                        DispatchQueue.main.asyncAfter(deadline: .now() + 0.4) { [self] in
+                            print("after Cmd-Z: tasks=\(store.tasks.count) spaces=\(store.spaces.count)")
+                            NSApp.terminate(nil)
+                        }
+                    }
+                }
+            }
+        }
     }
 
     private func registerHotKey() {
@@ -300,7 +386,7 @@ final class AppController: NSObject, NSApplicationDelegate {
 
     private func buildWidget() {
         handle = makeHandleWindow(frame: widgetFrame())
-        let hosting = HandleHostingView(rootView: WidgetView(debug: debug, count: Sample.today.count))
+        let hosting = HandleHostingView(rootView: WidgetView(debug: debug, store: store))
         hosting.onClick = { [weak self] in
             guard let self else { return }
             if self.debug.prototype == .cord { self.debug.cord.nudge() } else { self.togglePanel() }
@@ -432,7 +518,7 @@ final class AppController: NSObject, NSApplicationDelegate {
         panel.onCancel = { [weak self] in self?.hidePanel() }
         // The system window shadow draws square dark corners around the glass in dark mode.
         panel.hasShadow = false
-        panel.contentView = FirstMouseHostingView(rootView: PanelView(density: options.density, presentation: presentation, tab: options.tab))
+        panel.contentView = FirstMouseHostingView(rootView: PanelView(density: options.density, presentation: presentation, capture: capture, store: store, tab: options.tab))
         // Lays the panel out once while invisible, so the first real open is as quick as later ones.
         panel.alphaValue = 0
         panel.orderFrontRegardless()

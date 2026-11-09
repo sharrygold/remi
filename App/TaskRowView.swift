@@ -1,0 +1,110 @@
+import SwiftUI
+
+extension Space {
+    var tint: Color { Tokens.Tint.named(tintName) }
+}
+
+enum DueLabel {
+    static func text(for date: Date, now: Date = Date(), calendar: Calendar = .current) -> String {
+        if calendar.isDate(date, inSameDayAs: now) { return "Today" }
+        let today = calendar.startOfDay(for: now)
+        let days = calendar.dateComponents([.day], from: today, to: calendar.startOfDay(for: date)).day ?? 0
+        if days == 1 { return "Tomorrow" }
+        if days == -1 { return "Yesterday" }
+        return date.formatted(.dateTime.weekday(.abbreviated).day().month(.abbreviated))
+    }
+}
+
+struct TaskRowView: View {
+    @ObservedObject var store: TaskStore
+    let task: TaskItem
+    let density: Density
+    @State private var editing = false
+    @State private var draft = ""
+    @FocusState private var fieldFocused: Bool
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+
+    var body: some View {
+        HStack(spacing: Tokens.Spacing.s) {
+            Button(action: toggle) {
+                Image(systemName: task.isCompleted ? "checkmark.circle.fill" : "circle")
+                    .foregroundStyle(task.isCompleted ? AnyShapeStyle(task.space?.tint ?? .accentColor) : AnyShapeStyle(.tertiary))
+                    .contentTransition(.symbolEffect(.replace))
+            }
+            .buttonStyle(.plain)
+            .accessibilityLabel(task.isCompleted ? "Mark \(task.title) as not done" : "Mark \(task.title) as done")
+
+            title
+
+            if task.isImportant {
+                Image(systemName: "exclamationmark").font(.caption.bold()).foregroundStyle(.secondary)
+                    .accessibilityLabel("Important")
+            }
+            Spacer(minLength: Tokens.Spacing.s)
+            if let due = task.dueDate {
+                Text(DueLabel.text(for: due)).font(Tokens.TextRole.detail).foregroundStyle(.secondary)
+            }
+        }
+        .padding(.vertical, density.rowPadding)
+        .contentShape(Rectangle())
+        .contextMenu { menu }
+    }
+
+    @ViewBuilder private var title: some View {
+        if editing {
+            TextField("Task", text: $draft)
+                .textFieldStyle(.plain)
+                .font(Tokens.TextRole.row)
+                .focused($fieldFocused)
+                .onSubmit(finishEditing)
+                .onChange(of: fieldFocused) { _, focused in
+                    if !focused { finishEditing() }
+                }
+                .onAppear { fieldFocused = true }
+        } else {
+            Text(task.title)
+                .font(Tokens.TextRole.row)
+                .lineLimit(1)
+                .strikethrough(task.isCompleted)
+                .foregroundStyle(task.isCompleted ? .secondary : .primary)
+                .onTapGesture {
+                    draft = task.title
+                    editing = true
+                }
+                .accessibilityAddTraits(.isButton)
+                .accessibilityHint("Edit title")
+        }
+    }
+
+    @ViewBuilder private var menu: some View {
+        Menu("Move to") {
+            ForEach(store.spaces) { space in
+                Button(space.name) { store.move(task, to: space) }.disabled(space.id == task.space?.id)
+            }
+        }
+        Button(task.isImportant ? "Remove Important" : "Mark Important") { store.setImportant(task, !task.isImportant) }
+        Divider()
+        Button("Due Today") { store.setDue(task, Calendar.current.startOfDay(for: Date())) }
+        Button("Due Tomorrow") {
+            let today = Calendar.current.startOfDay(for: Date())
+            store.setDue(task, Calendar.current.date(byAdding: .day, value: 1, to: today))
+        }
+        Button("No Due Date") { store.setDue(task, nil) }.disabled(task.dueDate == nil)
+        Divider()
+        Button("Delete", role: .destructive) { store.delete(task) }
+    }
+
+    private func toggle() {
+        withAnimation(reduceMotion ? nil : Tokens.Motion.quick) { store.toggleCompleted(task) }
+        // Lets the tick be seen, then fades the row into Done.
+        DispatchQueue.main.asyncAfter(deadline: .now() + TaskStore.lingerSeconds + 0.05) {
+            withAnimation(reduceMotion ? nil : Tokens.Motion.quick) { store.reload() }
+        }
+    }
+
+    private func finishEditing() {
+        guard editing else { return }
+        editing = false
+        store.rename(task, to: draft)
+    }
+}
