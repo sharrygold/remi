@@ -14,6 +14,10 @@ struct Options {
     let handle = value("handle").flatMap(HandleStyle.init)
     let widget = value("widget").flatMap(WidgetPrototype.init)
     let colour = value("colour").flatMap(WidgetColour.init)
+    let previewLook: CGPoint? = value("preview-look").flatMap { text in
+        let parts = text.split(separator: ",").compactMap { Double($0) }
+        return parts.count == 2 ? CGPoint(x: parts[0], y: parts[1]) : nil
+    }
     let density = value("density").flatMap(Density.init) ?? .comfortable
     let tab = value("tab").flatMap { name in PanelTab.allCases.first { $0.rawValue.lowercased() == name } } ?? .today
     let appearance = value("appearance")
@@ -78,6 +82,7 @@ final class AppController: NSObject, NSApplicationDelegate {
     private lazy var debug: WidgetDebug = {
         let debug = WidgetDebug(prototype: options.widget, colour: options.colour)
         debug.previewHover = CommandLine.arguments.contains("--preview-hover")
+        debug.previewLook = options.previewLook
         return debug
     }()
     private let widgetMenu = NSMenu()
