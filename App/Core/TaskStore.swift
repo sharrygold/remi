@@ -1,0 +1,217 @@
+import Combine
+import Foundation
+import SwiftData
+
+/// The one place tasks and Spaces are read and changed. The UI only talks to this.
+@MainActor
+final class TaskStore: ObservableObject {
+    static let lingerSeconds: TimeInterval = 1.2
+    private static let symbols = ["folder", "star", "leaf", "flag", "bolt", "heart"]
+    private static let tints = ["work", "clients", "personal", "learning", "homeReno"]
+
+    @Published private(set) var spaces: [Space] = []
+    @Published private(set) var tasks: [TaskItem] = []
+    /// True when the saved data could not be opened and this session is temporary.
+    private(set) var isTemporary = false
+
+    private let context: ModelContext
+    private var undoStack: [() -> Void] = []
+
+    var canUndo: Bool { !undoStack.isEmpty }
+
+    /// `directory` nil keeps everything in memory, for tests and demos.
+    init(directory: URL?) {
+        let schema = Schema([Space.self, TaskItem.self])
+        var container: ModelContainer?
+        if let directory {
+            try? FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+            let configuration = ModelConfiguration(schema: schema, url: directory.appendingPathComponent("Library.store"))
+            container = try? ModelContainer(for: schema, configurations: configuration)
+        }
+        if container == nil { isTemporary = directory != nil }
+        let resolved = container ?? (try! ModelContainer(for: schema, configurations: ModelConfiguration(isStoredInMemoryOnly: true)))
+        context = ModelContext(resolved)
+        seedSpacesIfNeeded()
+        reload()
+    }
+
+    /// Follows the bundle ID rather than the display name, so renaming the app keeps the data.
+    static var defaultDirectory: URL {
+        let support = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0]
+        return support.appendingPathComponent(Bundle.main.bundleIdentifier ?? "com.example.oldapp", isDirectory: true)
+    }
+
+    private func seedSpacesIfNeeded() {
+        guard ((try? context.fetchCount(FetchDescriptor<Space>())) ?? 0) == 0 else { return }
+        let starters = [("Clients", "briefcase", "clients"), ("Work", "building.2", "work"), ("Personal", "house", "personal"),
+                        ("Learning", "book", "learning"), ("Home Reno", "magnifyingglass", "homeReno")]
+        for (index, starter) in starters.enumerated() {
+            context.insert(Space(name: starter.0, symbol: starter.1, tintName: starter.2, sortOrder: index))
+        }
+        save()
+    }
+
+    func reload() {
+        spaces = (try? context.fetch(FetchDescriptor<Space>(sortBy: [SortDescriptor(\.sortOrder)]))) ?? []
+        let all = (try? context.fetch(FetchDescriptor<TaskItem>(sortBy: [SortDescriptor(\.sortOrder)]))) ?? []
+        tasks = all.filter { $0.deletedAt == nil }
+    }
+
+    private func save() {
+        try? context.save()
+    }
+
+    private func commit(undo: @escaping () -> Void) {
+        undoStack.append(undo)
+        save()
+        reload()
+    }
+
+    func undo() {
+        guard let action = undoStack.popLast() else { return }
+        action()
+        save()
+        reload()
+    }
+
+    // MARK: Capture
+
+    /// Used when nothing is typed and "All" is selected, so every task still belongs to a Space.
+    var fallbackSpace: Space? { spaces.first { $0.name == "Personal" } ?? spaces.first }
+
+    @discardableResult
+    func add(_ parsed: ParsedCapture, currentSpace: Space?) -> TaskItem? {
+        guard parsed.canSave else { return nil }
+        var createdSpace: Space?
+        let space: Space?
+        switch parsed.space {
+        case .existing(let name):
+            space = spaces.first { $0.name == name }
+        case .new(let name):
+            let created = makeSpace(named: name)
+            createdSpace = created
+            space = created
+        case .none:
+            space = currentSpace ?? fallbackSpace
+        }
+        let order = (tasks.map(\.sortOrder).min() ?? 0) - 1
+        let task = TaskItem(title: parsed.title, space: space, dueDate: parsed.due, isImportant: parsed.important, sortOrder: order)
+        context.insert(task)
+        commit { [context] in
+            context.delete(task)
+            if let createdSpace { context.delete(createdSpace) }
+        }
+        return task
+    }
+
+    private func makeSpace(named name: String) -> Space {
+        let index = spaces.count
+        let space = Space(name: name, symbol: Self.symbols[index % Self.symbols.count],
+                          tintName: Self.tints[index % Self.tints.count], sortOrder: (spaces.map(\.sortOrder).max() ?? -1) + 1)
+        context.insert(space)
+        return space
+    }
+
+    // MARK: Editing
+
+    private func change(_ task: TaskItem, _ apply: (TaskItem) -> Void, undo: @escaping (TaskItem) -> Void) {
+        apply(task)
+        task.updatedAt = Date()
+        commit {
+            undo(task)
+            task.updatedAt = Date()
+        }
+    }
+
+    func toggleCompleted(_ task: TaskItem, now: Date = Date()) {
+        let wasCompleted = task.isCompleted, previousDate = task.completedAt
+        change(task, {
+            $0.isCompleted = !wasCompleted
+            $0.completedAt = wasCompleted ? nil : now
+        }, undo: {
+            $0.isCompleted = wasCompleted
+            $0.completedAt = previousDate
+        })
+    }
+
+    func rename(_ task: TaskItem, to title: String) {
+        let cleaned = title.trimmingCharacters(in: .whitespacesAndNewlines)
+        let previous = task.title
+        guard !cleaned.isEmpty, cleaned != previous else { return }
+        change(task, { $0.title = cleaned }, undo: { $0.title = previous })
+    }
+
+    func setImportant(_ task: TaskItem, _ important: Bool) {
+        let previous = task.isImportant
+        change(task, { $0.isImportant = important }, undo: { $0.isImportant = previous })
+    }
+
+    func setDue(_ task: TaskItem, _ date: Date?) {
+        let previous = task.dueDate
+        change(task, { $0.dueDate = date }, undo: { $0.dueDate = previous })
+    }
+
+    func move(_ task: TaskItem, to space: Space) {
+        let previous = task.space
+        change(task, { $0.space = space }, undo: { $0.space = previous })
+    }
+
+    /// Moves to Recently deleted; permanent removal arrives in M5.
+    func delete(_ task: TaskItem, now: Date = Date()) {
+        change(task, { $0.deletedAt = now }, undo: { $0.deletedAt = nil })
+    }
+
+    /// Applies a new order to the tasks in `ordered`, reusing the sort slots they already had.
+    func reorder(_ ordered: [TaskItem]) {
+        let previous = ordered.map(\.sortOrder)
+        let slots = previous.sorted()
+        for (task, slot) in zip(ordered, slots) { task.sortOrder = slot }
+        commit {
+            for (task, slot) in zip(ordered, previous) { task.sortOrder = slot }
+        }
+    }
+
+    // MARK: Lists
+
+    /// Just-ticked tasks stay listed for a moment so the tick can be seen before they fade.
+    private func isOpen(_ task: TaskItem, now: Date) -> Bool {
+        guard task.isCompleted, let completed = task.completedAt else { return !task.isCompleted }
+        return now.timeIntervalSince(completed) < Self.lingerSeconds
+    }
+
+    private func inSpace(_ task: TaskItem, _ space: Space?) -> Bool {
+        space == nil || task.space?.id == space?.id
+    }
+
+    func dueToday(in space: Space? = nil, now: Date = Date(), calendar: Calendar = .current) -> [TaskItem] {
+        tasks.filter { task in
+            guard let due = task.dueDate else { return false }
+            return isOpen(task, now: now) && inSpace(task, space) && calendar.isDate(due, inSameDayAs: now)
+        }
+    }
+
+    func overdue(in space: Space? = nil, now: Date = Date(), calendar: Calendar = .current) -> [TaskItem] {
+        let today = calendar.startOfDay(for: now)
+        return tasks.filter { task in
+            guard let due = task.dueDate else { return false }
+            return isOpen(task, now: now) && inSpace(task, space) && due < today
+        }
+    }
+
+    func open(in space: Space? = nil, now: Date = Date()) -> [TaskItem] {
+        tasks.filter { isOpen($0, now: now) && inSpace($0, space) }
+    }
+
+    func done(in space: Space? = nil, now: Date = Date()) -> [TaskItem] {
+        tasks.filter { $0.isCompleted && !isOpen($0, now: now) && inSpace($0, space) }
+            .sorted { ($0.completedAt ?? .distantPast) > ($1.completedAt ?? .distantPast) }
+    }
+
+    /// The number the widget shows: open tasks due today, never counting ticked ones.
+    func todayOpenCount(now: Date = Date(), calendar: Calendar = .current) -> Int {
+        tasks.filter { task in
+            guard let due = task.dueDate else { return false }
+            return !task.isCompleted && calendar.isDate(due, inSameDayAs: now)
+        }.count
+    }
+}

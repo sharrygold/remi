@@ -12,6 +12,8 @@ targets:
     type: application
     platform: macOS
     sources: [App]
+    scheme:
+      testTargets: [PerchTests]
     settings:
       base:
         PRODUCT_NAME: $(APP_DISPLAY_NAME)
@@ -25,3 +27,14 @@ targets:
         CODE_SIGN_STYLE: Manual
         CODE_SIGN_IDENTITY: "-"
         ENABLE_HARDENED_RUNTIME: NO
+  PerchTests:
+    type: bundle.unit-test
+    platform: macOS
+    # Compiles the UI-free core directly, so tests run without launching the floating app.
+    sources: [App/Core, Tests]
+    settings:
+      base:
+        GENERATE_INFOPLIST_FILE: YES
+        SWIFT_VERSION: "5.0"
+        CODE_SIGN_STYLE: Manual
+        CODE_SIGN_IDENTITY: "-"
