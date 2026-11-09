@@ -108,9 +108,6 @@ struct HandleView: View {
     let style: HandleStyle
     let count: Int
     var nextTitle = ""
-    var onDrag: () -> Void = {}
-    var onDragEnd: () -> Void = {}
-    let action: () -> Void
     @State private var hovering = false
     @Environment(\.accessibilityReduceTransparency) private var reduceTransparency
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
@@ -177,10 +174,6 @@ struct HandleView: View {
             .scaleEffect(hovering && !reduceMotion ? 1.06 : 1, anchor: style.attachesToEdge ? .trailing : .center)
             .animation(reduceMotion ? nil : Tokens.Motion.quick, value: hovering)
             .onHover { hovering = $0 }
-            .onTapGesture(perform: action)
-            .gesture(DragGesture(minimumDistance: 4, coordinateSpace: .global)
-                .onChanged { _ in onDrag() }
-                .onEnded { _ in onDragEnd() })
             .frame(width: style.size.width, height: style.size.height)
             .accessibilityElement()
             .accessibilityLabel("\(AppInfo.displayName), \(count) tasks today")
@@ -196,7 +189,7 @@ struct HandleGalleryView: View {
         LazyVGrid(columns: columns, spacing: Tokens.Spacing.l) {
             ForEach(Array(HandleStyle.allCases.enumerated()), id: \.element) { index, style in
                 VStack(spacing: Tokens.Spacing.s) {
-                    HandleView(style: style, count: 5, nextTitle: Sample.today[0].title) {}
+                    HandleView(style: style, count: 5, nextTitle: Sample.today[0].title)
                         .frame(height: 96)
                     Text("\(index + 1). \(style.title)")
                         .font(Tokens.TextRole.detail.weight(.medium))

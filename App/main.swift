@@ -11,7 +11,7 @@ struct Options {
     private static func value(_ key: String) -> String? {
         CommandLine.arguments.first { $0.hasPrefix("--\(key)=") }?.split(separator: "=").last.map(String.init)
     }
-    let handle = value("handle").flatMap(HandleStyle.init) ?? .edgeTab
+    let handle = value("handle").flatMap(HandleStyle.init) ?? .pebble
     let density = value("density").flatMap(Density.init) ?? .comfortable
     let tab = value("tab").flatMap { name in PanelTab.allCases.first { $0.rawValue.lowercased() == name } } ?? .today
     let appearance = value("appearance")
@@ -36,13 +36,43 @@ final class FirstMouseHostingView<Content: View>: NSHostingView<Content> {
     override func acceptsFirstMouse(for event: NSEvent?) -> Bool { true }
 }
 
+/// Owns every mouse event on the handle, so clicks and drags never depend on SwiftUI gestures
+/// or on how see-through the glass is at the pointer.
+final class HandleHostingView<Content: View>: NSHostingView<Content> {
+    var onClick: (() -> Void)?
+    private var grabOffset = NSPoint.zero
+    private var downMouse = NSPoint.zero
+    private var dragged = false
+    private let dragThreshold: CGFloat = 4
+
+    override func acceptsFirstMouse(for event: NSEvent?) -> Bool { true }
+    override func hitTest(_ point: NSPoint) -> NSView? { frame.contains(point) ? self : nil }
+
+    override func mouseDown(with event: NSEvent) {
+        let origin = window?.frame.origin ?? .zero
+        downMouse = NSEvent.mouseLocation
+        grabOffset = NSPoint(x: downMouse.x - origin.x, y: downMouse.y - origin.y)
+        dragged = false
+    }
+
+    override func mouseDragged(with event: NSEvent) {
+        let mouse = NSEvent.mouseLocation
+        if !dragged && hypot(mouse.x - downMouse.x, mouse.y - downMouse.y) < dragThreshold { return }
+        dragged = true
+        window?.setFrameOrigin(NSPoint(x: mouse.x - grabOffset.x, y: mouse.y - grabOffset.y))
+    }
+
+    override func mouseUp(with event: NSEvent) {
+        if !dragged && event.clickCount == 1 { onClick?() }
+    }
+}
+
 final class AppController: NSObject, NSApplicationDelegate {
     private let options = Options()
     private var handle: HandleWindow!
     private var panel: PanelWindow!
     private var statusItem: NSStatusItem!
     private var outsideClickMonitor: Any?
-    private var dragOffset: NSPoint?
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         if let name = options.appearance {
@@ -79,11 +109,11 @@ final class AppController: NSObject, NSApplicationDelegate {
         handle = HandleWindow(contentRect: frame, styleMask: [.borderless, .nonactivatingPanel], backing: .buffered, defer: false)
         configure(handle)
         let count = Sample.today.count + Sample.overdue.count
-        handle.contentView = FirstMouseHostingView(rootView: HandleView(style: options.handle, count: count, nextTitle: Sample.today[0].title,
-                                                                      onDrag: { [weak self] in self?.dragHandle() },
-                                                                      onDragEnd: { [weak self] in self?.dragOffset = nil }) { [weak self] in
-            self?.togglePanel()
-        })
+        let hosting = HandleHostingView(rootView: HandleView(style: options.handle, count: count, nextTitle: Sample.today[0].title))
+        hosting.onClick = { [weak self] in self?.togglePanel() }
+        handle.contentView = hosting
+        // Without this, macOS lets clicks fall through wherever the window's pixels read as transparent.
+        handle.ignoresMouseEvents = false
         handle.orderFrontRegardless()
     }
 
@@ -120,13 +150,6 @@ final class AppController: NSObject, NSApplicationDelegate {
 
     private func togglePanel() {
         panel.isVisible ? hidePanel() : showPanel()
-    }
-
-    private func dragHandle() {
-        let mouse = NSEvent.mouseLocation
-        let offset = dragOffset ?? NSPoint(x: mouse.x - handle.frame.minX, y: mouse.y - handle.frame.minY)
-        dragOffset = offset
-        handle.setFrameOrigin(NSPoint(x: mouse.x - offset.x, y: mouse.y - offset.y))
     }
 
     private func hidePanel() {
