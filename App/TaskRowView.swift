@@ -16,7 +16,7 @@ enum DueLabel {
 }
 
 struct TaskRowView: View {
-    @ObservedObject var store: TaskStore
+    @ObservedObject var store: LibraryStore
     let task: TaskItem
     let density: Density
     @State private var editing = false
@@ -97,7 +97,7 @@ struct TaskRowView: View {
     private func toggle() {
         withAnimation(reduceMotion ? nil : Tokens.Motion.quick) { store.toggleCompleted(task) }
         // Lets the tick be seen, then fades the row into Done.
-        DispatchQueue.main.asyncAfter(deadline: .now() + TaskStore.lingerSeconds + 0.05) {
+        DispatchQueue.main.asyncAfter(deadline: .now() + LibraryStore.lingerSeconds + 0.05) {
             withAnimation(reduceMotion ? nil : Tokens.Motion.quick) { store.reload() }
         }
     }

@@ -124,9 +124,15 @@ final class AppController: NSObject, NSApplicationDelegate {
     private let colourMenu = NSMenu()
     private let presentation = PanelPresentation()
     private let capture = CaptureText()
-    private lazy var store: TaskStore = {
-        let usesMemory = CommandLine.arguments.contains("--demo-data") || CommandLine.arguments.contains("--m2-selftest")
-        let store = TaskStore(directory: usesMemory ? nil : TaskStore.defaultDirectory)
+    private lazy var store: LibraryStore = {
+        let arguments = CommandLine.arguments
+        let usesMemory = ["--demo-data", "--m2-selftest", "--m3-selftest"].contains { arguments.contains($0) }
+        // --data-dir=PATH opens another library, used to check a copy of real data after a model change.
+        let custom = arguments.first { $0.hasPrefix("--data-dir=") }.map { URL(fileURLWithPath: String($0.dropFirst("--data-dir=".count))) }
+        let store = LibraryStore(directory: usesMemory ? nil : custom ?? LibraryStore.defaultDirectory)
+        if custom != nil {
+            print("data-dir temporary=\(store.isTemporary) spaces=\(store.spaces.count) tasks=\(store.tasks.count) notes=\(store.notes.count)")
+        }
         if CommandLine.arguments.contains("--demo-data") { seedDemo(store) }
         return store
     }()
@@ -155,15 +161,23 @@ final class AppController: NSObject, NSApplicationDelegate {
         buildStatusItem()
         registerHotKey()
         installEditMenu()
-        installUndoKey()
+        installPanelKeys()
         NotificationCenter.default.addObserver(self, selector: #selector(dayChanged), name: .NSCalendarDayChanged, object: nil)
         NotificationCenter.default.addObserver(self, selector: #selector(screensChanged),
                                                name: NSApplication.didChangeScreenParametersNotification, object: nil)
         Timer.scheduledTimer(withTimeInterval: 1, repeats: true) { [weak self] _ in self?.idleTick() }
         if options.open { showPanel() }
+        if CommandLine.arguments.contains("--open-note") {
+            DispatchQueue.main.async { self.presentation.noteToOpen = self.store.notes(in: nil).dropFirst().first?.id }
+        }
         if CommandLine.arguments.contains("--preview-tuck") { debug.tucked = true }
         if CommandLine.arguments.contains("--m1-selftest") { runShellSelfTest() }
         if CommandLine.arguments.contains("--m2-selftest") { runCaptureSelfTest() }
+        if CommandLine.arguments.contains("--m3-selftest") { runNotesSelfTest() }
+    }
+
+    func applicationWillTerminate(_ notification: Notification) {
+        store.save()
     }
 
     private func configure(_ window: NSPanel) {
@@ -253,14 +267,31 @@ final class AppController: NSObject, NSApplicationDelegate {
         NSApp.mainMenu = main
     }
 
-    /// With the capture field empty, ⌘Z undoes the last task change; while typing it edits the text.
-    private func installUndoKey() {
+    /// Panel-wide keys:
+    /// - ⌘Z with the capture field empty undoes the last change to tasks or notes. While typing,
+    ///   or inside a note, it undoes the typing instead.
+    /// - ⌘Return in the capture field saves a note.
+    /// - ⌘N starts a new note.
+    private func installPanelKeys() {
         NSEvent.addLocalMonitorForEvents(matching: .keyDown) { [weak self] event in
-            guard let self, event.modifierFlags.intersection(.deviceIndependentFlagsMask) == .command,
-                  event.charactersIgnoringModifiers == "z", self.panel.isKeyWindow,
-                  self.capture.text.isEmpty, self.store.canUndo else { return event }
-            self.store.undo()
-            return nil
+            guard let self, self.panel.isKeyWindow,
+                  event.modifierFlags.intersection(.deviceIndependentFlagsMask) == .command else { return event }
+            let inNote = (self.panel.firstResponder as? NSTextView)?.isFieldEditor == false
+            switch event.keyCode {
+            case UInt16(kVK_Return), UInt16(kVK_ANSI_KeypadEnter):
+                guard self.capture.isFocused, let submit = self.capture.submitNote else { return event }
+                submit()
+                return nil
+            case UInt16(kVK_ANSI_N):
+                self.presentation.newNoteRequests += 1
+                return nil
+            case UInt16(kVK_ANSI_Z):
+                guard !inNote, self.capture.text.isEmpty, self.store.canUndo else { return event }
+                self.store.undo()
+                return nil
+            default:
+                return event
+            }
         }
     }
 
@@ -268,7 +299,7 @@ final class AppController: NSObject, NSApplicationDelegate {
         DispatchQueue.main.async { self.store.reload() }
     }
 
-    private func seedDemo(_ store: TaskStore) {
+    private func seedDemo(_ store: LibraryStore) {
         let names = store.spaces.map(\.name)
         for line in ["Book dentist appointment #personal today", "Prepare sprint review notes #work today",
                      "Send design dashboard invoice #clients today", "Record Loom intro for invoice #clients today !",
@@ -277,6 +308,19 @@ final class AppController: NSObject, NSApplicationDelegate {
         }
         let yesterday = Calendar.current.date(byAdding: .day, value: -1, to: Calendar.current.startOfDay(for: Date()))
         store.add(ParsedCapture(title: "Reply to Dana about the project timeline", space: .existing("Work"), due: yesterday), currentSpace: nil)
+        let notes = [
+            ("Clients", true, "Invoice opening lines\nStart with their problem, then **one** proof point.\n- Mirror their words\n- Keep it under 120 words"),
+            ("Work", false, "Q4 priorities\n## This month\n- [x] Reporting cleanup\n- [ ] Onboarding flow\n- [ ] Vendor review"),
+            ("Clients", false, "Loom checklist\n- [ ] Close tabs\n- [ ] Check mic\n- [ ] Keep it under two minutes"),
+            ("Personal", false, "Trip ideas\nLisbon in December, ask about flights. https://www.visitlisboa.com"),
+        ]
+        for (index, (spaceName, pinned, body)) in notes.enumerated() {
+            let note = store.newNote(in: store.spaces.first { $0.name == spaceName })
+            store.setBody(note, body, now: Date().addingTimeInterval(Double(-index) * 5400))
+            if pinned { store.setPinned(note, true) }
+        }
+        store.save()
+        store.reload()
     }
 
     private func postKey(_ characters: String, code: UInt16, flags: NSEvent.ModifierFlags = []) {
@@ -313,6 +357,86 @@ final class AppController: NSObject, NSApplicationDelegate {
         }
     }
 
+    /// Drives notes through real key and mouse events: ⌘Return capture, undo, ⌘N, typed Markdown
+    /// shortcuts, a checkbox click, ⌘B, Esc back to the list, and a blank note being discarded.
+    private func runNotesSelfTest() {
+        func after(_ seconds: Double, _ work: @escaping () -> Void) {
+            DispatchQueue.main.asyncAfter(deadline: .now() + seconds, execute: work)
+        }
+        func finish(_ message: String) {
+            print(message)
+            NSApp.terminate(nil)
+        }
+        after(1) { [self] in
+            showPanel()
+            after(0.5) { [self] in
+                (panel.firstResponder as? NSTextView)?.insertText("Ideas for today's call #clients", replacementRange: NSRange(location: NSNotFound, length: 0))
+                after(0.2) { [self] in
+                    postKey("\r", code: 36, flags: .command)
+                    after(0.4) { [self] in
+                        print("cmd-return notes=\(store.notes.map { "\($0.body)|\($0.space?.name ?? "-")" }) tasks=\(store.tasks.count) field=[\(capture.text)]")
+                        postKey("z", code: 6, flags: .command)
+                        after(0.4) { [self] in
+                            print("after undo notes=\(store.notes.count)")
+                            postKey("n", code: 45, flags: .command)
+                            after(0.6) { [self] in typeNote(then: finish) }
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    private func typeNote(then finish: @escaping (String) -> Void) {
+        func after(_ seconds: Double, _ work: @escaping () -> Void) {
+            DispatchQueue.main.asyncAfter(deadline: .now() + seconds, execute: work)
+        }
+        guard let editor = panel.firstResponder as? NoteTextView else {
+            return finish("FAIL editor not focused, responder=\(String(describing: panel.firstResponder))")
+        }
+        for character in "Groceries\n- milk\n[] eggs\n\nnotes in bold done" {
+            editor.insertText(String(character), replacementRange: editor.selectedRange())
+        }
+        let note = store.notes.first
+        print("typed markdown=\(note?.body.debugDescription ?? "nil") title=\(note?.title ?? "nil") preview=\(note?.preview ?? "nil")")
+        let text = editor.string as NSString
+        let box = text.range(of: String(NoteText.checkboxCharacter))
+        guard box.location != NSNotFound, let rect = editor.checkboxRect(at: box.location) else { return finish("FAIL no checkbox") }
+        let point = editor.convert(NSPoint(x: rect.midX, y: rect.midY), to: nil)
+        for type in [NSEvent.EventType.leftMouseDown, .leftMouseUp] {
+            if let event = NSEvent.mouseEvent(with: type, location: point, modifierFlags: [], timestamp: ProcessInfo.processInfo.systemUptime,
+                                              windowNumber: panel.windowNumber, context: nil, eventNumber: 0, clickCount: 1, pressure: 1) {
+                NSApp.postEvent(event, atStart: false)
+            }
+        }
+        after(0.3) { [self] in
+            print("after click markdown=\(store.notes.first?.body.debugDescription ?? "nil")")
+            editor.setSelectedRange((editor.string as NSString).range(of: "bold"))
+            postKey("b", code: 11, flags: .command)
+            after(0.3) { [self] in
+                print("after cmd-b markdown=\(store.notes.first?.body.debugDescription ?? "nil")")
+                editor.setSelectedRange(NSRange(location: (editor.string as NSString).length, length: 0))
+                editor.insertText("x", replacementRange: editor.selectedRange())
+                postKey("z", code: 6, flags: .command)
+                after(0.3) { [self] in
+                    print("cmd-z in note keeps note=\(store.notes.count == 1) endsWith x=\(editor.string.hasSuffix("x"))")
+                    postKey("\u{1b}", code: 53)
+                    after(0.4) { [self] in
+                        let fieldFocused = (panel.firstResponder as? NSTextView)?.isFieldEditor == true
+                        print("after esc capture focused=\(fieldFocused) panel visible=\(panel.isVisible) notes=\(store.notes.count)")
+                        postKey("n", code: 45, flags: .command)
+                        after(0.5) { [self] in
+                            postKey("\u{1b}", code: 53)
+                            after(0.4) { [self] in
+                                finish("blank note discarded=\(store.notes.count == 1) saved body=\(store.notes.first?.body.debugDescription ?? "nil")")
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+
     private func registerHotKey() {
         let key = HotKey { [weak self] in DispatchQueue.main.async { self?.togglePanel() } }
         hotKeyRegistered = key.register(keyCode: kVK_Space, modifiers: controlKey)
@@ -322,6 +446,7 @@ final class AppController: NSObject, NSApplicationDelegate {
     private func showRightClickMenu(event: NSEvent, view: NSView) {
         let menu = NSMenu()
         menu.addItem(withTitle: "New Task", action: #selector(openPanelFromMenu), keyEquivalent: "").target = self
+        menu.addItem(withTitle: "New Note", action: #selector(newNoteFromMenu), keyEquivalent: "").target = self
         menu.addItem(withTitle: "Hide for 1 Hour", action: #selector(hideForAnHour), keyEquivalent: "").target = self
         menu.addItem(.separator())
         menu.addItem(withTitle: "Quit \(AppInfo.displayName)", action: #selector(NSApplication.terminate(_:)), keyEquivalent: "").target = NSApp
@@ -329,6 +454,11 @@ final class AppController: NSObject, NSApplicationDelegate {
     }
 
     @objc private func openPanelFromMenu() { showPanel() }
+
+    @objc private func newNoteFromMenu() {
+        showPanel()
+        presentation.newNoteRequests += 1
+    }
 
     @objc private func hideForAnHour() {
         hiddenUntil = Date().addingTimeInterval(3600)
@@ -625,6 +755,7 @@ final class AppController: NSObject, NSApplicationDelegate {
 
     private func hidePanel() {
         lastActivity = Date()
+        store.save()
         presentation.presented = false
         presentation.pinned = false
         DispatchQueue.main.asyncAfter(deadline: .now() + Tokens.Motion.panelCloseSeconds) { [weak self] in

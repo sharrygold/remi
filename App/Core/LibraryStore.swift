@@ -2,25 +2,28 @@ import Combine
 import Foundation
 import SwiftData
 
-/// The one place tasks and Spaces are read and changed. The UI only talks to this, on the main thread.
-final class TaskStore: ObservableObject {
+/// The one place Spaces, tasks and notes are read and changed. The UI only talks to this, on the main thread.
+final class LibraryStore: ObservableObject {
     static let lingerSeconds: TimeInterval = 1.2
     private static let symbols = ["folder", "star", "leaf", "flag", "bolt", "heart"]
     private static let tints = ["work", "clients", "personal", "learning", "homeReno"]
 
     @Published private(set) var spaces: [Space] = []
     @Published private(set) var tasks: [TaskItem] = []
+    @Published private(set) var notes: [Note] = []
     /// True when the saved data could not be opened and this session is temporary.
     private(set) var isTemporary = false
 
-    private let context: ModelContext
+    let context: ModelContext
     private var undoStack: [() -> Void] = []
+    /// Typing in a note saves after a short pause rather than on every key.
+    private var pendingSave: DispatchWorkItem?
 
     var canUndo: Bool { !undoStack.isEmpty }
 
     /// `directory` nil keeps everything in memory, for tests and demos.
     init(directory: URL?) {
-        let schema = Schema([Space.self, TaskItem.self])
+        let schema = Schema([Space.self, TaskItem.self, Note.self])
         var container: ModelContainer?
         if let directory {
             try? FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
@@ -31,6 +34,7 @@ final class TaskStore: ObservableObject {
         let resolved = container ?? (try! ModelContainer(for: schema, configurations: ModelConfiguration(isStoredInMemoryOnly: true)))
         context = ModelContext(resolved)
         seedSpacesIfNeeded()
+        removeBlankNotes()
         reload()
     }
 
@@ -54,13 +58,24 @@ final class TaskStore: ObservableObject {
         spaces = (try? context.fetch(FetchDescriptor<Space>(sortBy: [SortDescriptor(\.sortOrder)]))) ?? []
         let all = (try? context.fetch(FetchDescriptor<TaskItem>(sortBy: [SortDescriptor(\.sortOrder)]))) ?? []
         tasks = all.filter { $0.deletedAt == nil }
+        let allNotes = (try? context.fetch(FetchDescriptor<Note>())) ?? []
+        notes = allNotes.filter { $0.deletedAt == nil }
     }
 
-    private func save() {
+    func save() {
+        pendingSave?.cancel()
+        pendingSave = nil
         try? context.save()
     }
 
-    private func commit(undo: @escaping () -> Void) {
+    func scheduleSave(after delay: TimeInterval = 0.6) {
+        pendingSave?.cancel()
+        let work = DispatchWorkItem { [weak self] in self?.save() }
+        pendingSave = work
+        DispatchQueue.main.asyncAfter(deadline: .now() + delay, execute: work)
+    }
+
+    func commit(undo: @escaping () -> Void) {
         undoStack.append(undo)
         save()
         reload()
@@ -81,18 +96,7 @@ final class TaskStore: ObservableObject {
     @discardableResult
     func add(_ parsed: ParsedCapture, currentSpace: Space?) -> TaskItem? {
         guard parsed.canSave else { return nil }
-        var createdSpace: Space?
-        let space: Space?
-        switch parsed.space {
-        case .existing(let name):
-            space = spaces.first { $0.name == name }
-        case .new(let name):
-            let created = makeSpace(named: name)
-            createdSpace = created
-            space = created
-        case .none:
-            space = currentSpace ?? fallbackSpace
-        }
+        let (space, createdSpace) = resolveSpace(parsed.space, currentSpace: currentSpace)
         let order = (tasks.map(\.sortOrder).min() ?? 0) - 1
         let task = TaskItem(title: parsed.title, space: space, dueDate: parsed.due, isImportant: parsed.important, sortOrder: order)
         context.insert(task)
@@ -101,6 +105,19 @@ final class TaskStore: ObservableObject {
             if let createdSpace { context.delete(createdSpace) }
         }
         return task
+    }
+
+    /// Resolves the Space a capture belongs to, creating a new one when `#name` asked for it.
+    func resolveSpace(_ match: ParsedCapture.SpaceMatch, currentSpace: Space?) -> (space: Space?, created: Space?) {
+        switch match {
+        case .existing(let name):
+            return (spaces.first { $0.name == name }, nil)
+        case .new(let name):
+            let created = makeSpace(named: name)
+            return (created, created)
+        case .none:
+            return (currentSpace ?? fallbackSpace, nil)
+        }
     }
 
     private func makeSpace(named name: String) -> Space {

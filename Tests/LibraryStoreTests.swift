@@ -2,7 +2,7 @@ import XCTest
 import SwiftData
 
 @MainActor
-final class TaskStoreTests: XCTestCase {
+final class LibraryStoreTests: XCTestCase {
     private let calendar = Calendar.current
     private let now = Date()
     private var yesterday: Date { calendar.date(byAdding: .day, value: -1, to: calendar.startOfDay(for: now))! }
@@ -13,7 +13,7 @@ final class TaskStoreTests: XCTestCase {
     }
 
     func testSeedsFiveSpacesOnce() {
-        let store = TaskStore(directory: nil)
+        let store = LibraryStore(directory: nil)
         XCTAssertEqual(store.spaces.map(\.name), ["Clients", "Work", "Personal", "Learning", "Home Reno"])
     }
 
@@ -21,10 +21,10 @@ final class TaskStoreTests: XCTestCase {
         let directory = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
         defer { try? FileManager.default.removeItem(at: directory) }
         do {
-            let store = TaskStore(directory: directory)
+            let store = LibraryStore(directory: directory)
             store.add(parsed("Keep me", space: .new("Garden"), due: today), currentSpace: nil)
         }
-        let reopened = TaskStore(directory: directory)
+        let reopened = LibraryStore(directory: directory)
         XCTAssertFalse(reopened.isTemporary)
         XCTAssertEqual(reopened.tasks.map(\.title), ["Keep me"])
         XCTAssertEqual(reopened.tasks.first?.space?.name, "Garden")
@@ -32,7 +32,7 @@ final class TaskStoreTests: XCTestCase {
     }
 
     func testSpaceRules() {
-        let store = TaskStore(directory: nil)
+        let store = LibraryStore(directory: nil)
         let work = store.spaces.first { $0.name == "Work" }
         XCTAssertEqual(store.add(parsed("Current"), currentSpace: work)?.space?.name, "Work")
         XCTAssertEqual(store.add(parsed("Fallback"), currentSpace: nil)?.space?.name, "Personal")
@@ -40,7 +40,7 @@ final class TaskStoreTests: XCTestCase {
     }
 
     func testUndoCaptureAlsoRemovesNewSpace() {
-        let store = TaskStore(directory: nil)
+        let store = LibraryStore(directory: nil)
         store.add(parsed("Temp", space: .new("Garden")), currentSpace: nil)
         XCTAssertEqual(store.spaces.count, 6)
         store.undo()
@@ -50,7 +50,7 @@ final class TaskStoreTests: XCTestCase {
     }
 
     func testNewestFirstAndReorder() throws {
-        let store = TaskStore(directory: nil)
+        let store = LibraryStore(directory: nil)
         store.add(parsed("A"), currentSpace: nil)
         store.add(parsed("B"), currentSpace: nil)
         store.add(parsed("C"), currentSpace: nil)
@@ -62,7 +62,7 @@ final class TaskStoreTests: XCTestCase {
     }
 
     func testTodayAndOverdueLists() {
-        let store = TaskStore(directory: nil)
+        let store = LibraryStore(directory: nil)
         store.add(parsed("Today", due: today), currentSpace: nil)
         store.add(parsed("Late", due: yesterday), currentSpace: nil)
         store.add(parsed("Someday"), currentSpace: nil)
@@ -72,7 +72,7 @@ final class TaskStoreTests: XCTestCase {
     }
 
     func testCompletedLingersThenMovesToDone() throws {
-        let store = TaskStore(directory: nil)
+        let store = LibraryStore(directory: nil)
         let task = try XCTUnwrap(store.add(parsed("Tick", due: today), currentSpace: nil))
         store.toggleCompleted(task, now: now)
         XCTAssertEqual(store.todayOpenCount(now: now), 0)
@@ -86,7 +86,7 @@ final class TaskStoreTests: XCTestCase {
     }
 
     func testDeleteHidesAndUndoRestores() throws {
-        let store = TaskStore(directory: nil)
+        let store = LibraryStore(directory: nil)
         let task = try XCTUnwrap(store.add(parsed("Gone"), currentSpace: nil))
         store.delete(task)
         XCTAssertTrue(store.tasks.isEmpty)
@@ -95,7 +95,7 @@ final class TaskStoreTests: XCTestCase {
     }
 
     func testRenameIgnoresBlank() throws {
-        let store = TaskStore(directory: nil)
+        let store = LibraryStore(directory: nil)
         let task = try XCTUnwrap(store.add(parsed("Old"), currentSpace: nil))
         store.rename(task, to: "   ")
         XCTAssertEqual(task.title, "Old")
@@ -104,7 +104,7 @@ final class TaskStoreTests: XCTestCase {
     }
 
     func testMoveBetweenSpaces() throws {
-        let store = TaskStore(directory: nil)
+        let store = LibraryStore(directory: nil)
         let task = try XCTUnwrap(store.add(parsed("Move"), currentSpace: nil))
         let learning = try XCTUnwrap(store.spaces.first { $0.name == "Learning" })
         store.move(task, to: learning)

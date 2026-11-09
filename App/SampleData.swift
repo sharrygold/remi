@@ -17,14 +17,6 @@ struct SampleTask: Identifiable {
     var hasAction = false
 }
 
-struct SampleNote: Identifiable {
-    let id = UUID()
-    let title: String
-    let preview: String
-    let space: SampleSpace
-    var pinned = false
-}
-
 struct SampleLink: Identifiable {
     let id = UUID()
     let title: String
@@ -54,12 +46,6 @@ enum Sample {
         SampleTask(title: "Tidy the shared drive", space: clients, due: "Fri", hasAction: true),
         SampleTask(title: "Finish SwiftUI layout module", space: learning, due: "Tomorrow"),
         SampleTask(title: "Plan the garden beds", space: homeReno, due: "Mon"),
-    ]
-    static let notes = [
-        SampleNote(title: "Invoice opening lines", preview: "Start with their problem, then one proof point", space: clients, pinned: true),
-        SampleNote(title: "Q4 priorities", preview: "Reporting cleanup, onboarding flow, vendor review", space: work),
-        SampleNote(title: "Loom checklist", preview: "Close tabs, check mic, keep it under two minutes", space: clients),
-        SampleNote(title: "Trip ideas", preview: "Lisbon in December, ask about flights", space: personal),
     ]
     static let saved = [
         SampleLink(title: "Team handbook", domain: "example.com", space: clients, symbol: "person.crop.circle"),

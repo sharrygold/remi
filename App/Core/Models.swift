@@ -13,6 +13,7 @@ final class Space {
     var createdAt: Date = Date()
     var updatedAt: Date = Date()
     @Relationship(deleteRule: .nullify, inverse: \TaskItem.space) var tasks: [TaskItem]? = []
+    @Relationship(deleteRule: .nullify, inverse: \Note.space) var notes: [Note]? = []
 
     init(name: String, symbol: String, tintName: String, sortOrder: Int) {
         self.name = name
@@ -44,4 +45,24 @@ final class TaskItem {
         self.isImportant = isImportant
         self.sortOrder = sortOrder
     }
+}
+
+/// The body is stored as plain Markdown, so export and future sync never depend on the editor.
+@Model
+final class Note {
+    var id: UUID = UUID()
+    var body: String = ""
+    var space: Space?
+    var isPinned: Bool = false
+    var createdAt: Date = Date()
+    var updatedAt: Date = Date()
+    var deletedAt: Date?
+
+    init(body: String, space: Space?) {
+        self.body = body
+        self.space = space
+    }
+
+    var title: String { NoteText.title(of: body) }
+    var preview: String { NoteText.preview(of: body) }
 }

@@ -10,17 +10,22 @@ final class PanelPresentation: ObservableObject {
     @Published var presented = false
     @Published var pinned = false
     @Published var anchor = UnitPoint.trailing
+    /// Bumped by ⌘N and the widget's New Note item; the panel answers by opening a blank note.
+    @Published var newNoteRequests = 0
+    /// Opens a particular note, for example from search.
+    @Published var noteToOpen: UUID?
 }
 
 struct PanelView: View {
     let density: Density
     @ObservedObject var presentation: PanelPresentation
     @ObservedObject var capture: CaptureText
-    @ObservedObject var store: TaskStore
+    @ObservedObject var store: LibraryStore
     @State var tab: PanelTab
     @State private var selectedSpaceID: UUID?
     @State private var showDone = false
     @State private var confirmation: String?
+    @State private var openNoteID: UUID?
     @FocusState private var captureFocused: Bool
     @Environment(\.accessibilityReduceTransparency) private var reduceTransparency
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
@@ -54,12 +59,23 @@ struct PanelView: View {
         }
         .opacity(presentation.presented ? 1 : 0)
         .animation(Tokens.Motion.panel, value: presentation.presented)
-        .onAppear { captureFocused = true }
+        .onAppear {
+            captureFocused = true
+            capture.submitNote = submitNote
+        }
+        .onChange(of: captureFocused) { _, focused in capture.isFocused = focused }
         .onChange(of: presentation.presented) { _, presented in
             if presented {
                 captureFocused = true
                 store.reload()
             }
+        }
+        .onChange(of: presentation.newNoteRequests) { _, _ in startNewNote() }
+        .onChange(of: presentation.noteToOpen) { _, id in
+            guard let id else { return }
+            tab = .notes
+            openNoteID = id
+            presentation.noteToOpen = nil
         }
     }
 
@@ -94,6 +110,9 @@ struct PanelView: View {
                 if parsed.important { token("Important", symbol: "exclamationmark", tint: .secondary) }
             }
             Spacer()
+            if confirmation == nil || !capture.text.isEmpty {
+                Text("⌘↩ saves as a note").font(Tokens.TextRole.detail).foregroundStyle(.tertiary)
+            }
         }
         .frame(height: Tokens.Spacing.l)
     }
@@ -125,6 +144,20 @@ struct PanelView: View {
         guard let task = store.add(result, currentSpace: selectedSpace) else { return }
         capture.text = ""
         show(confirmation: "Added to \(task.space?.name ?? "Tasks")  ·  ⌘Z to undo")
+    }
+
+    /// ⌘Return: the same text becomes a note, keeping words like "today" as written.
+    private func submitNote() {
+        guard let note = store.addNote(fromCapture: capture.text, currentSpace: selectedSpace) else { return }
+        capture.text = ""
+        show(confirmation: "Note added to \(note.space?.name ?? "Notes")  ·  ⌘Z to undo")
+    }
+
+    private func startNewNote() {
+        if let open = store.notes.first(where: { $0.id == openNoteID }) { store.finishEditing(open) }
+        let note = store.newNote(in: selectedSpace)
+        tab = .notes
+        openNoteID = note.id
     }
 
     private func show(confirmation text: String) {
@@ -211,12 +244,15 @@ struct PanelView: View {
         Group {
             if tab == .tasks {
                 tasksList
+            } else if tab == .notes {
+                NotesPane(store: store, density: density, space: selectedSpace, showsSpace: selectedSpaceID == nil,
+                          openNoteID: $openNoteID, onNewNote: startNewNote, onClose: { captureFocused = true },
+                          onConfirm: { show(confirmation: $0) })
             } else {
                 ScrollView {
                     VStack(alignment: .leading, spacing: density.sectionGap) {
                         switch tab {
                         case .today: todayContent
-                        case .notes: notesContent
                         default: linksContent
                         }
                     }
@@ -307,19 +343,6 @@ struct PanelView: View {
         .padding(.top, Tokens.Spacing.l * 2)
     }
 
-    private var notesContent: some View {
-        ForEach(Sample.notes) { note in
-            VStack(alignment: .leading, spacing: Tokens.Spacing.xs) {
-                HStack(spacing: Tokens.Spacing.xs) {
-                    if note.pinned { Image(systemName: "pin.fill").font(.caption).foregroundStyle(.secondary) }
-                    Text(note.title).font(Tokens.TextRole.sectionTitle)
-                }
-                Text(note.preview).font(Tokens.TextRole.detail).foregroundStyle(.secondary).lineLimit(2)
-            }
-            .padding(.vertical, density.rowPadding)
-        }
-    }
-
     private var linksContent: some View {
         Group {
             section("Saved links", tint: .secondary, symbol: "bookmark") { ForEach(Sample.saved) { linkRow($0) } }
@@ -367,4 +390,7 @@ struct PanelView: View {
 /// The capture field's text, shared so ⌘Z can tell whether anything is being typed.
 final class CaptureText: ObservableObject {
     @Published var text = ""
+    /// Mirrors the field's focus, so ⌘Return is only taken while typing a capture.
+    var isFocused = false
+    var submitNote: (() -> Void)?
 }

@@ -95,7 +95,7 @@ final class WidgetDebug: ObservableObject {
 /// Renders whichever prototype the debug menu has selected. Solid fills only; glass stays on the panel.
 struct WidgetView: View {
     @ObservedObject var debug: WidgetDebug
-    @ObservedObject var store: TaskStore
+    @ObservedObject var store: LibraryStore
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     private var count: Int { store.todayOpenCount() }
