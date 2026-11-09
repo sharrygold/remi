@@ -41,6 +41,8 @@ final class AppController: NSObject, NSApplicationDelegate {
     private var handle: HandleWindow!
     private var panel: PanelWindow!
     private var statusItem: NSStatusItem!
+    private var outsideClickMonitor: Any?
+    private var dragOffset: NSPoint?
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         if let name = options.appearance {
@@ -77,7 +79,9 @@ final class AppController: NSObject, NSApplicationDelegate {
         handle = HandleWindow(contentRect: frame, styleMask: [.borderless, .nonactivatingPanel], backing: .buffered, defer: false)
         configure(handle)
         let count = Sample.today.count + Sample.overdue.count
-        handle.contentView = FirstMouseHostingView(rootView: HandleView(style: options.handle, count: count, nextTitle: Sample.today[0].title) { [weak self] in
+        handle.contentView = FirstMouseHostingView(rootView: HandleView(style: options.handle, count: count, nextTitle: Sample.today[0].title,
+                                                                      onDrag: { [weak self] in self?.dragHandle() },
+                                                                      onDragEnd: { [weak self] in self?.dragOffset = nil }) { [weak self] in
             self?.togglePanel()
         })
         handle.orderFrontRegardless()
@@ -99,7 +103,7 @@ final class AppController: NSObject, NSApplicationDelegate {
         let rect = NSRect(origin: .zero, size: Tokens.Size.panel)
         panel = PanelWindow(contentRect: rect, styleMask: [.borderless, .nonactivatingPanel], backing: .buffered, defer: false)
         configure(panel)
-        panel.onCancel = { [weak self] in self?.panel.orderOut(nil) }
+        panel.onCancel = { [weak self] in self?.hidePanel() }
         // The system window shadow draws square dark corners around the glass in dark mode.
         panel.hasShadow = false
         panel.contentView = FirstMouseHostingView(rootView: PanelView(density: options.density, tab: options.tab))
@@ -115,7 +119,22 @@ final class AppController: NSObject, NSApplicationDelegate {
     }
 
     private func togglePanel() {
-        panel.isVisible ? panel.orderOut(nil) : showPanel()
+        panel.isVisible ? hidePanel() : showPanel()
+    }
+
+    private func dragHandle() {
+        let mouse = NSEvent.mouseLocation
+        let offset = dragOffset ?? NSPoint(x: mouse.x - handle.frame.minX, y: mouse.y - handle.frame.minY)
+        dragOffset = offset
+        handle.setFrameOrigin(NSPoint(x: mouse.x - offset.x, y: mouse.y - offset.y))
+    }
+
+    private func hidePanel() {
+        panel.orderOut(nil)
+        if let monitor = outsideClickMonitor {
+            NSEvent.removeMonitor(monitor)
+            outsideClickMonitor = nil
+        }
     }
 
     private func showPanel() {
@@ -129,6 +148,10 @@ final class AppController: NSObject, NSApplicationDelegate {
         panel.setFrameOrigin(NSPoint(x: min(max(x, bounds.minX), bounds.maxX - size.width),
                                      y: min(max(y, bounds.minY), bounds.maxY - size.height)))
         panel.makeKeyAndOrderFront(nil)
+        // Global monitors only see clicks in other apps, so the handle can still toggle the panel.
+        outsideClickMonitor = outsideClickMonitor ?? NSEvent.addGlobalMonitorForEvents(matching: [.leftMouseDown, .rightMouseDown]) { [weak self] _ in
+            self?.hidePanel()
+        }
     }
 }
 
