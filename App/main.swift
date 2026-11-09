@@ -75,7 +75,11 @@ final class AppController: NSObject, NSApplicationDelegate {
     private var panel: PanelWindow!
     private var statusItem: NSStatusItem!
     private var outsideClickMonitor: Any?
-    private lazy var debug = WidgetDebug(prototype: options.widget, colour: options.colour)
+    private lazy var debug: WidgetDebug = {
+        let debug = WidgetDebug(prototype: options.widget, colour: options.colour)
+        debug.previewHover = CommandLine.arguments.contains("--preview-hover")
+        return debug
+    }()
     private let widgetMenu = NSMenu()
     private let colourMenu = NSMenu()
 

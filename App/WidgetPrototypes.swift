@@ -74,6 +74,9 @@ final class WidgetDebug: ObservableObject {
         didSet { UserDefaults.standard.set(colour.rawValue, forKey: Self.colourKey) }
     }
 
+    /// Set by --preview-hover so hover states can be captured without a mouse.
+    var previewHover = false
+
     init(prototype: WidgetPrototype?, colour: WidgetColour?) {
         let defaults = UserDefaults.standard
         self.prototype = prototype ?? defaults.string(forKey: Self.prototypeKey).flatMap(WidgetPrototype.init) ?? .pebble
@@ -90,12 +93,55 @@ struct WidgetView: View {
         Group {
             switch debug.prototype {
             case .pebble:
-                PebbleShape().fill(debug.colour.fill).frame(width: 68, height: 56)
+                PebbleWidget(colour: debug.colour, count: count, previewHover: debug.previewHover)
             }
         }
         .frame(width: debug.prototype.windowSize.width, height: debug.prototype.windowSize.height)
         .accessibilityElement()
         .accessibilityLabel("\(AppInfo.displayName), \(count) tasks today")
         .accessibilityAddTraits(.isButton)
+    }
+}
+
+/// A solid stone that breathes slowly and perks up under the pointer.
+struct PebbleWidget: View {
+    let colour: WidgetColour
+    let count: Int
+    let previewHover: Bool
+    @State private var hovering = false
+    @State private var inhaled = false
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+
+    private var perked: Bool { hovering || previewHover }
+
+    var body: some View {
+        PebbleShape()
+            .fill(colour.fill)
+            .overlay {
+                VStack(spacing: 1) {
+                    HStack(spacing: Tokens.Spacing.m) {
+                        eye
+                        eye
+                    }
+                    Text("\(count)").font(.headline).monospacedDigit()
+                }
+                .foregroundStyle(colour.ink)
+                .offset(y: perked ? -1 : 0)
+            }
+            .frame(width: 68, height: 56)
+            .shadow(color: .black.opacity(perked ? 0.32 : 0.24), radius: perked ? 8 : 5, y: perked ? 5 : 3)
+            .scaleEffect(x: inhaled ? 1.02 : 0.99, y: inhaled ? 0.98 : 1.02, anchor: .bottom)
+            .scaleEffect(perked && !reduceMotion ? 1.08 : 1)
+            .rotationEffect(.degrees(perked && !reduceMotion ? -4 : 0))
+            .animation(reduceMotion ? nil : Tokens.Motion.quick, value: perked)
+            .onHover { hovering = $0 }
+            .onAppear {
+                guard !reduceMotion else { return }
+                withAnimation(.easeInOut(duration: 3.2).repeatForever(autoreverses: true)) { inhaled = true }
+            }
+    }
+
+    private var eye: some View {
+        Capsule().frame(width: 4, height: perked ? 10 : 7)
     }
 }
