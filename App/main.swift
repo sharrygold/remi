@@ -100,6 +100,8 @@ final class AppController: NSObject, NSApplicationDelegate {
     private var panel: PanelWindow!
     private var statusItem: NSStatusItem!
     private var outsideClickMonitor: Any?
+    private static let birdNoticeRadius: CGFloat = 260
+    private var birdLookAway: DispatchWorkItem?
     private lazy var debug: WidgetDebug = {
         let debug = WidgetDebug(prototype: options.widget, colour: options.colour)
         debug.previewHover = CommandLine.arguments.contains("--preview-hover")
@@ -179,12 +181,43 @@ final class AppController: NSObject, NSApplicationDelegate {
 
     /// The cord's window is wide so it never clips, so only the rope itself may catch the mouse.
     private func installCordHitTesting() {
-        NSEvent.addGlobalMonitorForEvents(matching: .mouseMoved) { [weak self] _ in self?.updateCordHitTesting() }
+        NSEvent.addGlobalMonitorForEvents(matching: .mouseMoved) { [weak self] event in self?.pointerMoved(event) }
         NSEvent.addLocalMonitorForEvents(matching: .mouseMoved) { [weak self] event in
-            self?.updateCordHitTesting()
+            self?.pointerMoved(event)
             return event
         }
         updateCordHitTesting()
+    }
+
+    private func pointerMoved(_ event: NSEvent) {
+        updateCordHitTesting()
+        let mouse = NSEvent.mouseLocation
+        let point = CGPoint(x: mouse.x - handle.frame.minX, y: handle.frame.maxY - mouse.y)
+        switch debug.prototype {
+        case .cord:
+            if debug.cord.isNear(point, within: 6) { debug.cord.brush(at: point, dx: event.deltaX) }
+        case .bird:
+            followWithBird(point)
+        case .pebble:
+            break
+        }
+    }
+
+    /// The bird notices the pointer from well outside its window, and pauses before looking away.
+    private func followWithBird(_ point: CGPoint) {
+        let distance = hypot(point.x - 32, point.y - 32)
+        if distance <= Self.birdNoticeRadius {
+            birdLookAway?.cancel()
+            birdLookAway = nil
+            debug.birdPointer = point
+        } else if debug.birdPointer != nil, birdLookAway == nil {
+            let work = DispatchWorkItem { [weak self] in
+                self?.debug.birdPointer = nil
+                self?.birdLookAway = nil
+            }
+            birdLookAway = work
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.5, execute: work)
+        }
     }
 
     private func updateCordHitTesting() {

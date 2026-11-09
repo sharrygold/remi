@@ -84,6 +84,8 @@ final class WidgetDebug: ObservableObject {
     var previewHover = false
     /// Set by --preview-look=x,y so the bird's head turn can be captured without a mouse.
     var previewLook: CGPoint?
+    /// The pointer in the bird's window coordinates (y down) while it is close enough to notice.
+    @Published var birdPointer: CGPoint?
     let cord = CordSimulation()
 
     init(prototype: WidgetPrototype?, colour: WidgetColour?) {
@@ -104,7 +106,7 @@ struct WidgetView: View {
             case .pebble:
                 PebbleWidget(colour: debug.colour, count: count, previewHover: debug.previewHover)
             case .bird:
-                BirdWidget(colour: debug.colour, count: count, previewLook: debug.previewLook)
+                BirdWidget(colour: debug.colour, count: count, target: debug.previewLook ?? debug.birdPointer)
             case .cord:
                 CordWidget(colour: debug.colour, count: count, simulation: debug.cord)
             }
@@ -192,19 +194,26 @@ struct BirdHeadShape: Shape {
 struct BirdWidget: View {
     let colour: WidgetColour
     let count: Int
-    let previewLook: CGPoint?
-    @State private var pointer: CGPoint?
+    let target: CGPoint?
+    @State private var headAngle = lookingAtEgg
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     private static let headCenter = CGPoint(x: 32, y: 32)
     private static let lookingAtEgg = 19.0
+    private static let follow = Animation.interactiveSpring(response: 0.42, dampingFraction: 0.8)
+    private static let settle = Animation.spring(response: 0.9, dampingFraction: 0.85)
 
-    /// Angles run from the left, over the top, to the right, so the head never turns through the body.
-    private var headAngle: Double {
-        guard let target = previewLook ?? pointer else { return Self.lookingAtEgg }
+    /// Angles run from the left, over the top, to the right. Below the bird the head holds still
+    /// rather than whipping around through its own body.
+    private func updateHead(_ target: CGPoint?) {
+        guard let target else {
+            headAngle = Self.lookingAtEgg
+            return
+        }
         var degrees = atan2(target.y - Self.headCenter.y, target.x - Self.headCenter.x) * 180 / .pi
         if degrees > 90 { degrees -= 360 }
-        return min(max(degrees, -225), 30)
+        if degrees > 30 || degrees < -225 { return }
+        headAngle = degrees
     }
 
     var body: some View {
@@ -221,18 +230,14 @@ struct BirdWidget: View {
                 .frame(width: 60, height: 60)
                 .rotationEffect(.degrees(headAngle))
                 .offset(x: Self.headCenter.x - 30, y: Self.headCenter.y - 30)
-                .animation(reduceMotion ? nil : .interactiveSpring(response: 0.3, dampingFraction: 0.72), value: headAngle)
+                .animation(reduceMotion ? nil : (target == nil ? Self.settle : Self.follow), value: headAngle)
         }
         .frame(width: 104, height: 108, alignment: .topLeading)
         .compositingGroup()
         .shadow(color: .black.opacity(0.22), radius: 4, y: 2)
         .contentShape(Rectangle())
-        .onContinuousHover(coordinateSpace: .local) { phase in
-            switch phase {
-            case .active(let location): pointer = location
-            case .ended: pointer = nil
-            }
-        }
+        .onAppear { updateHead(target) }
+        .onChange(of: target) { _, new in updateHead(new) }
     }
 
     private var head: some View {
@@ -253,6 +258,7 @@ final class CordSimulation {
     private static let segments = 17
     private static let maxPull: CGFloat = 36
     private static let maxSideways: CGFloat = 30
+    private static let hopStrength: CGFloat = 0.18
     private static let step: Double = 1.0 / 60
     private static let gravity: CGFloat = 900
 
@@ -291,13 +297,30 @@ final class CordSimulation {
         target = nil
         // Starting from rest stops the stretched rope flinging itself upward.
         previous = points
-        return released.y - length >= Self.pullToOpen
+        // A pull stores a little energy, so the rope hops and swings before settling.
+        let pulled = released.y - length
+        for index in points.indices.dropFirst() {
+            let along = CGFloat(index) / CGFloat(Self.segments)
+            previous[index].y += pulled * Self.hopStrength * along
+            previous[index].x -= pulled * 0.012 * along
+        }
+        return pulled >= Self.pullToOpen
     }
 
     /// A small push that builds along the rope, for a click.
     func nudge(_ speed: CGFloat = 1.2) {
         for index in previous.indices {
             previous[index].x -= speed * CGFloat(index) / CGFloat(Self.segments)
+        }
+    }
+
+    /// The pointer brushed the rope while moving by dx: only the part it touches is pushed.
+    func brush(at point: CGPoint, dx: CGFloat) {
+        let push = min(max(dx, -6), 6) * 0.22
+        for index in points.indices.dropFirst() {
+            let distance = hypot(points[index].x - point.x, points[index].y - point.y)
+            guard distance < 20 else { continue }
+            previous[index].x -= push * (1 - distance / 20)
         }
     }
 
@@ -331,7 +354,7 @@ final class CordSimulation {
         let wind = windEnabled ? CGFloat(sin(time * 1.1) * 24 + sin(time * 0.37) * 12) : 0
         if target == nil { span += (length - span) * 0.12 }
         let settling = target == nil && span > length + 0.5
-        let damping: CGFloat = settling ? 0.7 : 0.98
+        let damping: CGFloat = settling ? 0.97 : 0.98
         for index in points.indices.dropFirst() {
             let velocity = CGPoint(x: (points[index].x - previous[index].x) * damping,
                                    y: (points[index].y - previous[index].y) * damping)
@@ -347,6 +370,8 @@ final class CordSimulation {
             for index in 0..<Self.segments {
                 let a = points[index], b = points[index + 1]
                 let distance = max(hypot(b.x - a.x, b.y - a.y), 0.0001)
+                // A rope resists stretching but can go slack, which is what lets it hop.
+                if target == nil && distance <= segment { continue }
                 let correction = (distance - segment) / distance / 2
                 let shift = CGPoint(x: (b.x - a.x) * correction, y: (b.y - a.y) * correction)
                 if index > 0 { points[index] = CGPoint(x: a.x + shift.x, y: a.y + shift.y) }
