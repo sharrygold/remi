@@ -51,6 +51,9 @@ final class HandleHostingView<Content: View>: NSHostingView<Content> {
     var isPullMode: () -> Bool = { false }
     var onPull: ((CGFloat, CGFloat) -> Void)?
     var onPullEnd: (() -> Void)?
+    /// Receives the window's new left edge when a cord drag goes sideways.
+    var onSlide: ((CGFloat) -> Void)?
+    private var sliding = false
     private var grabOffset = NSPoint.zero
     private var downMouse = NSPoint.zero
     private var dragged = false
@@ -69,9 +72,14 @@ final class HandleHostingView<Content: View>: NSHostingView<Content> {
     override func mouseDragged(with event: NSEvent) {
         let mouse = NSEvent.mouseLocation
         if !dragged && hypot(mouse.x - downMouse.x, mouse.y - downMouse.y) < dragThreshold { return }
+        if !dragged { sliding = abs(mouse.x - downMouse.x) > abs(mouse.y - downMouse.y) }
         dragged = true
         if isPullMode() {
-            onPull?(mouse.x - downMouse.x, downMouse.y - mouse.y)
+            if sliding {
+                onSlide?(mouse.x - grabOffset.x)
+            } else {
+                onPull?(mouse.x - downMouse.x, downMouse.y - mouse.y)
+            }
             return
         }
         window?.setFrameOrigin(NSPoint(x: mouse.x - grabOffset.x, y: mouse.y - grabOffset.y))
@@ -79,7 +87,7 @@ final class HandleHostingView<Content: View>: NSHostingView<Content> {
 
     override func mouseUp(with event: NSEvent) {
         if isPullMode() && dragged {
-            onPullEnd?()
+            if !sliding { onPullEnd?() }
             return
         }
         if !dragged && event.clickCount == 1 { onClick?() }
@@ -158,17 +166,52 @@ final class AppController: NSObject, NSApplicationDelegate {
             guard let self, self.debug.cord.release() else { return }
             self.togglePanel()
         }
+        hosting.onSlide = { [weak self] left in self?.slideCord(toLeft: left) }
         handle.contentView = hosting
+        handle.acceptsMouseMovedEvents = true
+        installCordHitTesting()
         handle.orderFrontRegardless()
         if let pull = options.previewPull {
-            debug.cord.configure(knots: Sample.today.count)
+            debug.cord.configure()
             debug.cord.pull(dx: 0, dy: pull)
         }
+    }
+
+    /// The cord's window is wide so it never clips, so only the rope itself may catch the mouse.
+    private func installCordHitTesting() {
+        NSEvent.addGlobalMonitorForEvents(matching: .mouseMoved) { [weak self] _ in self?.updateCordHitTesting() }
+        NSEvent.addLocalMonitorForEvents(matching: .mouseMoved) { [weak self] event in
+            self?.updateCordHitTesting()
+            return event
+        }
+        updateCordHitTesting()
+    }
+
+    private func updateCordHitTesting() {
+        guard debug.prototype == .cord else {
+            handle.ignoresMouseEvents = false
+            return
+        }
+        guard NSEvent.pressedMouseButtons == 0 else { return }
+        let mouse = NSEvent.mouseLocation
+        let point = CGPoint(x: mouse.x - handle.frame.minX, y: handle.frame.maxY - mouse.y)
+        handle.ignoresMouseEvents = !debug.cord.isNear(point)
+    }
+
+    /// Slides along the top edge of whichever display the pointer is on.
+    private func slideCord(toLeft left: CGFloat) {
+        let mouse = NSEvent.mouseLocation
+        let screen = NSScreen.screens.first { $0.frame.contains(mouse) } ?? handle.screen ?? NSScreen.screens[0]
+        let visible = screen.visibleFrame
+        let x = min(max(left, visible.minX), visible.maxX - handle.frame.width)
+        debug.cord.carry(dx: x - handle.frame.minX)
+        handle.setFrameOrigin(NSPoint(x: x, y: visible.maxY - handle.frame.height))
     }
 
     private func applyPrototype() {
         guard options.handle == nil else { return }
         handle.setFrame(widgetFrame(), display: true)
+        updateCordHitTesting()
         refreshDebugMenu()
     }
 
@@ -259,22 +302,39 @@ final class AppController: NSObject, NSApplicationDelegate {
     private func runCordSelfTest() {
         let cord = CordSimulation()
         cord.windEnabled = false
-        cord.configure(knots: 4)
+        cord.configure()
         func run(_ frames: Int) { (0..<frames).forEach { _ in cord.stepOnce() } }
         run(240)
-        print("rest tip y=\(cord.tip.y) rope=\(cord.length) knots=\(cord.knotIndices(count: 4))")
+        let rest = cord.tip.y
+        print("rest tip y=\(rest)")
+        for count in [1, 6, 14, 30] {
+            print("knots requested=\(count) drawn=\(cord.knots(count: count).count) radius=\(cord.knotRadius(count: count)) lastY=\(cord.knots(count: count).last?.y ?? 0)")
+        }
         cord.pull(dx: 0, dy: 10)
         run(60)
-        print("short pull tip y=\(cord.tip.y) opens=\(cord.release())")
+        print("short pull y=\(cord.tip.y) opens=\(cord.release())")
         run(240)
-        cord.pull(dx: 8, dy: 40)
+        cord.pull(dx: 8, dy: 500)
         run(60)
-        print("long pull tip x=\(cord.tip.x) y=\(cord.tip.y) opens=\(cord.release())")
-        run(300)
-        print("after release tip x=\(cord.tip.x) y=\(cord.tip.y)")
-        cord.pull(dx: 0, dy: 500)
-        run(60)
-        print("over pull tip y=\(cord.tip.y) window=240")
+        print("max pull y=\(cord.tip.y) opens=\(cord.release())")
+        var highest = cord.tip.y
+        var biggestStep: CGFloat = 0
+        var lastY = cord.tip.y
+        for _ in 0..<180 {
+            cord.stepOnce()
+            highest = min(highest, cord.tip.y)
+            biggestStep = max(biggestStep, abs(cord.tip.y - lastY))
+            lastY = cord.tip.y
+        }
+        print("after release highest=\(highest) rest=\(rest) overshoot=\(rest - highest) biggestFrameMove=\(biggestStep) settledY=\(cord.tip.y)")
+        var minX = CGFloat.infinity, maxX = -CGFloat.infinity
+        for _ in 0..<60 {
+            cord.carry(dx: 12)
+            cord.stepOnce()
+            minX = min(minX, cord.points.map(\.x).min() ?? 0)
+            maxX = max(maxX, cord.points.map(\.x).max() ?? 0)
+        }
+        print("fast slide rope x range=\(minX)...\(maxX) window=\(CordSimulation.width)")
     }
 
     private func togglePanel() {

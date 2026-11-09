@@ -53,7 +53,7 @@ enum WidgetPrototype: String, CaseIterable, Identifiable {
         switch self {
         case .pebble: CGSize(width: 96, height: 88)
         case .bird: CGSize(width: 104, height: 108)
-        case .cord: CGSize(width: 64, height: 240)
+        case .cord: CGSize(width: CordSimulation.width, height: 240)
         }
     }
 
@@ -61,7 +61,7 @@ enum WidgetPrototype: String, CaseIterable, Identifiable {
     func origin(in visible: NSRect) -> NSPoint {
         switch self {
         case .cord:
-            NSPoint(x: visible.maxX - windowSize.width - 72, y: visible.maxY - windowSize.height)
+            NSPoint(x: visible.maxX - windowSize.width - 40, y: visible.maxY - windowSize.height)
         case .pebble, .bird:
             NSPoint(x: visible.maxX - windowSize.width, y: visible.maxY - visible.height / 3 - windowSize.height / 2)
         }
@@ -88,7 +88,7 @@ final class WidgetDebug: ObservableObject {
 
     init(prototype: WidgetPrototype?, colour: WidgetColour?) {
         let defaults = UserDefaults.standard
-        self.prototype = prototype ?? defaults.string(forKey: Self.prototypeKey).flatMap(WidgetPrototype.init) ?? .pebble
+        self.prototype = prototype ?? defaults.string(forKey: Self.prototypeKey).flatMap(WidgetPrototype.init) ?? .bird
         self.colour = colour ?? defaults.string(forKey: Self.colourKey).flatMap(WidgetColour.init) ?? .stone
     }
 }
@@ -245,16 +245,21 @@ struct BirdWidget: View {
 
 /// A verlet rope pinned at the top. Pulling stretches it; letting go springs it back.
 final class CordSimulation {
-    static let width: CGFloat = 64
-    static let pullToOpen: CGFloat = 28
+    static let width: CGFloat = 200
+    static let pullToOpen: CGFloat = 24
+    static let length: CGFloat = 152
+    private static let maxKnots = 14
+    private static let edgeMargin: CGFloat = 12
     private static let segments = 17
-    private static let maxPull: CGFloat = 50
+    private static let maxPull: CGFloat = 36
+    private static let maxSideways: CGFloat = 30
     private static let step: Double = 1.0 / 60
     private static let gravity: CGFloat = 900
 
     private(set) var points: [CGPoint] = []
     private var previous: [CGPoint] = []
     private(set) var length: CGFloat = 0
+    private var span: CGFloat = 0
     private var target: CGPoint?
     private var lastDate: Date?
     private var leftover: Double = 0
@@ -264,31 +269,50 @@ final class CordSimulation {
     var pin: CGPoint { CGPoint(x: Self.width / 2, y: 0) }
     var tip: CGPoint { points.last ?? pin }
 
-    func configure(knots: Int) {
-        let newLength = 56 + CGFloat(knots) * min(24, 114 / CGFloat(max(knots, 1)))
-        guard newLength != length else { return }
-        length = newLength
+    /// The cord is always the same length; knots share the space on it.
+    func configure() {
+        guard length == 0 else { return }
+        length = Self.length
+        span = length
         points = (0...Self.segments).map { CGPoint(x: pin.x, y: length * CGFloat($0) / CGFloat(Self.segments)) }
         previous = points
     }
 
     /// Follows the pointer by its travel since the press; y grows downward.
     func pull(dx: CGFloat, dy: CGFloat) {
-        target = CGPoint(x: min(max(pin.x + dx, 10), Self.width - 10),
+        target = CGPoint(x: pin.x + min(max(dx, -Self.maxSideways), Self.maxSideways),
                          y: length + min(max(dy, 0), Self.maxPull))
     }
 
     /// Lets go. Returns true when the pull went far enough to open the panel.
     @discardableResult
     func release() -> Bool {
-        defer { target = nil }
-        guard let target else { return false }
-        return target.y - length >= Self.pullToOpen
+        guard let released = target else { return false }
+        target = nil
+        // Starting from rest stops the stretched rope flinging itself upward.
+        previous = points
+        return released.y - length >= Self.pullToOpen
     }
 
-    func nudge(_ amount: CGFloat = 5) {
-        guard let last = points.indices.last else { return }
-        points[last].x += amount
+    /// A small push that builds along the rope, for a click.
+    func nudge(_ speed: CGFloat = 1.2) {
+        for index in previous.indices {
+            previous[index].x -= speed * CGFloat(index) / CGFloat(Self.segments)
+        }
+    }
+
+    /// The window slid sideways by dx; the rope lags behind it and swings back.
+    func carry(dx: CGFloat) {
+        for index in points.indices.dropFirst() {
+            let lag = dx * 0.5 * CGFloat(index) / CGFloat(Self.segments)
+            points[index].x -= lag
+            previous[index].x -= lag
+        }
+    }
+
+    /// True when a point in window coordinates (y down) is close enough to grab the rope.
+    func isNear(_ point: CGPoint, within reach: CGFloat = 14) -> Bool {
+        points.contains { hypot($0.x - point.x, $0.y - point.y) <= reach + span / CGFloat(Self.segments) / 2 }
     }
 
     func advance(to date: Date) {
@@ -304,15 +328,18 @@ final class CordSimulation {
     func stepOnce() {
         time += Self.step
         let dt2 = CGFloat(Self.step * Self.step)
-        let wind = windEnabled ? CGFloat(sin(time * 1.1) * 40 + sin(time * 0.37) * 20) : 0
+        let wind = windEnabled ? CGFloat(sin(time * 1.1) * 24 + sin(time * 0.37) * 12) : 0
+        if target == nil { span += (length - span) * 0.12 }
+        let settling = target == nil && span > length + 0.5
+        let damping: CGFloat = settling ? 0.7 : 0.98
         for index in points.indices.dropFirst() {
-            let velocity = CGPoint(x: (points[index].x - previous[index].x) * 0.985,
-                                   y: (points[index].y - previous[index].y) * 0.985)
+            let velocity = CGPoint(x: (points[index].x - previous[index].x) * damping,
+                                   y: (points[index].y - previous[index].y) * damping)
             previous[index] = points[index]
             points[index].x += velocity.x + wind * dt2
             points[index].y += velocity.y + Self.gravity * dt2
         }
-        let span = target.map { max(length, hypot($0.x - pin.x, $0.y - pin.y)) } ?? length
+        if let target { span = max(length, hypot(target.x - pin.x, target.y - pin.y)) }
         let segment = span / CGFloat(Self.segments)
         for _ in 0..<24 {
             points[0] = pin
@@ -329,13 +356,31 @@ final class CordSimulation {
                 }
             }
         }
+        for index in points.indices {
+            points[index].x = min(max(points[index].x, Self.edgeMargin), Self.width - Self.edgeMargin)
+        }
     }
 
-    func knotIndices(count: Int) -> [Int] {
-        guard count > 0 else { return [] }
+    /// Knots spaced along the lower part of the rope, however many there are.
+    func knots(count: Int) -> [CGPoint] {
+        let shown = min(count, Self.maxKnots)
+        guard shown > 0, points.count > Self.segments else { return [] }
         let first = Double(Self.segments) * 0.3
-        guard count > 1 else { return [Self.segments] }
-        return (0..<count).map { Int((first + (Double(Self.segments) - first) * Double($0) / Double(count - 1)).rounded()) }
+        let last = Double(Self.segments)
+        return (0..<shown).map { index in
+            let position = shown == 1 ? last : first + (last - first) * Double(index) / Double(shown - 1)
+            let lower = min(Int(position), Self.segments - 1)
+            let t = CGFloat(position - Double(lower))
+            let a = points[lower], b = points[lower + 1]
+            return CGPoint(x: a.x + (b.x - a.x) * t, y: a.y + (b.y - a.y) * t)
+        }
+    }
+
+    func knotRadius(count: Int) -> CGFloat {
+        let shown = min(count, Self.maxKnots)
+        guard shown > 1 else { return 7 }
+        let spacing = length * 0.7 / CGFloat(shown - 1)
+        return min(7, spacing * 0.45)
     }
 }
 
@@ -358,13 +403,13 @@ struct CordWidget: View {
                 rope.move(to: first)
                 points.dropFirst().forEach { rope.addLine(to: $0) }
                 canvas.stroke(rope, with: .color(colour.fill), style: StrokeStyle(lineWidth: 3.5, lineCap: .round, lineJoin: .round))
-                for index in simulation.knotIndices(count: count) {
-                    let point = points[index]
-                    canvas.fill(Path(ellipseIn: CGRect(x: point.x - 7, y: point.y - 7, width: 14, height: 14)), with: .color(colour.fill))
+                let radius = simulation.knotRadius(count: count)
+                for point in simulation.knots(count: count) {
+                    canvas.fill(Path(ellipseIn: CGRect(x: point.x - radius, y: point.y - radius, width: radius * 2, height: radius * 2)),
+                                with: .color(colour.fill))
                 }
             }
         }
-        .onAppear { simulation.configure(knots: count) }
-        .onHover { if $0 { simulation.nudge() } }
+        .onAppear { simulation.configure() }
     }
 }
