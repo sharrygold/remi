@@ -86,6 +86,10 @@ final class LibraryStore: ObservableObject {
         reload()
     }
 
+    func clearUndo() {
+        undoStack.removeAll()
+    }
+
     func undo() {
         guard let action = undoStack.popLast() else { return }
         action()
