@@ -131,17 +131,18 @@ final class AppController: NSObject, NSApplicationDelegate {
     private let presentation = PanelPresentation()
     private let capture = CaptureText()
     private let search = SearchState()
+    private let nav = ListNavigation()
     private lazy var reminders = Reminders(store: store)
     private var settingsWindow: NSWindow?
     private var watchers: [AnyCancellable] = []
     /// Self-tests and demos keep everything in memory and must not show permission prompts or write backups.
     private var isScratchSession: Bool {
-        ["--demo-data", "--m2-selftest", "--m3-selftest", "--m4-selftest", "--m5-selftest", "--clipboard-selftest"]
+        ["--demo-data", "--m2-selftest", "--m3-selftest", "--m4-selftest", "--m5-selftest", "--m6-selftest", "--clipboard-selftest"]
             .contains { CommandLine.arguments.contains($0) }
     }
     private lazy var store: LibraryStore = {
         let arguments = CommandLine.arguments
-        let usesMemory = ["--demo-data", "--m2-selftest", "--m3-selftest", "--m4-selftest", "--m5-selftest", "--clipboard-selftest"].contains { arguments.contains($0) }
+        let usesMemory = ["--demo-data", "--m2-selftest", "--m3-selftest", "--m4-selftest", "--m5-selftest", "--m6-selftest", "--clipboard-selftest"].contains { arguments.contains($0) }
         // --data-dir=PATH opens another library, used to check a copy of real data after a model change.
         let custom = arguments.first { $0.hasPrefix("--data-dir=") }.map { URL(fileURLWithPath: String($0.dropFirst("--data-dir=".count))) }
         let store = LibraryStore(directory: usesMemory ? nil : custom ?? LibraryStore.defaultDirectory)
@@ -221,6 +222,7 @@ final class AppController: NSObject, NSApplicationDelegate {
         if CommandLine.arguments.contains("--m3-selftest") { runNotesSelfTest() }
         if CommandLine.arguments.contains("--m4-selftest") { runLinksSelfTest() }
         if CommandLine.arguments.contains("--m5-selftest") { runSearchSelfTest() }
+        if CommandLine.arguments.contains("--m6-selftest") { runKeyboardSelfTest() }
         if CommandLine.arguments.contains("--hit-selftest") {
             // A coarse map of the widget window: # catches clicks, . lets them through.
             DispatchQueue.main.asyncAfter(deadline: .now() + 1.5) { [self] in
@@ -392,6 +394,35 @@ final class AppController: NSObject, NSApplicationDelegate {
         NSApp.mainMenu = main
     }
 
+    /// List keys while the capture bar has the cursor. Returns nil when the key isn't a list key,
+    /// true when it was used, false to let it through after leaving the list (typing resumes capture).
+    private func handleListKey(_ event: NSEvent, flags: NSEvent.ModifierFlags) -> Bool? {
+        // The capture bar normally has the cursor, but a list can take focus when it redraws.
+        // Text being edited elsewhere (a note, a task title, search) keeps its keys.
+        let editingElsewhere = panel.firstResponder is NSTextView && !capture.isFocused
+        guard !editingElsewhere, !search.active, panel.isKeyWindow else { return nil }
+        let code = Int(event.keyCode)
+        if flags.isEmpty, code == kVK_DownArrow { return nav.move(1) }
+        guard nav.isActive else { return nil }
+        switch (code, flags) {
+        case (kVK_UpArrow, []): nav.move(-1)
+        case (kVK_Return, []), (kVK_ANSI_KeypadEnter, []): nav.run(.open)
+        case (kVK_Space, []): nav.run(.toggle)
+        case (kVK_Escape, []): nav.clear()
+        case (kVK_LeftArrow, []), (kVK_RightArrow, []): nav.run(.switchList)
+        case (kVK_ANSI_O, [.command]): nav.run(.action)
+        case (kVK_Delete, [.command]), (kVK_ForwardDelete, []): nav.run(.delete)
+        case (kVK_ANSI_P, [.command]): nav.run(.pin)
+        case (kVK_ANSI_LeftBracket, [.command, .shift]): nav.run(.moveSpace(-1))
+        case (kVK_ANSI_RightBracket, [.command, .shift]): nav.run(.moveSpace(1))
+        default:
+            // Anything else is typing: hand it back to the capture bar.
+            nav.clear()
+            return false
+        }
+        return true
+    }
+
     /// Panel-wide keys:
     /// - ⌘Z with the capture field empty undoes the last change to tasks or notes. While typing,
     ///   or inside a note, it undoes the typing instead.
@@ -402,6 +433,7 @@ final class AppController: NSObject, NSApplicationDelegate {
         NSEvent.addLocalMonitorForEvents(matching: .keyDown) { [weak self] event in
             guard let self, self.panel.isKeyWindow else { return event }
             let flags = event.modifierFlags.intersection([.command, .shift, .option, .control])
+            if self.handleListKey(event, flags: flags) == true { return nil }
             if event.keyCode == UInt16(kVK_Tab), flags.isEmpty, self.capture.isFocused,
                self.capture.toggleLinkList?() == true {
                 return nil
@@ -427,6 +459,14 @@ final class AppController: NSObject, NSApplicationDelegate {
                 return nil
             case UInt16(kVK_ANSI_F):
                 self.search.requests += 1
+                return nil
+            case UInt16(kVK_ANSI_1), UInt16(kVK_ANSI_2), UInt16(kVK_ANSI_3), UInt16(kVK_ANSI_4):
+                let order = [kVK_ANSI_1, kVK_ANSI_2, kVK_ANSI_3, kVK_ANSI_4]
+                self.nav.switchTab(order.firstIndex(of: Int(event.keyCode)) ?? 0)
+                return nil
+            case UInt16(kVK_ANSI_LeftBracket), UInt16(kVK_ANSI_RightBracket):
+                guard !(self.panel.firstResponder is NoteTextView) else { return event }
+                self.nav.switchSpace(event.keyCode == UInt16(kVK_ANSI_LeftBracket) ? -1 : 1)
                 return nil
             case UInt16(kVK_ANSI_Comma):
                 self.openSettings()
@@ -817,6 +857,80 @@ final class AppController: NSObject, NSApplicationDelegate {
         print("recorder restored=\(HotKeyCombo.saved.display)")
     }
 
+    /// The panel with the keyboard only: tabs, Spaces, moving through lists and acting on items.
+    private func runKeyboardSelfTest() {
+        seedDemo(store)
+        var steps: [(String, UInt16, NSEvent.ModifierFlags, () -> String)] = []
+        func step(_ name: String, _ characters: String, _ code: Int, _ flags: NSEvent.ModifierFlags = [], check: @escaping () -> String) {
+            steps.append((characters, UInt16(code), flags, { "\(name): \(check())" }))
+        }
+        func selected() -> String {
+            switch nav.selected {
+            case .task(let task): "task \(task.title)"
+            case .note(let note): "note \(note.title)"
+            case .link(let link): "link \(link.title)"
+            case nil: "none"
+            }
+        }
+        var ticked: TaskItem?
+        step("⌘2 Tasks, ↓", "", kVK_DownArrow) { "selected=\(selected())" }
+        step("↓", "", kVK_DownArrow) {
+            if case .task(let task) = self.nav.selected { ticked = task }
+            return "selected=\(selected())"
+        }
+        step("Space ticks", " ", kVK_Space) { "completed=\(ticked?.isCompleted ?? false) now selected=\(selected())" }
+        step("⌘Z unticks", "z", kVK_ANSI_Z, .command) { "completed=\(ticked?.isCompleted ?? false)" }
+        step("↓ reselect", "", kVK_DownArrow) {
+            if case .task(let task) = self.nav.selected { ticked = task }
+            return "selected=\(selected())"
+        }
+        step("⇧⌘] moves Space", "]", kVK_ANSI_RightBracket, [.command, .shift]) {
+            "space=\(ticked?.space?.name ?? "-")"
+        }
+        step("⌘P marks important", "p", kVK_ANSI_P, .command) { "important=\(ticked?.isImportant ?? false)" }
+        step("⌘⌫ deletes", "\u{8}", kVK_Delete, .command) { "deleted=\(ticked?.deletedAt != nil) tasks=\(self.store.tasks.count)" }
+        step("Esc leaves list", "\u{1b}", kVK_Escape) { "selected=\(selected()) panel=\(self.presentation.presented)" }
+        step("⌘Z undoes delete", "z", kVK_ANSI_Z, .command) { "deleted=\(ticked?.deletedAt != nil)" }
+        step("⌘3 Notes", "3", kVK_ANSI_3, .command) { "notes tab" }
+        step("↓", "", kVK_DownArrow) { "selected=\(selected())" }
+        step("Return opens", "\r", kVK_Return) { "editor=\(self.panel.firstResponder is NoteTextView)" }
+        step("Esc back", "\u{1b}", kVK_Escape) { "capture=\(self.capture.isFocused)" }
+        step("⌘4 Links, ↓", "", kVK_DownArrow) { "selected=\(selected())" }
+        step("→ Watch later", "", kVK_RightArrow) { "list switched, selected=\(selected())" }
+        step("↓", "", kVK_DownArrow) { "selected=\(selected())" }
+        step("Space watched", " ", kVK_Space) {
+            "watchLater=\(self.store.watchLaterCount()) watched=\(self.store.links(in: nil, list: .watchLater, watched: true).count)"
+        }
+        step("typing returns to capture", "h", kVK_ANSI_H) { "selected=\(selected()) field=[\(self.capture.text)]" }
+        step("⌘] next Space", "]", kVK_ANSI_RightBracket, .command) { "ok" }
+        step("⌘1 Today, ↓", "", kVK_DownArrow) { "selected=\(selected())" }
+        step("Return edits title", "\r", kVK_Return) { "capture focused=\(self.capture.isFocused) responder=\(String(describing: type(of: self.panel.firstResponder as Any)))" }
+
+        // Some steps need a tab switch first.
+        let before: [Int: (String, Int, NSEvent.ModifierFlags)] = [0: ("2", kVK_ANSI_2, .command), 14: ("4", kVK_ANSI_4, .command),
+                                                                   20: ("1", kVK_ANSI_1, .command)]
+        func run(_ index: Int) {
+            guard index < steps.count else {
+                NSApp.terminate(nil)
+                return
+            }
+            if let (characters, code, flags) = before[index] { postKey(characters, code: UInt16(code), flags: flags) }
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.25) { [self] in
+                let (characters, code, flags, report) = steps[index]
+                postKey(characters, code: code, flags: flags)
+                // Ticking lingers before the list changes.
+                DispatchQueue.main.asyncAfter(deadline: .now() + (code == UInt16(kVK_Space) ? 1.6 : 0.4)) {
+                    print(report() + "  [focus=\(self.capture.isFocused ? "capture" : String(describing: type(of: self.panel.firstResponder as Any)))]")
+                    run(index + 1)
+                }
+            }
+        }
+        DispatchQueue.main.asyncAfter(deadline: .now() + 1) { [self] in
+            showPanel()
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) { run(0) }
+        }
+    }
+
     private func checkSettings() {
         postKey(",", code: 43, flags: .command)
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.8) { [self] in
@@ -1062,7 +1176,7 @@ final class AppController: NSObject, NSApplicationDelegate {
         // The system window shadow draws square dark corners around the glass in dark mode.
         panel.hasShadow = false
         panel.contentView = FirstMouseHostingView(rootView: PanelView(density: options.density, presentation: presentation, capture: capture, store: store,
-                                                                                search: search, tab: options.tab))
+                                                                                search: search, nav: nav, tab: options.tab))
         // Lays the panel out once while invisible, so the first real open is as quick as later ones.
         panel.alphaValue = 0
         panel.orderFrontRegardless()

@@ -30,6 +30,7 @@ struct NotesPane: View {
         let notes = store.notes(in: space)
         let pinned = notes.filter(\.isPinned)
         let others = notes.filter { !$0.isPinned }
+        ScrollViewReader { proxy in
         ScrollView {
             VStack(alignment: .leading, spacing: density.sectionGap) {
                 Button(action: onNewNote) {
@@ -51,6 +52,8 @@ struct NotesPane: View {
             }
             .padding(Tokens.Spacing.m)
             .frame(maxWidth: .infinity, alignment: .leading)
+        }
+        .modifier(FollowSelection(proxy: proxy))
         }
     }
 
@@ -108,6 +111,8 @@ struct NotesPane: View {
             .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
+        .keyboardHighlight(note.id)
+        .id(note.id)
         .accessibilityHint("Opens the note")
         .contextMenu { menu(for: note) }
     }

@@ -25,6 +25,8 @@ struct PanelView: View {
     @ObservedObject var capture: CaptureText
     @ObservedObject var store: LibraryStore
     @ObservedObject var search: SearchState
+    @ObservedObject var nav: ListNavigation
+    @State private var editRequest: UUID?
     @State var tab: PanelTab
     /// A task found by search, briefly highlighted in the Tasks list.
     @State private var highlightedTaskID: UUID?
@@ -76,11 +78,30 @@ struct PanelView: View {
         }
         .opacity(presentation.presented ? 1 : 0)
         .animation(Tokens.Motion.panel, value: presentation.presented)
-        .environment(\.panelActions, PanelActions(open: openItem, confirm: { show(confirmation: $0) }))
+        .environment(\.panelActions, PanelActions(open: openItem, confirm: { show(confirmation: $0) },
+                                                   focusCapture: { captureFocused = true }, editRequest: editRequest))
+        .environment(\.keyboardSelection, nav.selectedID)
+        .onChange(of: tab) { _, _ in nav.clear() }
+        .onChange(of: selectedSpaceID) { _, _ in nav.clear() }
+        .onChange(of: linkList) { _, _ in nav.clear() }
+        .onChange(of: openNoteID) { _, _ in nav.clear() }
+        .onChange(of: search.active) { _, _ in nav.clear() }
         .onAppear {
             captureFocused = true
             capture.submitNote = submitNote
             capture.toggleLinkList = toggleLinkList
+            nav.items = navItems
+            nav.perform = performNav
+            nav.switchTab = { index in
+                guard PanelTab.allCases.indices.contains(index) else { return }
+                closeSearch()
+                tab = PanelTab.allCases[index]
+            }
+            nav.switchSpace = { step in
+                let ids: [UUID?] = [nil] + store.spaces.map(\.id)
+                let current = ids.firstIndex { $0 == selectedSpaceID } ?? 0
+                selectedSpaceID = ids[(current + step + ids.count) % ids.count]
+            }
             capture.dismissClipboardOffer = {
                 guard let offer = clipboardOffer, capture.text.isEmpty else { return false }
                 dismissClipboard(offer)
@@ -297,6 +318,88 @@ struct PanelView: View {
         withAnimation(Tokens.Motion.quick) { clipboardOffer = nil }
     }
 
+    // MARK: Keyboard
+
+    /// The current list in the order it is drawn.
+    private func navItems() -> [NavItem] {
+        switch tab {
+        case .today:
+            let today = store.dueToday(in: selectedSpace)
+            let grouped = store.spaces.flatMap { space in today.filter { $0.space?.id == space.id } }
+            return (grouped + store.overdue(in: selectedSpace)).map(NavItem.task)
+        case .tasks:
+            return (store.open(in: selectedSpace) + (showDone ? store.done(in: selectedSpace) : [])).map(NavItem.task)
+        case .notes:
+            return openNoteID == nil ? store.notes(in: selectedSpace).map(NavItem.note) : []
+        case .links:
+            return store.links(in: selectedSpace, list: linkList).map(NavItem.link)
+        }
+    }
+
+    private func performNav(_ command: NavCommand, _ item: NavItem) {
+        // Keep the cursor in the capture bar, unless this command moves it on purpose.
+        defer {
+            if case .open = command {} else { captureFocused = true }
+        }
+        switch (command, item) {
+        case (.open, .task(let task)):
+            editRequest = task.id
+            DispatchQueue.main.async { editRequest = nil }
+        case (.open, .note(let note)), (.action, .note(let note)):
+            openNoteID = note.id
+        case (.open, .link(let link)), (.action, .link(let link)):
+            if let url = link.url { openItem(.url(url)) }
+        case (.action, .task(let task)):
+            if let action = task.action { openItem(action) } else { show(confirmation: "This task has no action") }
+        case (.toggle, .task(let task)):
+            withAnimation(reduceMotion ? nil : Tokens.Motion.quick) { store.toggleCompleted(task) }
+            DispatchQueue.main.asyncAfter(deadline: .now() + LibraryStore.lingerSeconds + 0.05) {
+                withAnimation(reduceMotion ? nil : Tokens.Motion.quick) { store.reload() }
+            }
+        case (.toggle, .link(let link)) where link.list == .watchLater:
+            store.setWatched(link, !link.isWatched)
+        case (.delete, .task(let task)):
+            store.delete(task)
+            show(confirmation: "Task deleted  ·  ⌘Z to undo")
+        case (.delete, .note(let note)):
+            store.delete(note)
+            show(confirmation: "Note deleted  ·  ⌘Z to undo")
+        case (.delete, .link(let link)):
+            store.delete(link)
+            show(confirmation: "Link deleted  ·  ⌘Z to undo")
+        case (.pin, .task(let task)):
+            store.setImportant(task, !task.isImportant)
+        case (.pin, .note(let note)):
+            store.setPinned(note, !note.isPinned)
+        case (.pin, .link(let link)):
+            store.setPinned(link, !link.isPinned)
+        case (.moveSpace(let step), _):
+            moveToSpace(item, step: step)
+        case (.switchList, _) where tab == .links:
+            linkList = linkList == .saved ? .watchLater : .saved
+        default:
+            break
+        }
+    }
+
+    private func moveToSpace(_ item: NavItem, step: Int) {
+        let spaces = store.spaces
+        let currentID: UUID? = switch item {
+        case .task(let task): task.space?.id
+        case .note(let note): note.space?.id
+        case .link(let link): link.space?.id
+        }
+        guard !spaces.isEmpty else { return }
+        let index = spaces.firstIndex { $0.id == currentID } ?? 0
+        let target = spaces[(index + step + spaces.count) % spaces.count]
+        switch item {
+        case .task(let task): store.move(task, to: target)
+        case .note(let note): store.move(note, to: target)
+        case .link(let link): store.move(link, to: target)
+        }
+        show(confirmation: "Moved to \(target.name)  ·  ⌘Z to undo")
+    }
+
     // MARK: Search
 
     private func closeSearch() {
@@ -415,12 +518,15 @@ struct PanelView: View {
             } else if tab == .links {
                 LinksPane(store: store, density: density, space: selectedSpace, showsSpace: selectedSpaceID == nil, list: $linkList)
             } else {
-                ScrollView {
-                    VStack(alignment: .leading, spacing: density.sectionGap) {
-                        todayContent
+                ScrollViewReader { proxy in
+                    ScrollView {
+                        VStack(alignment: .leading, spacing: density.sectionGap) {
+                            todayContent
+                        }
+                        .padding(Tokens.Spacing.m)
+                        .frame(maxWidth: .infinity, alignment: .leading)
                     }
-                    .padding(Tokens.Spacing.m)
-                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .modifier(FollowSelection(proxy: proxy))
                 }
             }
         }
@@ -513,6 +619,7 @@ struct PanelView: View {
             }
             .listStyle(.plain)
             .scrollContentBackground(.hidden)
+            .modifier(FollowSelection(proxy: proxy))
             .onChange(of: highlightedTaskID) { _, id in
                 guard let id else { return }
                 withAnimation(Tokens.Motion.quick) { proxy.scrollTo(id, anchor: .center) }

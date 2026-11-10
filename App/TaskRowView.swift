@@ -49,7 +49,14 @@ struct TaskRowView: View {
         }
         .padding(.vertical, density.rowPadding)
         .contentShape(Rectangle())
+        .keyboardHighlight(task.id)
+        .id(task.id)
         .contextMenu { menu }
+        .onChange(of: actions.editRequest) { _, id in
+            guard id == task.id, !editing else { return }
+            draft = task.title
+            editing = true
+        }
     }
 
     @ViewBuilder private var title: some View {
@@ -165,5 +172,6 @@ struct TaskRowView: View {
         guard editing else { return }
         editing = false
         store.rename(task, to: draft)
+        actions.focusCapture()
     }
 }

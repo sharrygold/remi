@@ -74,6 +74,9 @@ enum LinkOpener {
 struct PanelActions {
     var open: (ItemAction) -> Void = { LinkOpener.perform($0) }
     var confirm: (String) -> Void = { _ in }
+    var focusCapture: () -> Void = {}
+    /// A task whose title the keyboard asked to edit.
+    var editRequest: UUID?
 }
 
 private struct PanelActionsKey: EnvironmentKey {

@@ -13,6 +13,7 @@ struct LinksPane: View {
     var body: some View {
         VStack(spacing: 0) {
             picker
+            ScrollViewReader { proxy in
             ScrollView {
                 VStack(alignment: .leading, spacing: density.sectionGap) {
                     let items = store.links(in: space, list: list)
@@ -28,6 +29,8 @@ struct LinksPane: View {
                 }
                 .padding(Tokens.Spacing.m)
                 .frame(maxWidth: .infinity, alignment: .leading)
+            }
+            .modifier(FollowSelection(proxy: proxy))
             }
         }
     }
@@ -144,6 +147,8 @@ struct LinkRowView: View {
             }
         }
         .padding(.vertical, density.rowPadding)
+        .keyboardHighlight(link.id)
+        .id(link.id)
         .onHover { hovering = $0 }
         .contextMenu { menu }
     }
