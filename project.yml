@@ -24,8 +24,11 @@ targets:
         MARKETING_VERSION: "0.1"
         CURRENT_PROJECT_VERSION: "1"
         SWIFT_VERSION: "5.0"
-        CODE_SIGN_STYLE: Manual
-        CODE_SIGN_IDENTITY: "-"
+        # Signed with a free Apple ID (Personal Team), so macOS keeps permissions such as
+        # notifications and Open at login across rebuilds. Use "-" to build without an account.
+        CODE_SIGN_STYLE: Automatic
+        DEVELOPMENT_TEAM: YOURTEAMID
+        CODE_SIGN_IDENTITY: Apple Development
         ENABLE_HARDENED_RUNTIME: NO
   PerchTests:
     type: bundle.unit-test
