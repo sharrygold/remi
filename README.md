@@ -71,7 +71,7 @@ Nothing is sent anywhere except the page fetch that gets a saved link's title an
 ## Project layout
 
 - `App/Core`: models, store, parser, search, export, backups. No UI; this is what the unit tests compile, and what a future iPhone app could reuse.
-- `App`: the AppKit shell (`main.swift`), the SwiftUI panel, notes editor, Settings and widgets. `DesignTokens.swift` holds the whole look.
+- `App`: the app around the core. `AppController.swift` starts everything (menus, settings, daily jobs), with extensions for the panel (`+Panel`), the widget (`+Widget`), the Settings window (`+Settings`) and the self-tests and demo data (`+SelfTests`). `main.swift` is just the entry point and launch options; `Windows.swift` holds the window classes. The SwiftUI views are in `PanelView`, `NotesPane`, `LinksPane`, `SearchPane`, `SettingsView` and `WidgetPrototypes`. `DesignTokens.swift` holds the whole look.
 - `Tests`: unit tests. `Scripts`: install and screenshot scripts.
 - `SPEC.md` is the product spec, `DECISIONS.md` records what changed and why, `PROGRESS.md` tracks milestones, `QA.md` is the acceptance checklist.
 
