@@ -209,6 +209,10 @@ final class AppController: NSObject, NSApplicationDelegate {
             search.query = String(text.dropFirst("--search=".count))
         }
         if options.open { showPanel() }
+        // For screenshots: show the keyboard selection on the first row.
+        if CommandLine.arguments.contains("--select-first") {
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) { self.nav.move(1) }
+        }
         // --settings=Spaces opens Settings on that section, without the widget, for screenshots.
         if let name = CommandLine.arguments.first(where: { $0.hasPrefix("--settings=") })?.dropFirst("--settings=".count) {
             handle.orderOut(nil)
@@ -1182,6 +1186,7 @@ final class AppController: NSObject, NSApplicationDelegate {
         NotificationCenter.default.addObserver(forName: NSWindow.didEndLiveResizeNotification, object: panel, queue: .main) { [weak self] _ in
             guard let self else { return }
             UserDefaults.standard.set(NSStringFromSize(self.panel.frame.size), forKey: Self.panelSizeKey)
+            self.panel.invalidateShadow()
         }
         configure(panel)
         // Esc steps back one layer at a time: the clipboard chip, then search, then the panel.
@@ -1194,8 +1199,9 @@ final class AppController: NSObject, NSApplicationDelegate {
             }
             self.hidePanel()
         }
-        // The system window shadow draws square dark corners around the glass in dark mode.
-        panel.hasShadow = false
+        // On macOS 27 the system shadow follows the rounded glass cleanly (it drew square corners in the
+        // Phase 1 build). It is recomputed once the panel has finished growing and after a resize.
+        panel.hasShadow = true
         let hosting = FirstMouseHostingView(rootView: PanelView(density: options.density, presentation: presentation, capture: capture, store: store,
                                                                                 search: search, nav: nav, tab: options.tab))
         // The window decides the size, so the edges can be dragged.
@@ -1309,6 +1315,7 @@ final class AppController: NSObject, NSApplicationDelegate {
                                         y: min(max(1 - (anchor.midY - origin.y) / size.height, 0), 1))
         panel.makeKeyAndOrderFront(nil)
         presentation.presented = true
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.4) { [weak self] in self?.panel.invalidateShadow() }
         // Global monitors only see clicks in other apps, so the handle can still toggle the panel.
         outsideClickMonitor = outsideClickMonitor ?? NSEvent.addGlobalMonitorForEvents(matching: [.leftMouseDown, .rightMouseDown]) { [weak self] _ in
             guard self?.presentation.pinned == false else { return }
