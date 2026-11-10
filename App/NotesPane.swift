@@ -12,6 +12,7 @@ struct NotesPane: View {
     /// Hands focus back to the capture bar after leaving a note.
     var onClose: () -> Void
     var onConfirm: (String) -> Void
+    @Environment(\.panelActions) private var actions
 
     private var openNote: Note? { store.notes.first { $0.id == openNoteID } }
 
@@ -166,7 +167,7 @@ struct NotesPane: View {
             .padding(.horizontal, Tokens.Spacing.m)
             .padding(.top, Tokens.Spacing.s + Tokens.Spacing.xs)
 
-            NoteEditor(note: note, store: store, onEscape: close)
+            NoteEditor(note: note, store: store, onEscape: close, onOpenLink: { actions.open(.url($0)) })
                 .id(note.id)
         }
     }

@@ -11,8 +11,11 @@ struct ParsedCapture: Equatable {
     var space: SpaceMatch = .none
     var due: Date?
     var important = false
+    /// The first URL typed or pasted. With no other words it makes a link, otherwise the task's action.
+    var url: URL?
 
     var canSave: Bool { !title.isEmpty }
+    var isLink: Bool { url != nil && title.isEmpty }
 }
 
 enum CaptureParser {
@@ -31,7 +34,12 @@ enum CaptureParser {
         var used = Set<Int>()
         var result = ParsedCapture(title: "")
 
-        if let index = words.firstIndex(where: { $0.hasPrefix("#") && $0.count > 1 }) {
+        if let index = words.firstIndex(where: { LinkClassifier.url(from: $0) != nil }) {
+            result.url = LinkClassifier.url(from: words[index])
+            used.insert(index)
+        }
+
+        if let index = words.indices.first(where: { !used.contains($0) && words[$0].hasPrefix("#") && words[$0].count > 1 }) {
             let typed = String(words[index].dropFirst())
             if let match = spaceNames.first(where: { normalized($0) == normalized(typed) }) {
                 result.space = .existing(match)
@@ -41,7 +49,7 @@ enum CaptureParser {
             used.insert(index)
         }
 
-        for (index, word) in words.enumerated() where word == "!" {
+        for (index, word) in words.enumerated() where word == "!" && !used.contains(index) {
             result.important = true
             used.insert(index)
         }

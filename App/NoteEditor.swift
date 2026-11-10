@@ -6,6 +6,7 @@ struct NoteEditor: NSViewRepresentable {
     let note: Note
     let store: LibraryStore
     var onEscape: () -> Void
+    var onOpenLink: (URL) -> Void
 
     func makeCoordinator() -> NoteEditorController {
         NoteEditorController(note: note, store: store)
@@ -13,11 +14,13 @@ struct NoteEditor: NSViewRepresentable {
 
     func makeNSView(context: Context) -> NSScrollView {
         context.coordinator.onEscape = onEscape
+        context.coordinator.onOpenLink = onOpenLink
         return context.coordinator.scrollView
     }
 
     func updateNSView(_ view: NSScrollView, context: Context) {
         context.coordinator.onEscape = onEscape
+        context.coordinator.onOpenLink = onOpenLink
     }
 
     static func dismantleNSView(_ view: NSScrollView, coordinator: NoteEditorController) {
@@ -157,6 +160,7 @@ final class NoteEditorController: NSObject, NSTextViewDelegate {
     let scrollView = NSScrollView()
     let textView: NoteTextView
     var onEscape: (() -> Void)?
+    var onOpenLink: ((URL) -> Void)?
     private let note: Note
     private let store: LibraryStore
     /// True while this controller makes its own edits, so the shortcut rules don't run on them.
@@ -246,6 +250,14 @@ final class NoteEditorController: NSObject, NSTextViewDelegate {
     func textDidChange(_ notification: Notification) {
         restyle()
         store.setBody(note, markdown)
+    }
+
+    /// Links open in the preferred browser, like links everywhere else in the panel.
+    func textView(_ textView: NSTextView, clickedOnLink link: Any, at charIndex: Int) -> Bool {
+        let url = (link as? URL) ?? (link as? String).flatMap(URL.init(string:))
+        guard let url, let onOpenLink else { return false }
+        onOpenLink(url)
+        return true
     }
 
     func textView(_ textView: NSTextView, shouldChangeTextIn range: NSRange, replacementString text: String?) -> Bool {

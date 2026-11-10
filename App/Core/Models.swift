@@ -14,6 +14,7 @@ final class Space {
     var updatedAt: Date = Date()
     @Relationship(deleteRule: .nullify, inverse: \TaskItem.space) var tasks: [TaskItem]? = []
     @Relationship(deleteRule: .nullify, inverse: \Note.space) var notes: [Note]? = []
+    @Relationship(deleteRule: .nullify, inverse: \LinkItem.space) var links: [LinkItem]? = []
 
     init(name: String, symbol: String, tintName: String, sortOrder: Int) {
         self.name = name
@@ -37,6 +38,9 @@ final class TaskItem {
     var createdAt: Date = Date()
     var updatedAt: Date = Date()
     var deletedAt: Date?
+    /// The optional doorway, stored as two plain fields so the model stays sync-friendly. Use `action`.
+    var actionKind: String?
+    var actionTarget: String?
 
     init(title: String, space: Space?, dueDate: Date?, isImportant: Bool, sortOrder: Int) {
         self.title = title
@@ -65,4 +69,95 @@ final class Note {
 
     var title: String { NoteText.title(of: body) }
     var preview: String { NoteText.preview(of: body) }
+}
+
+/// Something a task can open in one click.
+enum ItemAction: Equatable {
+    case url(URL)
+    case app(URL)
+    case file(URL)
+
+    var kind: String {
+        switch self {
+        case .url: "url"
+        case .app: "app"
+        case .file: "file"
+        }
+    }
+
+    var target: URL {
+        switch self {
+        case .url(let url), .app(let url), .file(let url): url
+        }
+    }
+
+    /// A short name for menus and VoiceOver: the site, the app or the file name.
+    var label: String {
+        switch self {
+        case .url(let url): LinkClassifier.displayHost(url)
+        case .app(let url): url.deletingPathExtension().lastPathComponent
+        case .file(let url): url.lastPathComponent
+        }
+    }
+}
+
+extension TaskItem {
+    var action: ItemAction? {
+        get {
+            guard let kind = actionKind, let target = actionTarget else { return nil }
+            switch kind {
+            case "url": return URL(string: target).map(ItemAction.url)
+            case "app": return .app(URL(fileURLWithPath: target))
+            case "file": return .file(URL(fileURLWithPath: target))
+            default: return nil
+            }
+        }
+        set {
+            actionKind = newValue?.kind
+            switch newValue {
+            case .url(let url): actionTarget = url.absoluteString
+            case .app(let url), .file(let url): actionTarget = url.path
+            case nil: actionTarget = nil
+            }
+        }
+    }
+}
+
+enum LinkList: String, CaseIterable {
+    case saved, watchLater
+
+    var title: String { self == .saved ? "Saved links" : "Watch later" }
+    var symbol: String { self == .saved ? "bookmark" : "play.rectangle" }
+}
+
+@Model
+final class LinkItem {
+    var id: UUID = UUID()
+    var urlString: String = ""
+    /// The page title once fetched; until then, the site name.
+    var title: String = ""
+    var iconData: Data?
+    var titleFetched: Bool = false
+    var listName: String = LinkList.saved.rawValue
+    var isPinned: Bool = false
+    var isWatched: Bool = false
+    var watchedAt: Date?
+    var space: Space?
+    var createdAt: Date = Date()
+    var updatedAt: Date = Date()
+    var deletedAt: Date?
+
+    init(url: URL, list: LinkList, space: Space?) {
+        urlString = url.absoluteString
+        title = LinkClassifier.displayHost(url)
+        listName = list.rawValue
+        self.space = space
+    }
+
+    var url: URL? { URL(string: urlString) }
+    var list: LinkList {
+        get { LinkList(rawValue: listName) ?? .saved }
+        set { listName = newValue.rawValue }
+    }
+    var domain: String { url.map(LinkClassifier.displayHost) ?? urlString }
 }

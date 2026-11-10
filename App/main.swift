@@ -126,7 +126,7 @@ final class AppController: NSObject, NSApplicationDelegate {
     private let capture = CaptureText()
     private lazy var store: LibraryStore = {
         let arguments = CommandLine.arguments
-        let usesMemory = ["--demo-data", "--m2-selftest", "--m3-selftest"].contains { arguments.contains($0) }
+        let usesMemory = ["--demo-data", "--m2-selftest", "--m3-selftest", "--m4-selftest"].contains { arguments.contains($0) }
         // --data-dir=PATH opens another library, used to check a copy of real data after a model change.
         let custom = arguments.first { $0.hasPrefix("--data-dir=") }.map { URL(fileURLWithPath: String($0.dropFirst("--data-dir=".count))) }
         let store = LibraryStore(directory: usesMemory ? nil : custom ?? LibraryStore.defaultDirectory)
@@ -136,6 +136,7 @@ final class AppController: NSObject, NSApplicationDelegate {
         if CommandLine.arguments.contains("--demo-data") { seedDemo(store) }
         return store
     }()
+    private lazy var metadata = LinkMetadataFetcher(store: store)
     private var hotKey: HotKey?
     private var hotKeyRegistered = false
     private var lastActivity = Date()
@@ -156,6 +157,11 @@ final class AppController: NSObject, NSApplicationDelegate {
             buildGallery()
             return
         }
+        store.onLinkAdded = { [weak self] link in self?.metadata.fetch(link) }
+        presentation.closeAfterOpening = { [weak self] in
+            guard let self, !self.presentation.pinned else { return }
+            self.hidePanel()
+        }
         if let style = options.handle { buildGalleryHandle(style) } else { buildWidget() }
         buildPanel()
         buildStatusItem()
@@ -166,6 +172,9 @@ final class AppController: NSObject, NSApplicationDelegate {
         NotificationCenter.default.addObserver(self, selector: #selector(screensChanged),
                                                name: NSApplication.didChangeScreenParametersNotification, object: nil)
         Timer.scheduledTimer(withTimeInterval: 1, repeats: true) { [weak self] _ in self?.idleTick() }
+        if let text = CommandLine.arguments.first(where: { $0.hasPrefix("--capture=") }) {
+            capture.text = String(text.dropFirst("--capture=".count))
+        }
         if options.open { showPanel() }
         if CommandLine.arguments.contains("--open-note") {
             DispatchQueue.main.async { self.presentation.noteToOpen = self.store.notes(in: nil).dropFirst().first?.id }
@@ -174,6 +183,7 @@ final class AppController: NSObject, NSApplicationDelegate {
         if CommandLine.arguments.contains("--m1-selftest") { runShellSelfTest() }
         if CommandLine.arguments.contains("--m2-selftest") { runCaptureSelfTest() }
         if CommandLine.arguments.contains("--m3-selftest") { runNotesSelfTest() }
+        if CommandLine.arguments.contains("--m4-selftest") { runLinksSelfTest() }
     }
 
     func applicationWillTerminate(_ notification: Notification) {
@@ -272,10 +282,16 @@ final class AppController: NSObject, NSApplicationDelegate {
     ///   or inside a note, it undoes the typing instead.
     /// - ⌘Return in the capture field saves a note.
     /// - ⌘N starts a new note.
+    /// - Tab on a pasted link switches between Saved links and Watch later.
     private func installPanelKeys() {
         NSEvent.addLocalMonitorForEvents(matching: .keyDown) { [weak self] event in
-            guard let self, self.panel.isKeyWindow,
-                  event.modifierFlags.intersection(.deviceIndependentFlagsMask) == .command else { return event }
+            guard let self, self.panel.isKeyWindow else { return event }
+            let flags = event.modifierFlags.intersection([.command, .shift, .option, .control])
+            if event.keyCode == UInt16(kVK_Tab), flags.isEmpty, self.capture.isFocused,
+               self.capture.toggleLinkList?() == true {
+                return nil
+            }
+            guard flags == .command else { return event }
             let inNote = (self.panel.firstResponder as? NSTextView)?.isFieldEditor == false
             switch event.keyCode {
             case UInt16(kVK_Return), UInt16(kVK_ANSI_KeypadEnter):
@@ -318,6 +334,26 @@ final class AppController: NSObject, NSApplicationDelegate {
             let note = store.newNote(in: store.spaces.first { $0.name == spaceName })
             store.setBody(note, body, now: Date().addingTimeInterval(Double(-index) * 5400))
             if pinned { store.setPinned(note, true) }
+        }
+        let links = [
+            ("https://www.example.com/team/~01example", "Team handbook", "Clients", true),
+            ("https://docs.google.com/spreadsheets/d/invoice-tracker", "Invoice tracker", "Clients", false),
+            ("https://linear.app/team/dashboard", "Team dashboard", "Work", false),
+            ("https://www.youtube.com/watch?v=invoices101", "How to write invoices that win", "Clients", false),
+            ("https://www.youtube.com/watch?v=swiftuilayout", "SwiftUI layout, explained", "Learning", false),
+        ]
+        for (address, title, spaceName, pinned) in links {
+            guard let url = URL(string: address) else { continue }
+            let link = store.addLink(url, currentSpace: store.spaces.first { $0.name == spaceName }).link
+            store.setMetadata(for: link.id, title: title, iconData: nil)
+            if pinned { store.setPinned(link, true) }
+        }
+        if let task = store.tasks.first(where: { $0.title.hasPrefix("Record Loom") }),
+           let loom = NSWorkspace.shared.urlForApplication(withBundleIdentifier: "com.loom.desktop") ?? URL(string: "https://www.loom.com") {
+            store.setAction(task, loom.isFileURL ? .app(loom) : .url(loom))
+        }
+        if let task = store.tasks.first(where: { $0.title.hasPrefix("Send design") }), let url = URL(string: "https://www.example.com/nx/invoices") {
+            store.setAction(task, .url(url))
         }
         store.save()
         store.reload()
@@ -434,6 +470,81 @@ final class AppController: NSObject, NSApplicationDelegate {
                     }
                 }
             }
+        }
+    }
+
+    /// Pastes a YouTube link and checks its list, title and icon; uses Tab to switch a link's list;
+    /// saves a task with a URL as its action; and offers a URL from a private test clipboard.
+    private func runLinksSelfTest() {
+        func after(_ seconds: Double, _ work: @escaping () -> Void) {
+            DispatchQueue.main.asyncAfter(deadline: .now() + seconds, execute: work)
+        }
+        func type(_ text: String) {
+            (panel.firstResponder as? NSTextView)?.insertText(text, replacementRange: NSRange(location: NSNotFound, length: 0))
+        }
+        func describe(_ link: LinkItem?) -> String {
+            guard let link else { return "nil" }
+            return "\(link.title)|\(link.list.rawValue)|\(link.space?.name ?? "-")|icon=\(link.iconData?.count ?? 0)B|fetched=\(link.titleFetched)"
+        }
+        print("browser=\(LinkOpener.browserURL?.lastPathComponent ?? "system default")")
+        after(1) { [self] in
+            showPanel()
+            after(0.5) { [self] in
+                type("https://www.youtube.com/watch?v=jNQXAC9IVRw")
+                after(0.2) { [self] in
+                    postKey("\r", code: 36)
+                    after(0.3) { [self] in
+                        print("youtube saved: \(describe(store.links.first)) field=[\(capture.text)]")
+                        type("developer.apple.com/documentation/linkpresentation #learning")
+                        postKey("\t", code: 48)
+                        after(0.3) { [self] in
+                            print("after tab override=\(capture.linkListOverride?.rawValue ?? "nil")")
+                            postKey("\r", code: 36)
+                            after(0.3) { [self] in
+                                print("apple doc saved: \(describe(store.links.first))")
+                                type("Update profile https://www.example.com/team/ today")
+                                postKey("\r", code: 36)
+                                after(0.3) { [self] in
+                                    let task = store.tasks.first
+                                    print("task: \(task?.title ?? "nil") action=\(task?.action?.label ?? "nil") due=\(task?.dueDate != nil)")
+                                    type("https://www.youtube.com/watch?v=jNQXAC9IVRw")
+                                    postKey("\r", code: 36)
+                                    after(0.3) { [self] in
+                                        print("duplicate kept count=\(store.links.count)")
+                                        checkClipboardNudge {
+                                            after(8) { [self] in
+                                                print("after fetch: \(store.links.map { describe($0) })")
+                                                NSApp.terminate(nil)
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    /// Uses a private pasteboard, so the user's own clipboard is never touched.
+    private func checkClipboardNudge(then done: @escaping () -> Void) {
+        let board = NSPasteboard(name: NSPasteboard.Name("perch-selftest"))
+        board.clearContents()
+        board.setString("https://www.notion.so/invoice-template", forType: .string)
+        Task { @MainActor in
+            let offer = await ClipboardNudge.check(board) { [store] in store.isSaved($0) }
+            print("clipboard behavior=\(board.accessBehavior.rawValue) offer url=\(offer?.url?.absoluteString ?? "nil") offered=\(offer != nil)")
+            board.clearContents()
+            board.setString("https://www.youtube.com/watch?v=jNQXAC9IVRw", forType: .string)
+            let saved = await ClipboardNudge.check(board) { [store] in store.isSaved($0) }
+            print("already saved url offered=\(saved != nil)")
+            board.clearContents()
+            board.setString("just some words", forType: .string)
+            let words = await ClipboardNudge.check(board) { [store] in store.isSaved($0) }
+            print("plain text offered=\(words != nil)")
+            board.releaseGlobally()
+            done()
         }
     }
 
@@ -769,6 +880,7 @@ final class AppController: NSObject, NSApplicationDelegate {
     }
 
     private func showPanel() {
+        metadata.fetchMissing()
         debug.tucked = false
         lastActivity = Date()
         let visible = (handle.screen ?? NSScreen.screens[0]).visibleFrame

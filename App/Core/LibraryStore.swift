@@ -11,6 +11,9 @@ final class LibraryStore: ObservableObject {
     @Published private(set) var spaces: [Space] = []
     @Published private(set) var tasks: [TaskItem] = []
     @Published private(set) var notes: [Note] = []
+    @Published private(set) var links: [LinkItem] = []
+    /// Called after a link is saved, so the app can fetch its title and icon. Keeps this file free of networking.
+    var onLinkAdded: ((LinkItem) -> Void)?
     /// True when the saved data could not be opened and this session is temporary.
     private(set) var isTemporary = false
 
@@ -23,7 +26,7 @@ final class LibraryStore: ObservableObject {
 
     /// `directory` nil keeps everything in memory, for tests and demos.
     init(directory: URL?) {
-        let schema = Schema([Space.self, TaskItem.self, Note.self])
+        let schema = Schema([Space.self, TaskItem.self, Note.self, LinkItem.self])
         var container: ModelContainer?
         if let directory {
             try? FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
@@ -60,6 +63,8 @@ final class LibraryStore: ObservableObject {
         tasks = all.filter { $0.deletedAt == nil }
         let allNotes = (try? context.fetch(FetchDescriptor<Note>())) ?? []
         notes = allNotes.filter { $0.deletedAt == nil }
+        let allLinks = (try? context.fetch(FetchDescriptor<LinkItem>(sortBy: [SortDescriptor(\.createdAt, order: .reverse)]))) ?? []
+        links = allLinks.filter { $0.deletedAt == nil }
     }
 
     func save() {
@@ -99,6 +104,7 @@ final class LibraryStore: ObservableObject {
         let (space, createdSpace) = resolveSpace(parsed.space, currentSpace: currentSpace)
         let order = (tasks.map(\.sortOrder).min() ?? 0) - 1
         let task = TaskItem(title: parsed.title, space: space, dueDate: parsed.due, isImportant: parsed.important, sortOrder: order)
+        if let url = parsed.url { task.action = .url(url) }
         context.insert(task)
         commit { [context] in
             context.delete(task)
@@ -165,6 +171,11 @@ final class LibraryStore: ObservableObject {
     func setDue(_ task: TaskItem, _ date: Date?) {
         let previous = task.dueDate
         change(task, { $0.dueDate = date }, undo: { $0.dueDate = previous })
+    }
+
+    func setAction(_ task: TaskItem, _ action: ItemAction?) {
+        let previous = task.action
+        change(task, { $0.action = action }, undo: { $0.action = previous })
     }
 
     func move(_ task: TaskItem, to space: Space) {

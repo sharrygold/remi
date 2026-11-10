@@ -14,6 +14,8 @@ final class PanelPresentation: ObservableObject {
     @Published var newNoteRequests = 0
     /// Opens a particular note, for example from search.
     @Published var noteToOpen: UUID?
+    /// Closes the panel after something opens elsewhere, unless it is pinned. Set by the app.
+    var closeAfterOpening: () -> Void = {}
 }
 
 struct PanelView: View {
@@ -26,6 +28,8 @@ struct PanelView: View {
     @State private var showDone = false
     @State private var confirmation: String?
     @State private var openNoteID: UUID?
+    @State private var linkList: LinkList = .saved
+    @State private var clipboardOffer: ClipboardOffer?
     @FocusState private var captureFocused: Bool
     @Environment(\.accessibilityReduceTransparency) private var reduceTransparency
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
@@ -41,7 +45,7 @@ struct PanelView: View {
     var body: some View {
         VStack(spacing: Tokens.Spacing.s) {
             captureBar
-            if showsTokens { tokenRow }
+            if showsTokens { tokenRow } else if let clipboardOffer { clipboardChip(clipboardOffer) }
             spaceSwitcher
             tabs
             content
@@ -59,15 +63,21 @@ struct PanelView: View {
         }
         .opacity(presentation.presented ? 1 : 0)
         .animation(Tokens.Motion.panel, value: presentation.presented)
+        .environment(\.panelActions, PanelActions(open: openItem, confirm: { show(confirmation: $0) }))
         .onAppear {
             captureFocused = true
             capture.submitNote = submitNote
+            capture.toggleLinkList = toggleLinkList
         }
+        .onChange(of: capture.text) { _, _ in capture.linkListOverride = nil }
         .onChange(of: captureFocused) { _, focused in capture.isFocused = focused }
         .onChange(of: presentation.presented) { _, presented in
             if presented {
                 captureFocused = true
                 store.reload()
+                checkClipboard()
+            } else {
+                clipboardOffer = nil
             }
         }
         .onChange(of: presentation.newNoteRequests) { _, _ in startNewNote() }
@@ -104,14 +114,21 @@ struct PanelView: View {
         HStack(spacing: Tokens.Spacing.xs) {
             if let confirmation, capture.text.isEmpty {
                 token(confirmation, symbol: "checkmark", tint: .secondary)
+            } else if parsed.isLink {
+                spaceToken
+                token(captureLinkList.title, symbol: captureLinkList.symbol, tint: .accentColor)
             } else {
                 spaceToken
                 if let due = parsed.due { token(DueLabel.text(for: due), symbol: "calendar", tint: .secondary) }
                 if parsed.important { token("Important", symbol: "exclamationmark", tint: .secondary) }
+                if let url = parsed.url { token(LinkClassifier.displayHost(url), symbol: "arrow.up.right", tint: .secondary)
+                    .accessibilityLabel("Opens \(LinkClassifier.displayHost(url))") }
             }
             Spacer()
             if confirmation == nil || !capture.text.isEmpty {
-                Text("⌘↩ saves as a note").font(Tokens.TextRole.detail).foregroundStyle(.tertiary)
+                Text(parsed.isLink ? "Tab switches list" : "⌘↩ saves as a note").font(Tokens.TextRole.detail).foregroundStyle(.tertiary)
+                    .lineLimit(1)
+                    .layoutPriority(-1)
             }
         }
         .frame(height: Tokens.Spacing.l)
@@ -132,6 +149,8 @@ struct PanelView: View {
 
     private func token(_ text: String, symbol: String, tint: Color) -> some View {
         Label(text, systemImage: symbol)
+            .lineLimit(1)
+            .fixedSize()
             .font(Tokens.TextRole.detail)
             .foregroundStyle(tint)
             .padding(.horizontal, Tokens.Spacing.s)
@@ -139,8 +158,27 @@ struct PanelView: View {
             .background(tint.opacity(0.14), in: Capsule())
     }
 
+    /// The list a captured link will go to: Watch later for videos, unless Tab switched it.
+    private var captureLinkList: LinkList {
+        capture.linkListOverride ?? parsed.url.map(LinkClassifier.list(for:)) ?? .saved
+    }
+
+    /// Tab in the capture bar flips a link between Saved links and Watch later. Returns false when not a link.
+    private func toggleLinkList() -> Bool {
+        guard parsed.isLink else { return false }
+        capture.linkListOverride = captureLinkList == .saved ? .watchLater : .saved
+        return true
+    }
+
     private func submit() {
         let result = parsed
+        if result.isLink, let url = result.url {
+            let saved = store.addLink(url, list: captureLinkList, spaceMatch: result.space, currentSpace: selectedSpace)
+            capture.text = ""
+            show(confirmation: saved.isNew ? "Saved to \(saved.link.list.title)  ·  ⌘Z to undo"
+                                           : "Already in \(saved.link.list.title)")
+            return
+        }
         guard let task = store.add(result, currentSpace: selectedSpace) else { return }
         capture.text = ""
         show(confirmation: "Added to \(task.space?.name ?? "Tasks")  ·  ⌘Z to undo")
@@ -158,6 +196,60 @@ struct PanelView: View {
         let note = store.newNote(in: selectedSpace)
         tab = .notes
         openNoteID = note.id
+    }
+
+    private func openItem(_ action: ItemAction) {
+        if LinkOpener.perform(action) {
+            presentation.closeAfterOpening()
+        } else {
+            show(confirmation: "Can't find \(action.label). It may have moved.")
+        }
+    }
+
+    // MARK: Clipboard
+
+    private func checkClipboard() {
+        Task { @MainActor in
+            clipboardOffer = await ClipboardNudge.check(isSaved: store.isSaved)
+        }
+    }
+
+    private func clipboardChip(_ offer: ClipboardOffer) -> some View {
+        HStack(spacing: Tokens.Spacing.s) {
+            Image(systemName: "doc.on.clipboard").foregroundStyle(.secondary).accessibilityHidden(true)
+            Text(offer.url.map { "Save link from clipboard? \(LinkClassifier.displayHost($0))" } ?? "Save link from clipboard?")
+                .lineLimit(1)
+            Spacer(minLength: Tokens.Spacing.xs)
+            Button("Save") { saveClipboard(offer) }
+                .buttonStyle(.plain)
+                .foregroundStyle(Color.accentColor)
+                .fontWeight(.semibold)
+            Button { dismissClipboard(offer) } label: { Image(systemName: "xmark") }
+                .buttonStyle(.plain)
+                .foregroundStyle(.secondary)
+                .accessibilityLabel("Dismiss")
+        }
+        .font(Tokens.TextRole.detail)
+        .padding(.horizontal, Tokens.Spacing.s + Tokens.Spacing.xs)
+        .frame(height: Tokens.Spacing.l + Tokens.Spacing.xs)
+        .background(Color.accentColor.opacity(0.1), in: Capsule())
+        .transition(.opacity)
+    }
+
+    private func saveClipboard(_ offer: ClipboardOffer) {
+        ClipboardNudge.markHandled(offer)
+        clipboardOffer = nil
+        guard let url = offer.url ?? ClipboardNudge.readURL() else {
+            show(confirmation: "The clipboard no longer holds a link")
+            return
+        }
+        let saved = store.addLink(url, currentSpace: selectedSpace)
+        show(confirmation: saved.isNew ? "Saved to \(saved.link.list.title)  ·  ⌘Z to undo" : "Already in \(saved.link.list.title)")
+    }
+
+    private func dismissClipboard(_ offer: ClipboardOffer) {
+        ClipboardNudge.markHandled(offer)
+        withAnimation(Tokens.Motion.quick) { clipboardOffer = nil }
     }
 
     private func show(confirmation text: String) {
@@ -248,13 +340,12 @@ struct PanelView: View {
                 NotesPane(store: store, density: density, space: selectedSpace, showsSpace: selectedSpaceID == nil,
                           openNoteID: $openNoteID, onNewNote: startNewNote, onClose: { captureFocused = true },
                           onConfirm: { show(confirmation: $0) })
+            } else if tab == .links {
+                LinksPane(store: store, density: density, space: selectedSpace, showsSpace: selectedSpaceID == nil, list: $linkList)
             } else {
                 ScrollView {
                     VStack(alignment: .leading, spacing: density.sectionGap) {
-                        switch tab {
-                        case .today: todayContent
-                        default: linksContent
-                        }
+                        todayContent
                     }
                     .padding(Tokens.Spacing.m)
                     .frame(maxWidth: .infinity, alignment: .leading)
@@ -283,6 +374,24 @@ struct PanelView: View {
                     ForEach(overdue) { taskRow($0) }
                 }
             }
+        }
+        watchLaterShortcut
+    }
+
+    /// A quiet count that jumps to the Watch later list.
+    @ViewBuilder private var watchLaterShortcut: some View {
+        let count = store.watchLaterCount(in: selectedSpace)
+        if count > 0 {
+            Button {
+                linkList = .watchLater
+                tab = .links
+            } label: {
+                Label(count == 1 ? "1 to watch later" : "\(count) to watch later", systemImage: "play.rectangle")
+                    .font(Tokens.TextRole.detail)
+                    .foregroundStyle(.secondary)
+            }
+            .buttonStyle(.plain)
+            .padding(.top, Tokens.Spacing.xs)
         }
     }
 
@@ -343,29 +452,11 @@ struct PanelView: View {
         .padding(.top, Tokens.Spacing.l * 2)
     }
 
-    private var linksContent: some View {
-        Group {
-            section("Saved links", tint: .secondary, symbol: "bookmark") { ForEach(Sample.saved) { linkRow($0) } }
-            section("Watch later", tint: .secondary, symbol: "play.rectangle") { ForEach(Sample.watchLater) { linkRow($0) } }
-        }
-    }
-
     private func section<Rows: View>(_ title: String, tint: Color, symbol: String, @ViewBuilder rows: () -> Rows) -> some View {
         VStack(alignment: .leading, spacing: density.rowPadding) {
             Label(title, systemImage: symbol).font(Tokens.TextRole.sectionTitle).foregroundStyle(tint)
             rows()
         }
-    }
-
-    private func linkRow(_ link: SampleLink) -> some View {
-        HStack(spacing: Tokens.Spacing.s) {
-            Image(systemName: link.symbol).foregroundStyle(link.space.tint).frame(width: Tokens.Spacing.m + Tokens.Spacing.xs)
-            VStack(alignment: .leading) {
-                Text(link.title).font(Tokens.TextRole.row).lineLimit(1)
-                Text(link.domain).font(Tokens.TextRole.detail).foregroundStyle(.secondary)
-            }
-        }
-        .padding(.vertical, density.rowPadding)
     }
 
     private var footer: some View {
@@ -393,4 +484,7 @@ final class CaptureText: ObservableObject {
     /// Mirrors the field's focus, so ⌘Return is only taken while typing a capture.
     var isFocused = false
     var submitNote: (() -> Void)?
+    /// Tab on a pasted link; returns false when the text is not a link, so Tab behaves normally.
+    var toggleLinkList: (() -> Bool)?
+    @Published var linkListOverride: LinkList?
 }

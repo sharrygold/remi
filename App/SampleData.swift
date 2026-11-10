@@ -17,14 +17,6 @@ struct SampleTask: Identifiable {
     var hasAction = false
 }
 
-struct SampleLink: Identifiable {
-    let id = UUID()
-    let title: String
-    let domain: String
-    let space: SampleSpace
-    var symbol = "globe"
-}
-
 enum Sample {
     static let clients = SampleSpace(name: "Clients", symbol: "briefcase", tint: Tokens.Tint.clients)
     static let work = SampleSpace(name: "Work", symbol: "building.2", tint: Tokens.Tint.work)
@@ -46,14 +38,5 @@ enum Sample {
         SampleTask(title: "Tidy the shared drive", space: clients, due: "Fri", hasAction: true),
         SampleTask(title: "Finish SwiftUI layout module", space: learning, due: "Tomorrow"),
         SampleTask(title: "Plan the garden beds", space: homeReno, due: "Mon"),
-    ]
-    static let saved = [
-        SampleLink(title: "Team handbook", domain: "example.com", space: clients, symbol: "person.crop.circle"),
-        SampleLink(title: "Invoice tracker", domain: "docs.google.com", space: clients, symbol: "doc.text"),
-        SampleLink(title: "Team dashboard", domain: "linear.app", space: work, symbol: "chart.bar"),
-    ]
-    static let watchLater = [
-        SampleLink(title: "How to write invoices that win", domain: "youtube.com", space: clients, symbol: "play.rectangle"),
-        SampleLink(title: "SwiftUI layout, explained", domain: "youtube.com", space: learning, symbol: "play.rectangle"),
     ]
 }

@@ -23,6 +23,7 @@ struct TaskRowView: View {
     @State private var draft = ""
     @FocusState private var fieldFocused: Bool
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @Environment(\.panelActions) private var actions
 
     var body: some View {
         HStack(spacing: Tokens.Spacing.s) {
@@ -41,6 +42,7 @@ struct TaskRowView: View {
                     .accessibilityLabel("Important")
             }
             Spacer(minLength: Tokens.Spacing.s)
+            if let action = task.action { actionButton(action) }
             if let due = task.dueDate {
                 Text(DueLabel.text(for: due)).font(Tokens.TextRole.detail).foregroundStyle(.secondary)
             }
@@ -76,7 +78,64 @@ struct TaskRowView: View {
         }
     }
 
+    /// The task's doorway: one click opens the link, app or folder.
+    private func actionButton(_ action: ItemAction) -> some View {
+        let available = LinkOpener.isAvailable(action)
+        return Button { actions.open(action) } label: {
+            Image(systemName: Self.symbol(for: action))
+                .font(Tokens.TextRole.detail.weight(.semibold))
+                .foregroundStyle(available ? AnyShapeStyle(task.space?.tint ?? .accentColor) : AnyShapeStyle(.tertiary))
+                .padding(.horizontal, Tokens.Spacing.s - 2)
+                .padding(.vertical, 2)
+                .background((task.space?.tint ?? .accentColor).opacity(available ? 0.14 : 0.05), in: Capsule())
+        }
+        .buttonStyle(.plain)
+        .disabled(!available)
+        .help(available ? "Open \(action.label)" : "Can't find \(action.label). It may have moved.")
+        .accessibilityLabel(available ? "Open \(action.label)" : "\(action.label) can't be found")
+    }
+
+    static func symbol(for action: ItemAction) -> String {
+        switch action {
+        case .url: "arrow.up.right"
+        case .app: "app"
+        case .file: "folder"
+        }
+    }
+
+    @ViewBuilder private var actionMenu: some View {
+        Menu(task.action == nil ? "Add Action" : "Action") {
+            if let action = task.action {
+                Button("Open \(action.label)") { actions.open(action) }
+                Divider()
+            }
+            Button("Paste Link") {
+                guard let url = ClipboardNudge.readURL() else {
+                    actions.confirm("There is no link on the clipboard")
+                    return
+                }
+                store.setAction(task, .url(url))
+            }
+            Button("Choose App…") { choose(app: true) }
+            Button("Choose File or Folder…") { choose(app: false) }
+            if task.action != nil {
+                Divider()
+                Button("Remove Action") { store.setAction(task, nil) }
+            }
+        }
+    }
+
+    /// Runs after the menu closes, so the file chooser isn't opened mid-menu.
+    private func choose(app: Bool) {
+        DispatchQueue.main.async {
+            guard let url = LinkOpener.choose(app: app) else { return }
+            store.setAction(task, app ? .app(url) : .file(url))
+        }
+    }
+
     @ViewBuilder private var menu: some View {
+        actionMenu
+        Divider()
         Menu("Move to") {
             ForEach(store.spaces) { space in
                 Button(space.name) { store.move(task, to: space) }.disabled(space.id == task.space?.id)
