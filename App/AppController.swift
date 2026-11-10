@@ -123,6 +123,11 @@ final class AppController: NSObject, NSApplicationDelegate {
             search.query = String(text.dropFirst("--search=".count))
         }
         if options.open { showPanel() }
+        // For screenshots of the closing animation: --close-at=SECONDS closes the panel then.
+        if let text = CommandLine.arguments.first(where: { $0.hasPrefix("--close-at=") }),
+           let seconds = Double(text.dropFirst("--close-at=".count)) {
+            DispatchQueue.main.asyncAfter(deadline: .now() + seconds) { self.hidePanel() }
+        }
         // For screenshots: --add opens the current tab's "+" field once the panel is up.
         if CommandLine.arguments.contains("--add") {
             DispatchQueue.main.asyncAfter(deadline: .now() + 1) { self.presentation.addRequests += 1 }

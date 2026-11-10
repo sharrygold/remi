@@ -147,9 +147,18 @@ extension AppController {
         store.save()
         presentation.presented = false
         presentation.pinned = false
+        // The glass, the list card and the shadow all leave together: the window fades as one
+        // while the mask shrinks back into the widget.
+        panel.hasShadow = false
+        NSAnimationContext.runAnimationGroup { context in
+            context.duration = Tokens.Motion.panelCloseSeconds
+            context.timingFunction = CAMediaTimingFunction(name: .easeIn)
+            panel.animator().alphaValue = 0
+        }
         DispatchQueue.main.asyncAfter(deadline: .now() + Tokens.Motion.panelCloseSeconds) { [weak self] in
             guard let self, !self.presentation.presented else { return }
             self.panel.orderOut(nil)
+            self.presentation.shown = false
         }
         if let monitor = outsideClickMonitor {
             NSEvent.removeMonitor(monitor)
@@ -175,8 +184,14 @@ extension AppController {
                                         y: min(max(1 - (anchor.midY - origin.y) / size.height, 0), 1))
         // --no-focus shows the panel without taking the keyboard, for screenshots while the user works.
         if CommandLine.arguments.contains("--no-focus") { panel.orderFrontRegardless() } else { panel.makeKeyAndOrderFront(nil) }
+        panel.alphaValue = 1
+        presentation.shown = true
         presentation.presented = true
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.4) { [weak self] in self?.panel.invalidateShadow() }
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.4) { [weak self] in
+            guard let self, self.presentation.presented else { return }
+            self.panel.hasShadow = true
+            self.panel.invalidateShadow()
+        }
         // Global monitors only see clicks in other apps, so the handle can still toggle the panel.
         outsideClickMonitor = outsideClickMonitor ?? NSEvent.addGlobalMonitorForEvents(matching: [.leftMouseDown, .rightMouseDown]) { [weak self] _ in
             guard self?.presentation.pinned == false else { return }

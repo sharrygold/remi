@@ -8,6 +8,8 @@ enum PanelTab: String, CaseIterable, Identifiable {
 /// Drives the panel growing out of, and shrinking back into, the widget.
 final class PanelPresentation: ObservableObject {
     @Published var presented = false
+    /// True from opening until the window is ordered out, so closing doesn't fade the view.
+    @Published var shown = false
     @Published var pinned = false
     @Published var anchor = UnitPoint.trailing
     /// Bumped by ⌘N and the widget's New Note item; the panel answers by opening a blank note.
@@ -50,6 +52,9 @@ struct PanelView: View {
 
     private let shape = RoundedRectangle(cornerRadius: Tokens.Radius.panel, style: .continuous)
 
+    /// Between the close starting and the window being ordered out.
+    private var closing: Bool { presentation.shown && !presentation.presented }
+
     private var selectedSpace: Space? { store.spaces.first { $0.id == selectedSpaceID } }
 
     private var parsed: ParsedCapture {
@@ -81,10 +86,14 @@ struct PanelView: View {
         }
         .glassEffect(reduceTransparency ? .identity : .regular, in: shape)
         // A growing mask rather than scaling the content, which knocks the text field out of position.
+        // Opening grows out of the widget. Closing doesn't shrink the mask (the glass drops out under a
+        // shrinking mask and leaves the darker list card behind as a box); the whole panel eases a
+        // little toward the widget while the window fades (see hidePanel).
         .mask {
-            shape.scaleEffect(presentation.presented || reduceMotion ? 1 : 0.08, anchor: presentation.anchor)
+            shape.scaleEffect(presentation.presented || presentation.shown || reduceMotion ? 1 : 0.08, anchor: presentation.anchor)
         }
-        .opacity(presentation.presented ? 1 : 0)
+        .scaleEffect(closing && !reduceMotion ? 0.94 : 1, anchor: presentation.anchor)
+        .opacity(presentation.shown ? 1 : 0)
         .animation(Tokens.Motion.panel, value: presentation.presented)
         .environment(\.panelActions, PanelActions(open: openItem, confirm: { show(confirmation: $0) },
                                                    focusCapture: { captureFocused = true }, editRequest: editRequest))
