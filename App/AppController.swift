@@ -42,13 +42,13 @@ final class AppController: NSObject, NSApplicationDelegate {
 
     /// Self-tests and demos keep everything in memory and must not show permission prompts or write backups.
     var isScratchSession: Bool {
-        ["--demo-data", "--m2-selftest", "--m3-selftest", "--m4-selftest", "--m5-selftest", "--m6-selftest", "--clipboard-selftest"]
+        ["--demo-data", "--m2-selftest", "--m3-selftest", "--m4-selftest", "--m5-selftest", "--m6-selftest", "--clipboard-selftest", "--add-selftest"]
             .contains { CommandLine.arguments.contains($0) }
     }
 
     lazy var store: LibraryStore = {
         let arguments = CommandLine.arguments
-        let usesMemory = ["--demo-data", "--m2-selftest", "--m3-selftest", "--m4-selftest", "--m5-selftest", "--m6-selftest", "--clipboard-selftest"].contains { arguments.contains($0) }
+        let usesMemory = ["--demo-data", "--m2-selftest", "--m3-selftest", "--m4-selftest", "--m5-selftest", "--m6-selftest", "--clipboard-selftest", "--add-selftest"].contains { arguments.contains($0) }
         // --data-dir=PATH opens another library, used to check a copy of real data after a model change.
         let custom = arguments.first { $0.hasPrefix("--data-dir=") }.map { URL(fileURLWithPath: String($0.dropFirst("--data-dir=".count))) }
         let store = LibraryStore(directory: usesMemory ? nil : custom ?? LibraryStore.defaultDirectory)
@@ -123,6 +123,10 @@ final class AppController: NSObject, NSApplicationDelegate {
             search.query = String(text.dropFirst("--search=".count))
         }
         if options.open { showPanel() }
+        // For screenshots: --add opens the current tab's "+" field once the panel is up.
+        if CommandLine.arguments.contains("--add") {
+            DispatchQueue.main.asyncAfter(deadline: .now() + 1) { self.presentation.addRequests += 1 }
+        }
         // For screenshots: --space-step=1 picks the first Space after All.
         if let step = CommandLine.arguments.first(where: { $0.hasPrefix("--space-step=") }).flatMap({ Int($0.dropFirst("--space-step=".count)) }) {
             DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) { self.nav.switchSpace(step) }
@@ -170,6 +174,7 @@ final class AppController: NSObject, NSApplicationDelegate {
             }
         }
         if CommandLine.arguments.contains("--clipboard-selftest") { runClipboardChipSelfTest() }
+        if CommandLine.arguments.contains("--add-selftest") { runAddSelfTest() }
     }
 
     func applicationWillTerminate(_ notification: Notification) {

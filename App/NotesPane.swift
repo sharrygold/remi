@@ -30,19 +30,15 @@ struct NotesPane: View {
         let notes = store.notes(in: space)
         let pinned = notes.filter(\.isPinned)
         let others = notes.filter { !$0.isPinned }
+        VStack(spacing: 0) {
+        PaneHeader(addTitle: "New note", addHelp: "New note (⌘N)", onAdd: onNewNote) {
+            Text(notes.count == 1 ? "1 note" : "\(notes.count) notes")
+                .font(Tokens.TextRole.detail.weight(.medium))
+                .foregroundStyle(.secondary)
+        }
         ScrollViewReader { proxy in
         ScrollView {
             VStack(alignment: .leading, spacing: density.sectionGap) {
-                Button(action: onNewNote) {
-                    Label("New Note", systemImage: "square.and.pencil")
-                        .font(Tokens.TextRole.meta)
-                        .foregroundStyle(Color.accentColor)
-                        .frame(maxWidth: .infinity, alignment: .leading)
-                        .contentShape(Rectangle())
-                }
-                .buttonStyle(.plain)
-                .help("New note (⌘N)")
-
                 if notes.isEmpty {
                     emptyState
                 } else {
@@ -55,13 +51,14 @@ struct NotesPane: View {
         }
         .modifier(FollowSelection(proxy: proxy))
         }
+        }
     }
 
     private var emptyState: some View {
         VStack(spacing: Tokens.Spacing.s) {
             Image(systemName: "note.text").font(.title2).foregroundStyle(.secondary).accessibilityHidden(true)
             Text("No notes here yet").font(Tokens.TextRole.sectionTitle)
-            Text("Type above and press ⌘Return, or start a new note.")
+            Text("Start a new note, or type below and press ⌘Return.")
                 .font(Tokens.TextRole.detail).foregroundStyle(.secondary).multilineTextAlignment(.center)
         }
         .frame(maxWidth: .infinity)

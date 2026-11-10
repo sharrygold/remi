@@ -7,12 +7,20 @@ struct LinksPane: View {
     let space: Space?
     let showsSpace: Bool
     @Binding var list: LinkList
+    /// Bumped from outside to open the Add link field.
+    var addRequests = 0
     @State private var showWatched = false
+    @State private var adding = false
+    /// A link just added by hand, whose name field opens next.
+    @State private var renameID: UUID?
     @Environment(\.panelActions) private var actions
 
     var body: some View {
         VStack(spacing: 0) {
             picker
+            if adding {
+                InlineAddField(placeholder: "Paste or type a link", symbol: "link", onSave: addLink, onClose: { closeAdding() })
+            }
             ScrollViewReader { proxy in
             ScrollView {
                 VStack(alignment: .leading, spacing: density.sectionGap) {
@@ -33,6 +41,44 @@ struct LinksPane: View {
             .modifier(FollowSelection(proxy: proxy))
             }
         }
+        .environment(\.panelActions, renameActions)
+        .onChange(of: addRequests) { _, _ in adding = true }
+        .onChange(of: list) { _, _ in adding = false }
+    }
+
+    /// Passes the just-added link's rename request down to its row.
+    private var renameActions: PanelActions {
+        var copy = actions
+        if let renameID { copy.editRequest = renameID }
+        return copy
+    }
+
+    /// Saves to the list on screen, then opens the new link's name, since a bare address
+    /// says little about why you kept it. Return keeps the page title, Esc too.
+    private func addLink(_ text: String) -> Bool {
+        guard let url = CaptureParser.parse(text, spaceNames: []).url else {
+            actions.confirm("That doesn't look like a link")
+            return false
+        }
+        let saved = store.addLink(url, list: list, currentSpace: space)
+        closeAdding(refocus: false)
+        guard saved.isNew else {
+            actions.confirm("Already in \(saved.link.list.title)")
+            actions.focusCapture()
+            return true
+        }
+        actions.confirm("Saved to \(saved.link.list.title)  ·  name it, or Esc")
+        let id = saved.link.id
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.15) {
+            renameID = id
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) { renameID = nil }
+        }
+        return true
+    }
+
+    private func closeAdding(refocus: Bool = true) {
+        adding = false
+        if refocus { actions.focusCapture() }
     }
 
     private var picker: some View {
@@ -51,18 +97,22 @@ struct LinksPane: View {
                 .buttonStyle(.plain)
                 .accessibilityAddTraits(list == item ? .isSelected : [])
             }
-            Spacer()
+            Spacer(minLength: Tokens.Spacing.s)
+            AddButton(title: "Add link", help: list == .saved ? "Add a link to Saved links" : "Add a video to Watch later") {
+                adding = true
+            }
         }
-        .padding(.horizontal, Tokens.Spacing.m - Tokens.Spacing.xs)
-        .padding(.top, Tokens.Spacing.s + Tokens.Spacing.xs)
+        .padding(.leading, Tokens.Spacing.m - Tokens.Spacing.xs)
+        .padding(.trailing, Tokens.Spacing.s)
+        .padding(.top, Tokens.Spacing.s)
     }
 
     private var emptyState: some View {
         VStack(spacing: Tokens.Spacing.s) {
             Image(systemName: list.symbol).font(.title2).foregroundStyle(.secondary).accessibilityHidden(true)
             Text(list == .saved ? "No saved links yet" : "Nothing to watch").font(Tokens.TextRole.sectionTitle)
-            Text(list == .saved ? "Paste a link above and press Return to keep it here."
-                                : "Paste a YouTube or other video link above and it lands here.")
+            Text(list == .saved ? "Add one, or paste a link below and press Return."
+                                : "Paste a YouTube or other video link below and it lands here.")
                 .font(Tokens.TextRole.detail).foregroundStyle(.secondary).multilineTextAlignment(.center)
         }
         .frame(maxWidth: .infinity)

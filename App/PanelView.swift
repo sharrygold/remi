@@ -12,6 +12,10 @@ final class PanelPresentation: ObservableObject {
     @Published var anchor = UnitPoint.trailing
     /// Bumped by ⌘N and the widget's New Note item; the panel answers by opening a blank note.
     @Published var newNoteRequests = 0
+    /// The "+" of the current tab, pressed from code (self-tests).
+    @Published var addRequests = 0
+    /// Opens the Links tab's "Add link" field.
+    @Published var addLinkRequests = 0
     /// Opens a particular note, for example from search.
     @Published var noteToOpen: UUID?
     /// Closes the panel after something opens elsewhere, unless it is pinned. Set by the app.
@@ -35,6 +39,8 @@ struct PanelView: View {
     @State private var confirmation: String?
     @State private var openNoteID: UUID?
     @State private var linkList: LinkList = .saved
+    /// The "+ New task" field at the top of Today and Tasks.
+    @State private var addingTask = false
     @State private var clipboardOffer: ClipboardOffer?
     /// Bumped on every open and close, so a slow clipboard check from an earlier open is ignored.
     @State private var clipboardCheck = 0
@@ -83,7 +89,10 @@ struct PanelView: View {
         .environment(\.panelActions, PanelActions(open: openItem, confirm: { show(confirmation: $0) },
                                                    focusCapture: { captureFocused = true }, editRequest: editRequest))
         .environment(\.keyboardSelection, nav.selectedID)
-        .onChange(of: tab) { _, _ in nav.clear() }
+        .onChange(of: tab) { _, _ in
+            nav.clear()
+            addingTask = false
+        }
         .onChange(of: selectedSpaceID) { _, _ in nav.clear() }
         .onChange(of: linkList) { _, _ in nav.clear() }
         .onChange(of: openNoteID) { _, _ in nav.clear() }
@@ -121,6 +130,10 @@ struct PanelView: View {
                 clipboardCheck += 1
                 clipboardOffer = nil
             }
+        }
+        .onChange(of: presentation.addRequests) { _, _ in
+            closeSearch()
+            if tab == .notes { startNewNote() } else if tab == .links { presentation.addLinkRequests += 1 } else { addingTask = true }
         }
         .onChange(of: presentation.newNoteRequests) { _, _ in
             closeSearch()
@@ -464,70 +477,12 @@ struct PanelView: View {
 
     // MARK: Spaces and tabs
 
-    private var spaceSwitcher: some View {
-        ScrollViewReader { proxy in
-        ScrollView(.horizontal, showsIndicators: false) {
-            HStack(spacing: Tokens.Spacing.xs) {
-                spaceChip(name: "All", symbol: "square.grid.2x2", tint: .accentColor, id: nil)
-                ForEach(store.spaces) { space in
-                    spaceChip(name: space.name, symbol: space.symbol, tint: space.tint, id: space.id)
-                        .dropDestination(for: String.self) { items, _ in
-                            guard let raw = items.first, let task = store.tasks.first(where: { $0.id.uuidString == raw }) else { return false }
-                            store.move(task, to: space)
-                            return true
-                        }
-                }
-                Button(action: startNewSpace) {
-                    Image(systemName: "plus").font(Tokens.TextRole.detail).foregroundStyle(.secondary)
-                        .padding(.horizontal, Tokens.Spacing.s).padding(.vertical, Tokens.Spacing.xs)
-                }
-                .buttonStyle(.plain)
-                .accessibilityLabel("New Space")
-            }
-            .padding(.trailing, Tokens.Spacing.l)
-        }
-        // Keeps the chosen Space in view, so a long list never hides it off the end.
-        .onChange(of: selectedSpaceID) { _, id in
-            withAnimation(Tokens.Motion.quick) { proxy.scrollTo(id?.uuidString ?? "all", anchor: .center) }
-        }
-        .mask {
-            // Fades the trailing edge so a cut-off Space reads as scrollable.
-            HStack(spacing: 0) {
-                Color.black
-                LinearGradient(colors: [.black, .clear], startPoint: .leading, endPoint: .trailing)
-                    .frame(width: Tokens.Spacing.l)
-            }
-        }
-        }
-    }
-
     /// New Spaces come from the capture bar, so there is never a dialog.
     private func startNewSpace() {
         if !capture.text.contains("#") {
             capture.text = capture.text.isEmpty ? "#" : capture.text + " #"
         }
         captureFocused = true
-    }
-
-    private func spaceChip(name: String, symbol: String, tint: Color, id: UUID?) -> some View {
-        let selected = selectedSpaceID == id
-        return Button { selectedSpaceID = id } label: {
-            // Colour only on the icon: tinted text on a tinted wash was hard to read over the glass.
-            Label {
-                Text(name).foregroundStyle(selected ? .primary : .secondary)
-            } icon: {
-                Image(systemName: symbol).foregroundStyle(selected ? AnyShapeStyle(tint) : AnyShapeStyle(.secondary))
-            }
-            .font(Tokens.TextRole.detail.weight(selected ? .semibold : .regular))
-            .padding(.horizontal, Tokens.Spacing.s)
-            .padding(.vertical, Tokens.Spacing.xs)
-            .background(selected ? AnyShapeStyle(.quaternary) : AnyShapeStyle(.clear), in: Capsule())
-            .contentShape(Capsule())
-        }
-        .buttonStyle(.plain)
-        .id(id?.uuidString ?? "all")
-        .help(id == nil ? "All Spaces (⌘[ and ⌘] switch)" : name)
-        .accessibilityAddTraits(selected ? .isSelected : [])
     }
 
     private var tabs: some View {
@@ -554,23 +509,30 @@ struct PanelView: View {
     @ViewBuilder private var content: some View {
         Group {
             if tab == .tasks {
-                tasksList
+                VStack(spacing: 0) {
+                    taskHeader
+                    tasksList
+                }
             } else if tab == .notes {
                 NotesPane(store: store, density: density, space: selectedSpace, showsSpace: selectedSpaceID == nil,
                           openNoteID: $openNoteID, onNewNote: startNewNote, onClose: { captureFocused = true },
                           onConfirm: { show(confirmation: $0) })
             } else if tab == .links {
-                LinksPane(store: store, density: density, space: selectedSpace, showsSpace: selectedSpaceID == nil, list: $linkList)
+                LinksPane(store: store, density: density, space: selectedSpace, showsSpace: selectedSpaceID == nil, list: $linkList,
+                          addRequests: presentation.addLinkRequests)
             } else {
-                ScrollViewReader { proxy in
-                    ScrollView {
-                        VStack(alignment: .leading, spacing: density.sectionGap) {
-                            todayContent
+                VStack(spacing: 0) {
+                    taskHeader
+                    ScrollViewReader { proxy in
+                        ScrollView {
+                            VStack(alignment: .leading, spacing: density.sectionGap) {
+                                todayContent
+                            }
+                            .padding(Tokens.Spacing.m)
+                            .frame(maxWidth: .infinity, alignment: .leading)
                         }
-                        .padding(Tokens.Spacing.m)
-                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .modifier(FollowSelection(proxy: proxy))
                     }
-                    .modifier(FollowSelection(proxy: proxy))
                 }
             }
         }
@@ -579,12 +541,52 @@ struct PanelView: View {
                     in: RoundedRectangle(cornerRadius: Tokens.Radius.large, style: .continuous))
     }
 
+    /// Today shows the date, Tasks how many are open; both add a task by hand on the right.
+    @ViewBuilder private var taskHeader: some View {
+        PaneHeader(addTitle: "New task", addHelp: tab == .today ? "Add a task due today" : "Add a task", onAdd: {
+            closeSearch()
+            addingTask = true
+        }) {
+            Group {
+                if tab == .today {
+                    Text(Date().formatted(.dateTime.weekday(.wide).day().month(.wide)))
+                } else {
+                    let count = store.open(in: selectedSpace).count
+                    Text(count == 1 ? "1 open" : "\(count) open")
+                }
+            }
+            .font(Tokens.TextRole.detail.weight(.medium))
+            .foregroundStyle(.secondary)
+            .lineLimit(1)
+        }
+        if addingTask {
+            InlineAddField(placeholder: tab == .today ? "New task for today" : "New task", symbol: "circle",
+                           onSave: addTask, onClose: closeAddTask)
+        }
+    }
+
+    /// Typed by hand into the list's own field. The same words as the capture bar work:
+    /// #space, today, tomorrow and !. On Today, a task without a date is due today.
+    private func addTask(_ text: String) -> Bool {
+        var parsed = CaptureParser.parse(text, spaceNames: store.spaces.map(\.name))
+        if parsed.title.isEmpty, let url = parsed.url { parsed.title = LinkClassifier.displayHost(url) }
+        if tab == .today, parsed.due == nil { parsed.due = Calendar.current.startOfDay(for: Date()) }
+        guard let task = store.add(parsed, currentSpace: selectedSpace) else { return false }
+        show(confirmation: "Added to \(task.space?.name ?? "Tasks")  ·  ⌘Z to undo")
+        return true
+    }
+
+    private func closeAddTask() {
+        addingTask = false
+        captureFocused = true
+    }
+
     @ViewBuilder private var todayContent: some View {
         let today = store.dueToday(in: selectedSpace)
         let overdue = store.overdue(in: selectedSpace)
         if today.isEmpty && overdue.isEmpty {
             emptyState(symbol: "sun.max", title: "Nothing planned for today",
-                       detail: "Type a task above and add “today” to put it here.")
+                       detail: "Add a task, or type one below with “today” in it.")
         } else {
             ForEach(store.spaces.filter { space in today.contains { $0.space?.id == space.id } }) { space in
                 section(space.name, tint: space.tint, symbol: space.symbol) {
@@ -626,7 +628,7 @@ struct PanelView: View {
         let done = store.done(in: selectedSpace)
         if open.isEmpty && done.isEmpty {
             VStack {
-                emptyState(symbol: "checklist", title: "No tasks here yet", detail: "Anything you type above and send with Return lands here.")
+                emptyState(symbol: "checklist", title: "No tasks here yet", detail: "Add one, or type below and press Return.")
             }
             .padding(Tokens.Spacing.m)
             .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
@@ -695,11 +697,52 @@ struct PanelView: View {
         }
     }
 
-    /// Spaces on the left; search, pin and Settings as quiet icons on the right.
+    /// One button for the current Space; the menu lists them all and starts a new one.
+    /// It scales to any number of Spaces, where a row of chips ran out of room.
+    private var spaceMenu: some View {
+        let space = selectedSpace
+        return Menu {
+            Picker("Space", selection: $selectedSpaceID) {
+                Label("All Spaces", systemImage: "square.grid.2x2").tag(UUID?.none)
+                ForEach(store.spaces) { item in
+                    Label(item.name, systemImage: item.symbol).tag(Optional(item.id))
+                }
+            }
+            .pickerStyle(.inline)
+            .labelsHidden()
+            Divider()
+            Button("New Space…", systemImage: "plus", action: startNewSpace)
+        } label: {
+            HStack(spacing: 6) {
+                Image(systemName: space?.symbol ?? "square.grid.2x2")
+                    .foregroundStyle(space?.tint ?? .accentColor)
+                Text(space?.name ?? "All Spaces")
+                    .foregroundStyle(.primary)
+                    .lineLimit(1)
+                Image(systemName: "chevron.down")
+                    .font(.system(size: 9, weight: .bold))
+                    .foregroundStyle(.secondary)
+            }
+            .font(Tokens.TextRole.detail.weight(.semibold))
+            .padding(.horizontal, Tokens.Spacing.s + 2)
+            .padding(.vertical, Tokens.Spacing.xs + 1)
+            .background(.quaternary, in: Capsule())
+            .contentShape(Capsule())
+        }
+        .menuStyle(.button)
+        .buttonStyle(.plain)
+        .menuIndicator(.hidden)
+        .fixedSize()
+        .help("Choose a Space (⌘[ and ⌘] switch)")
+        .accessibilityLabel("Space: \(space?.name ?? "All Spaces")")
+    }
+
+    /// The Space menu on the left; search, pin and Settings as quiet icons on the right.
     private var header: some View {
         HStack(spacing: Tokens.Spacing.s) {
-            spaceSwitcher
-            HStack(spacing: Tokens.Spacing.xs) {
+            spaceMenu
+            Spacer(minLength: Tokens.Spacing.s)
+            HStack(spacing: 2) {
                 iconButton(search.active ? "magnifyingglass.circle.fill" : "magnifyingglass", help: "Search (⌘F)", label: "Search") {
                     if search.active { closeSearch() } else { search.requests += 1 }
                 }
@@ -718,7 +761,7 @@ struct PanelView: View {
             Image(systemName: symbol)
                 .font(Tokens.TextRole.detail)
                 .foregroundStyle(.secondary)
-                .frame(width: 26, height: 26)
+                .frame(width: 24, height: 24)
                 .contentShape(Rectangle())
         }
         .buttonStyle(.plain)

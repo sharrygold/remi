@@ -565,4 +565,56 @@ extension AppController {
             }
         }
     }
+
+    /// The "+" buttons: a task typed into the Tasks list's own field, then a link added and named.
+    func runAddSelfTest() {
+        seedDemo(store)
+        presentation.pinned = true
+        showPanel()
+        func after(_ seconds: Double, _ work: @escaping () -> Void) {
+            DispatchQueue.main.asyncAfter(deadline: .now() + seconds, execute: work)
+        }
+        func typeText(_ text: String) {
+            for character in text { postKey(String(character), code: 0) }
+        }
+        func responder() -> String { String(describing: type(of: panel.firstResponder as Any)) }
+        let tasksBefore = store.tasks.count
+        after(1.0) { [self] in
+            postKey("2", code: UInt16(kVK_ANSI_2), flags: .command)
+            after(0.4) { [self] in
+                presentation.addRequests += 1
+                after(0.6) { [self] in
+                    print("task field open: capture=\(capture.isFocused) responder=\(responder())")
+                    typeText("Call Ada #work tomorrow !")
+                    postKey("\r", code: UInt16(kVK_Return))
+                    after(0.5) { [self] in
+                        let task = store.tasks.first { $0.title == "Call Ada" }
+                        print("task added=\(store.tasks.count - tasksBefore) title=\(task?.title ?? "-") space=\(task?.space?.name ?? "-") due=\(task?.dueDate != nil) important=\(task?.isImportant ?? false) fieldStillOpen=\(!capture.isFocused)")
+                        postKey("\u{1b}", code: UInt16(kVK_Escape))
+                        after(0.5) { [self] in
+                            print("esc closed field: capture=\(capture.isFocused) panel=\(presentation.presented)")
+                            postKey("4", code: UInt16(kVK_ANSI_4), flags: .command)
+                            after(0.4) { [self] in
+                                presentation.addRequests += 1
+                                after(0.6) { [self] in
+                                    typeText("example.com/jobs/42")
+                                    postKey("\r", code: UInt16(kVK_Return))
+                                    after(1.0) { [self] in
+                                        let link = store.links.first { $0.urlString.contains("example.com/jobs/42") }
+                                        print("link added=\(link != nil) list=\(link?.list.rawValue ?? "-") renaming responder=\(responder()) capture=\(capture.isFocused)")
+                                        typeText("SwiftUI job")
+                                        postKey("\r", code: UInt16(kVK_Return))
+                                        after(0.5) { [self] in
+                                            print("link named=\(link?.title ?? "-") edited=\(link?.titleEdited ?? false) capture=\(capture.isFocused)")
+                                            NSApp.terminate(nil)
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
 }

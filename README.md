@@ -32,6 +32,8 @@ The `.xcodeproj` is generated from `project.yml`; don't edit it by hand.
 
 Open the panel by clicking the widget, pulling the cord, or pressing **⌃Space** (change it in Settings).
 
+The capture bar is at the bottom. The Space button at the top left picks a Space or starts a new one; search, pin and Settings sit at the top right. Each list has its own **+** (New task, New note, Add link) for adding by hand: Return saves and keeps the field open for the next one, Esc closes it. A link added this way asks for a name straight after.
+
 | In the capture bar | |
 |---|---|
 | Return | Save as a task |
