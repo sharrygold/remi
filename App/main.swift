@@ -126,7 +126,7 @@ final class AppController: NSObject, NSApplicationDelegate {
     private let capture = CaptureText()
     private lazy var store: LibraryStore = {
         let arguments = CommandLine.arguments
-        let usesMemory = ["--demo-data", "--m2-selftest", "--m3-selftest", "--m4-selftest"].contains { arguments.contains($0) }
+        let usesMemory = ["--demo-data", "--m2-selftest", "--m3-selftest", "--m4-selftest", "--clipboard-selftest"].contains { arguments.contains($0) }
         // --data-dir=PATH opens another library, used to check a copy of real data after a model change.
         let custom = arguments.first { $0.hasPrefix("--data-dir=") }.map { URL(fileURLWithPath: String($0.dropFirst("--data-dir=".count))) }
         let store = LibraryStore(directory: usesMemory ? nil : custom ?? LibraryStore.defaultDirectory)
@@ -184,6 +184,7 @@ final class AppController: NSObject, NSApplicationDelegate {
         if CommandLine.arguments.contains("--m2-selftest") { runCaptureSelfTest() }
         if CommandLine.arguments.contains("--m3-selftest") { runNotesSelfTest() }
         if CommandLine.arguments.contains("--m4-selftest") { runLinksSelfTest() }
+        if CommandLine.arguments.contains("--clipboard-selftest") { runClipboardChipSelfTest() }
     }
 
     func applicationWillTerminate(_ notification: Notification) {
@@ -527,6 +528,61 @@ final class AppController: NSObject, NSApplicationDelegate {
         }
     }
 
+    /// The chip in the real panel: Return saves it, and quick reopening never brings it back.
+    private func runClipboardChipSelfTest() {
+        func after(_ seconds: Double, _ work: @escaping () -> Void) {
+            DispatchQueue.main.asyncAfter(deadline: .now() + seconds, execute: work)
+        }
+        let board = NSPasteboard(name: NSPasteboard.Name("perch-chip-selftest"))
+        board.clearContents()
+        board.setString("https://www.youtube.com/watch?v=jNQXAC9IVRw", forType: .string)
+        ClipboardNudge.board = board
+        func chipShowing() -> Bool {
+            // Asking to dismiss reports whether a chip is there; only used where it should not be.
+            capture.dismissClipboardOffer?() ?? false
+        }
+        after(1) { [self] in
+            showPanel()
+            after(0.4) { [self] in
+                postKey("\r", code: 36)
+                after(0.3) { [self] in
+                    print("after Return links=\(store.links.count) list=\(store.links.first?.list.rawValue ?? "nil")")
+                    // Close and reopen quickly, several times, as a real user would.
+                    for index in 0..<6 {
+                        after(Double(index) * 0.1) { [self] in togglePanel() }
+                    }
+                    after(1.2) { [self] in
+                        if !presentation.presented { showPanel() }
+                        after(0.5) { [self] in
+                            print("chip back after reopening=\(chipShowing()) links=\(store.links.count)")
+                            board.clearContents()
+                            board.setString("https://www.notion.so/new-page", forType: .string)
+                            hidePanel()
+                            after(0.4) { [self] in
+                                showPanel()
+                                after(0.4) { [self] in
+                                    postKey("\u{1b}", code: 53)
+                                    after(0.3) { [self] in
+                                        print("esc dismissed chip, panel still open=\(presentation.presented) links=\(store.links.count)")
+                                        hidePanel()
+                                        after(0.4) { [self] in
+                                            showPanel()
+                                            after(0.4) {
+                                                print("dismissed chip stays away=\(!chipShowing())")
+                                                board.releaseGlobally()
+                                                NSApp.terminate(nil)
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+
     /// Uses a private pasteboard, so the user's own clipboard is never touched.
     private func checkClipboardNudge(then done: @escaping () -> Void) {
         let board = NSPasteboard(name: NSPasteboard.Name("perch-selftest"))
@@ -756,7 +812,10 @@ final class AppController: NSObject, NSApplicationDelegate {
         let rect = NSRect(origin: .zero, size: Tokens.Size.panel)
         panel = PanelWindow(contentRect: rect, styleMask: [.borderless, .nonactivatingPanel], backing: .buffered, defer: false)
         configure(panel)
-        panel.onCancel = { [weak self] in self?.hidePanel() }
+        panel.onCancel = { [weak self] in
+            guard let self, self.capture.dismissClipboardOffer?() != true else { return }
+            self.hidePanel()
+        }
         // The system window shadow draws square dark corners around the glass in dark mode.
         panel.hasShadow = false
         panel.contentView = FirstMouseHostingView(rootView: PanelView(density: options.density, presentation: presentation, capture: capture, store: store, tab: options.tab))

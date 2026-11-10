@@ -30,6 +30,8 @@ struct PanelView: View {
     @State private var openNoteID: UUID?
     @State private var linkList: LinkList = .saved
     @State private var clipboardOffer: ClipboardOffer?
+    /// Bumped on every open and close, so a slow clipboard check from an earlier open is ignored.
+    @State private var clipboardCheck = 0
     @FocusState private var captureFocused: Bool
     @Environment(\.accessibilityReduceTransparency) private var reduceTransparency
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
@@ -68,6 +70,11 @@ struct PanelView: View {
             captureFocused = true
             capture.submitNote = submitNote
             capture.toggleLinkList = toggleLinkList
+            capture.dismissClipboardOffer = {
+                guard let offer = clipboardOffer, capture.text.isEmpty else { return false }
+                dismissClipboard(offer)
+                return true
+            }
         }
         .onChange(of: capture.text) { _, _ in capture.linkListOverride = nil }
         .onChange(of: captureFocused) { _, focused in capture.isFocused = focused }
@@ -77,6 +84,7 @@ struct PanelView: View {
                 store.reload()
                 checkClipboard()
             } else {
+                clipboardCheck += 1
                 clipboardOffer = nil
             }
         }
@@ -171,6 +179,10 @@ struct PanelView: View {
     }
 
     private func submit() {
+        if capture.text.trimmingCharacters(in: .whitespaces).isEmpty, let offer = clipboardOffer {
+            saveClipboard(offer)
+            return
+        }
         let result = parsed
         if result.isLink, let url = result.url {
             let saved = store.addLink(url, list: captureLinkList, spaceMatch: result.space, currentSpace: selectedSpace)
@@ -209,8 +221,12 @@ struct PanelView: View {
     // MARK: Clipboard
 
     private func checkClipboard() {
+        clipboardCheck += 1
+        let check = clipboardCheck
         Task { @MainActor in
-            clipboardOffer = await ClipboardNudge.check(isSaved: store.isSaved)
+            let offer = await ClipboardNudge.check(isSaved: store.isSaved)
+            guard check == clipboardCheck, presentation.presented, let offer, !ClipboardNudge.isHandled(offer.changeCount) else { return }
+            clipboardOffer = offer
         }
     }
 
@@ -220,17 +236,30 @@ struct PanelView: View {
             Text(offer.url.map { "Save link from clipboard? \(LinkClassifier.displayHost($0))" } ?? "Save link from clipboard?")
                 .lineLimit(1)
             Spacer(minLength: Tokens.Spacing.xs)
-            Button("Save") { saveClipboard(offer) }
-                .buttonStyle(.plain)
-                .foregroundStyle(Color.accentColor)
-                .fontWeight(.semibold)
-            Button { dismissClipboard(offer) } label: { Image(systemName: "xmark") }
-                .buttonStyle(.plain)
-                .foregroundStyle(.secondary)
-                .accessibilityLabel("Dismiss")
+            Button { saveClipboard(offer) } label: {
+                Text("Save  ↩").fontWeight(.semibold)
+                    .padding(.horizontal, Tokens.Spacing.s)
+                    .frame(maxHeight: .infinity)
+                    .contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
+            .foregroundStyle(Color.accentColor)
+            .help("Save this link (Return)")
+            .accessibilityLabel("Save link")
+            Button { dismissClipboard(offer) } label: {
+                Image(systemName: "xmark")
+                    .frame(width: Tokens.Spacing.l, height: Tokens.Spacing.l)
+                    .frame(maxHeight: .infinity)
+                    .contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
+            .foregroundStyle(.secondary)
+            .help("Not this one (Esc)")
+            .accessibilityLabel("Dismiss")
         }
         .font(Tokens.TextRole.detail)
-        .padding(.horizontal, Tokens.Spacing.s + Tokens.Spacing.xs)
+        .padding(.leading, Tokens.Spacing.s + Tokens.Spacing.xs)
+        .padding(.trailing, Tokens.Spacing.xs)
         .frame(height: Tokens.Spacing.l + Tokens.Spacing.xs)
         .background(Color.accentColor.opacity(0.1), in: Capsule())
         .transition(.opacity)
@@ -487,4 +516,6 @@ final class CaptureText: ObservableObject {
     /// Tab on a pasted link; returns false when the text is not a link, so Tab behaves normally.
     var toggleLinkList: (() -> Bool)?
     @Published var linkListOverride: LinkList?
+    /// Esc first dismisses the clipboard chip; returns false when there is none, so Esc closes the panel.
+    var dismissClipboardOffer: (() -> Bool)?
 }
