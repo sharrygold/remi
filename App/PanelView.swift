@@ -16,6 +16,7 @@ final class PanelPresentation: ObservableObject {
     @Published var noteToOpen: UUID?
     /// Closes the panel after something opens elsewhere, unless it is pinned. Set by the app.
     var closeAfterOpening: () -> Void = {}
+    var openSettings: () -> Void = {}
 }
 
 struct PanelView: View {
@@ -23,7 +24,10 @@ struct PanelView: View {
     @ObservedObject var presentation: PanelPresentation
     @ObservedObject var capture: CaptureText
     @ObservedObject var store: LibraryStore
+    @ObservedObject var search: SearchState
     @State var tab: PanelTab
+    /// A task found by search, briefly highlighted in the Tasks list.
+    @State private var highlightedTaskID: UUID?
     @State private var selectedSpaceID: UUID?
     @State private var showDone = false
     @State private var confirmation: String?
@@ -48,9 +52,16 @@ struct PanelView: View {
         VStack(spacing: Tokens.Spacing.s) {
             captureBar
             if showsTokens { tokenRow } else if let clipboardOffer { clipboardChip(clipboardOffer) }
-            spaceSwitcher
-            tabs
-            content
+            if search.active {
+                SearchPane(store: store, search: search, density: density, onOpen: openSearchHit, onClose: closeSearch)
+                    .frame(maxHeight: .infinity)
+                    .background(Color(nsColor: .textBackgroundColor).opacity(reduceTransparency ? 1 : Tokens.Surface.contentOpacity),
+                                in: RoundedRectangle(cornerRadius: Tokens.Radius.large, style: .continuous))
+            } else {
+                spaceSwitcher
+                tabs
+                content
+            }
             footer
         }
         .padding(Tokens.Spacing.s)
@@ -88,7 +99,12 @@ struct PanelView: View {
                 clipboardOffer = nil
             }
         }
-        .onChange(of: presentation.newNoteRequests) { _, _ in startNewNote() }
+        .onChange(of: presentation.newNoteRequests) { _, _ in
+            closeSearch()
+            startNewNote()
+        }
+        .onChange(of: search.requests) { _, _ in search.active = true }
+        .onChange(of: search.active) { _, active in if !active { captureFocused = true } }
         .onChange(of: presentation.noteToOpen) { _, id in
             guard let id else { return }
             tab = .notes
@@ -281,6 +297,33 @@ struct PanelView: View {
         withAnimation(Tokens.Motion.quick) { clipboardOffer = nil }
     }
 
+    // MARK: Search
+
+    private func closeSearch() {
+        guard search.active else { return }
+        search.active = false
+        search.query = ""
+        captureFocused = true
+    }
+
+    private func openSearchHit(_ hit: SearchHit) {
+        closeSearch()
+        switch hit {
+        case .task(let task):
+            selectedSpaceID = nil
+            if task.isCompleted { showDone = true }
+            tab = .tasks
+            DispatchQueue.main.async { highlightedTaskID = task.id }
+            DispatchQueue.main.asyncAfter(deadline: .now() + 1.6) {
+                if highlightedTaskID == task.id { withAnimation(Tokens.Motion.quick) { highlightedTaskID = nil } }
+            }
+        case .note(let note):
+            presentation.noteToOpen = note.id
+        case .link(let link):
+            if let url = link.url { openItem(.url(url)) }
+        }
+    }
+
     private func show(confirmation text: String) {
         confirmation = text
         DispatchQueue.main.asyncAfter(deadline: .now() + 2.5) {
@@ -438,12 +481,14 @@ struct PanelView: View {
             .padding(Tokens.Spacing.m)
             .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
         } else {
+            ScrollViewReader { proxy in
             List {
                 ForEach(open) { task in
                     taskRow(task)
                         .itemProvider { NSItemProvider(object: task.id.uuidString as NSString) }
-                        .listRowBackground(Color.clear)
+                        .listRowBackground(highlight(task))
                         .listRowSeparator(.hidden)
+                        .id(task.id)
                 }
                 .onMove { source, destination in
                     var ordered = open
@@ -461,14 +506,25 @@ struct PanelView: View {
                     .listRowSeparator(.hidden)
                     if showDone {
                         ForEach(done) { task in
-                            taskRow(task).listRowBackground(Color.clear).listRowSeparator(.hidden)
+                            taskRow(task).listRowBackground(highlight(task)).listRowSeparator(.hidden).id(task.id)
                         }
                     }
                 }
             }
             .listStyle(.plain)
             .scrollContentBackground(.hidden)
+            .onChange(of: highlightedTaskID) { _, id in
+                guard let id else { return }
+                withAnimation(Tokens.Motion.quick) { proxy.scrollTo(id, anchor: .center) }
+            }
+            }
         }
+    }
+
+    private func highlight(_ task: TaskItem) -> some View {
+        RoundedRectangle(cornerRadius: Tokens.Radius.small, style: .continuous)
+            .fill(task.id == highlightedTaskID ? (task.space?.tint ?? .accentColor).opacity(0.18) : .clear)
+            .padding(.horizontal, Tokens.Spacing.xs)
     }
 
     private func emptyState(symbol: String, title: String, detail: String) -> some View {
@@ -490,15 +546,25 @@ struct PanelView: View {
 
     private var footer: some View {
         HStack {
-            Label("Search", systemImage: "magnifyingglass")
-            Text("⌘F").foregroundStyle(.tertiary)
+            Button { search.requests += 1 } label: {
+                HStack(spacing: Tokens.Spacing.xs) {
+                    Label("Search", systemImage: "magnifyingglass")
+                    Text("⌘F").foregroundStyle(.tertiary)
+                }
+                .contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
+            .accessibilityLabel("Search")
             Spacer()
             Button { presentation.pinned.toggle() } label: {
                 Image(systemName: presentation.pinned ? "pin.fill" : "pin")
             }
             .buttonStyle(.plain)
             .accessibilityLabel(presentation.pinned ? "Unpin panel" : "Pin panel open")
-            Image(systemName: "gearshape").accessibilityLabel("Settings")
+            Button { presentation.openSettings() } label: { Image(systemName: "gearshape") }
+                .buttonStyle(.plain)
+                .help("Settings (⌘,)")
+                .accessibilityLabel("Settings")
         }
         .font(Tokens.TextRole.detail)
         .foregroundStyle(.secondary)

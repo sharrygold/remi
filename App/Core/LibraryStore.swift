@@ -16,6 +16,8 @@ final class LibraryStore: ObservableObject {
     var onLinkAdded: ((LinkItem) -> Void)?
     /// True when the saved data could not be opened and this session is temporary.
     private(set) var isTemporary = false
+    /// Where the library is saved; nil when it lives in memory.
+    private(set) var directory: URL?
 
     let context: ModelContext
     private var undoStack: [() -> Void] = []
@@ -33,7 +35,7 @@ final class LibraryStore: ObservableObject {
             let configuration = ModelConfiguration(schema: schema, url: directory.appendingPathComponent("Library.store"))
             container = try? ModelContainer(for: schema, configurations: configuration)
         }
-        if container == nil { isTemporary = directory != nil }
+        if container == nil { isTemporary = directory != nil } else { self.directory = directory }
         let resolved = container ?? (try! ModelContainer(for: schema, configurations: ModelConfiguration(isStoredInMemoryOnly: true)))
         context = ModelContext(resolved)
         seedSpacesIfNeeded()

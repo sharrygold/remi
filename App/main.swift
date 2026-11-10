@@ -1,5 +1,6 @@
 import AppKit
 import Carbon.HIToolbox
+import Combine
 import ServiceManagement
 import SwiftUI
 
@@ -39,6 +40,13 @@ final class PanelWindow: NSPanel {
     override var canBecomeKey: Bool { true }
     override var canBecomeMain: Bool { false }
     override func cancelOperation(_ sender: Any?) { onCancel?() }
+}
+
+/// Settings takes keyboard focus without activating the app, which macOS often refuses for a
+/// background app; the floating panel works the same way.
+final class SettingsPanel: NSPanel {
+    override var canBecomeKey: Bool { true }
+    override var canBecomeMain: Bool { true }
 }
 
 final class FirstMouseHostingView<Content: View>: NSHostingView<Content> {
@@ -120,13 +128,20 @@ final class AppController: NSObject, NSApplicationDelegate {
         debug.previewLook = options.previewLook
         return debug
     }()
-    private let widgetMenu = NSMenu()
-    private let colourMenu = NSMenu()
     private let presentation = PanelPresentation()
     private let capture = CaptureText()
+    private let search = SearchState()
+    private lazy var reminders = Reminders(store: store)
+    private var settingsWindow: NSWindow?
+    private var watchers: [AnyCancellable] = []
+    /// Self-tests and demos keep everything in memory and must not show permission prompts or write backups.
+    private var isScratchSession: Bool {
+        ["--demo-data", "--m2-selftest", "--m3-selftest", "--m4-selftest", "--m5-selftest", "--clipboard-selftest"]
+            .contains { CommandLine.arguments.contains($0) }
+    }
     private lazy var store: LibraryStore = {
         let arguments = CommandLine.arguments
-        let usesMemory = ["--demo-data", "--m2-selftest", "--m3-selftest", "--m4-selftest", "--clipboard-selftest"].contains { arguments.contains($0) }
+        let usesMemory = ["--demo-data", "--m2-selftest", "--m3-selftest", "--m4-selftest", "--m5-selftest", "--clipboard-selftest"].contains { arguments.contains($0) }
         // --data-dir=PATH opens another library, used to check a copy of real data after a model change.
         let custom = arguments.first { $0.hasPrefix("--data-dir=") }.map { URL(fileURLWithPath: String($0.dropFirst("--data-dir=".count))) }
         let store = LibraryStore(directory: usesMemory ? nil : custom ?? LibraryStore.defaultDirectory)
@@ -142,10 +157,10 @@ final class AppController: NSObject, NSApplicationDelegate {
     private var lastActivity = Date()
     private var hiddenUntil: Date?
     private let showNowItem = NSMenuItem(title: "Show Widget Now", action: #selector(showWidgetNow), keyEquivalent: "")
-    private let loginItem = NSMenuItem(title: "Launch at Login", action: #selector(toggleLaunchAtLogin), keyEquivalent: "")
     private static let idleSecondsBeforeTuck: TimeInterval = 4
 
     func applicationDidFinishLaunching(_ notification: Notification) {
+        SettingsKey.registerDefaults()
         if let name = options.appearance {
             NSApp.appearance = NSAppearance(named: name == "dark" ? .darkAqua : .aqua)
         }
@@ -166,6 +181,18 @@ final class AppController: NSObject, NSApplicationDelegate {
         buildPanel()
         buildStatusItem()
         registerHotKey()
+        applyWindowSettings()
+        NotificationCenter.default.addObserver(self, selector: #selector(settingsChanged), name: UserDefaults.didChangeNotification, object: nil)
+        watchers.append(debug.$prototype.dropFirst().removeDuplicates().sink { [weak self] _ in
+            DispatchQueue.main.async { self?.applyPrototype() }
+        })
+        presentation.openSettings = { [weak self] in self?.openSettings() }
+        reminders.onOpen = { [weak self] in self?.showPanel() }
+        if !isScratchSession {
+            reminders.start()
+            runDailyMaintenance()
+        }
+        DispatchQueue.main.asyncAfter(deadline: .now() + 3) { [weak self] in self?.makeSettingsWindow() }
         installEditMenu()
         installPanelKeys()
         NotificationCenter.default.addObserver(self, selector: #selector(dayChanged), name: .NSCalendarDayChanged, object: nil)
@@ -175,7 +202,16 @@ final class AppController: NSObject, NSApplicationDelegate {
         if let text = CommandLine.arguments.first(where: { $0.hasPrefix("--capture=") }) {
             capture.text = String(text.dropFirst("--capture=".count))
         }
+        if let text = CommandLine.arguments.first(where: { $0.hasPrefix("--search=") }) {
+            search.active = true
+            search.query = String(text.dropFirst("--search=".count))
+        }
         if options.open { showPanel() }
+        // --settings=Spaces opens Settings on that section, without the widget, for screenshots.
+        if let name = CommandLine.arguments.first(where: { $0.hasPrefix("--settings=") })?.dropFirst("--settings=".count) {
+            handle.orderOut(nil)
+            showSettings(tab: SettingsTab.allCases.first { $0.rawValue.replacingOccurrences(of: " ", with: "").lowercased() == name.lowercased() } ?? .general)
+        }
         if CommandLine.arguments.contains("--open-note") {
             DispatchQueue.main.async { self.presentation.noteToOpen = self.store.notes(in: nil).dropFirst().first?.id }
         }
@@ -184,6 +220,7 @@ final class AppController: NSObject, NSApplicationDelegate {
         if CommandLine.arguments.contains("--m2-selftest") { runCaptureSelfTest() }
         if CommandLine.arguments.contains("--m3-selftest") { runNotesSelfTest() }
         if CommandLine.arguments.contains("--m4-selftest") { runLinksSelfTest() }
+        if CommandLine.arguments.contains("--m5-selftest") { runSearchSelfTest() }
         if CommandLine.arguments.contains("--clipboard-selftest") { runClipboardChipSelfTest() }
     }
 
@@ -200,7 +237,71 @@ final class AppController: NSObject, NSApplicationDelegate {
         window.isOpaque = false
         window.hasShadow = true
         window.isReleasedWhenClosed = false
-        window.sharingType = options.allowCapture ? .readOnly : .none
+    }
+
+    /// Applies the Settings that change windows: screen-recording visibility and full-screen apps.
+    private func applyWindowSettings() {
+        let defaults = UserDefaults.standard
+        let hidden = defaults.bool(forKey: SettingsKey.hideFromRecordings) && !options.allowCapture
+        for window in [handle, panel].compactMap({ $0 }) {
+            window.sharingType = hidden ? .none : .readOnly
+        }
+        guard let handle else { return }
+        if defaults.bool(forKey: SettingsKey.showOverFullScreen) {
+            handle.collectionBehavior.insert(.fullScreenAuxiliary)
+        } else {
+            handle.collectionBehavior.remove(.fullScreenAuxiliary)
+        }
+    }
+
+    @objc private func settingsChanged() {
+        DispatchQueue.main.async { self.applyWindowSettings() }
+    }
+
+    /// Clears Recently deleted items older than 30 days and writes today's backup, once per day.
+    private func runDailyMaintenance() {
+        store.purgeDeleted()
+        guard let directory = store.directory else { return }
+        do {
+            try Backups.backUp({ store.makeArchive() }, to: Backups.directory(in: directory))
+        } catch {
+            NSLog("Daily backup failed: \(error.localizedDescription)")
+        }
+    }
+
+    @objc private func openSettings() {
+        showSettings(tab: .general)
+    }
+
+    private func showSettings(tab: SettingsTab) {
+        if !presentation.pinned && presentation.presented { hidePanel() }
+        let window = settingsWindow ?? makeSettingsWindow()
+        settingsContext?.tab = tab
+        if !window.isVisible { window.center() }
+        window.orderFrontRegardless()
+        window.makeKey()
+    }
+
+    private var settingsContext: SettingsContext?
+
+    /// Built once, a few seconds after launch, so the first open is instant.
+    @discardableResult
+    private func makeSettingsWindow() -> NSWindow {
+        if let settingsWindow { return settingsWindow }
+        let context = SettingsContext(store: store, widget: debug, reminders: reminders, libraryDirectory: store.directory) { [weak self] combo in
+            self?.hotKey?.register(combo) ?? false
+        }
+        let window = SettingsPanel(contentRect: NSRect(x: 0, y: 0, width: 700, height: 520),
+                                   styleMask: [.titled, .closable, .nonactivatingPanel], backing: .buffered, defer: false)
+        window.contentViewController = NSHostingController(rootView: SettingsView(context: context))
+        window.title = "\(AppInfo.displayName) Settings"
+        window.isFloatingPanel = false
+        window.hidesOnDeactivate = false
+        window.isReleasedWhenClosed = false
+        window.center()
+        settingsContext = context
+        settingsWindow = window
+        return window
     }
 
     private func makeHandleWindow(frame: NSRect) -> HandleWindow {
@@ -292,12 +393,30 @@ final class AppController: NSObject, NSApplicationDelegate {
                self.capture.toggleLinkList?() == true {
                 return nil
             }
+            if self.search.active, self.search.isFocused, flags.isEmpty || flags == .function || flags == [.function, .numericPad] {
+                switch Int(event.keyCode) {
+                case kVK_DownArrow:
+                    self.search.selection = min(self.search.selection + 1, max(self.search.resultCount - 1, 0))
+                    return nil
+                case kVK_UpArrow:
+                    self.search.selection = max(self.search.selection - 1, 0)
+                    return nil
+                default:
+                    break
+                }
+            }
             guard flags == .command else { return event }
             let inNote = (self.panel.firstResponder as? NSTextView)?.isFieldEditor == false
             switch event.keyCode {
             case UInt16(kVK_Return), UInt16(kVK_ANSI_KeypadEnter):
                 guard self.capture.isFocused, let submit = self.capture.submitNote else { return event }
                 submit()
+                return nil
+            case UInt16(kVK_ANSI_F):
+                self.search.requests += 1
+                return nil
+            case UInt16(kVK_ANSI_Comma):
+                self.openSettings()
                 return nil
             case UInt16(kVK_ANSI_N):
                 self.presentation.newNoteRequests += 1
@@ -313,7 +432,10 @@ final class AppController: NSObject, NSApplicationDelegate {
     }
 
     @objc private func dayChanged() {
-        DispatchQueue.main.async { self.store.reload() }
+        DispatchQueue.main.async {
+            self.store.reload()
+            if !self.isScratchSession { self.runDailyMaintenance() }
+        }
     }
 
     private func seedDemo(_ store: LibraryStore) {
@@ -604,9 +726,92 @@ final class AppController: NSObject, NSApplicationDelegate {
         }
     }
 
+    /// ⌘F search with real keys (type, ↓, Return opens a note, a task, Esc steps back), Settings via ⌘,,
+    /// shortcut re-registration, a live window setting, and reminder timing.
+    private func runSearchSelfTest() {
+        seedDemo(store)
+        func after(_ seconds: Double, _ work: @escaping () -> Void) {
+            DispatchQueue.main.asyncAfter(deadline: .now() + seconds, execute: work)
+        }
+        func type(_ text: String) {
+            (panel.firstResponder as? NSTextView)?.insertText(text, replacementRange: NSRange(location: NSNotFound, length: 0))
+        }
+        after(1) { [self] in
+            showPanel()
+            after(0.4) { [self] in
+                postKey("f", code: 3, flags: .command)
+                after(0.4) { [self] in
+                    print("cmd-f active=\(search.active) searchFocused=\(search.isFocused)")
+                    type("invoice")
+                    after(0.3) { [self] in
+                        let found = store.search("invoice")
+                        print("results tasks=\(found.tasks.count) notes=\(found.notes.count) links=\(found.links.count) counted=\(search.resultCount)")
+                        postKey("", code: 125)
+                        postKey("", code: 125)
+                        after(0.3) { [self] in
+                            print("selection after two downs=\(search.selection)")
+                            postKey("\r", code: 36)
+                            after(0.8) { [self] in
+                                print("opened note editor=\(panel.firstResponder is NoteTextView) searchActive=\(search.active)")
+                                postKey("\u{1b}", code: 53)
+                                after(0.5) { [self] in
+                                    postKey("f", code: 3, flags: .command)
+                                    after(0.4) { [self] in
+                                        type("dentist")
+                                        after(0.3) { [self] in
+                                            postKey("\r", code: 36)
+                                            after(0.4) { [self] in
+                                                print("task hit closes search=\(!search.active) panel visible=\(panel.isVisible)")
+                                                postKey("f", code: 3, flags: .command)
+                                                after(0.3) { [self] in
+                                                    postKey("\u{1b}", code: 53)
+                                                    after(0.3) { [self] in
+                                                        print("esc closes search only: search=\(search.active) panel=\(presentation.presented)")
+                                                        checkSettings()
+                                                    }
+                                                }
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    private func checkSettings() {
+        postKey(",", code: 43, flags: .command)
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.8) { [self] in
+            print("cmd-comma settings visible=\(settingsWindow?.isVisible ?? false) title=\(settingsWindow?.title ?? "nil") panelHidden=\(!presentation.presented)")
+            settingsWindow?.close()
+            let other = HotKeyCombo(keyCode: kVK_ANSI_K, modifiers: cmdKey | optionKey, display: "⌥⌘K")
+            let switched = hotKey?.register(other) ?? false
+            let restored = hotKey?.register(HotKeyCombo.saved) ?? false
+            print("hotkey switch=\(switched) restored=\(restored) saved=\(HotKeyCombo.saved.display)")
+            let defaults = UserDefaults.standard
+            let before = defaults.bool(forKey: SettingsKey.hideFromRecordings)
+            defaults.set(false, forKey: SettingsKey.hideFromRecordings)
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.2) { [self] in
+                let visibleToRecorders = panel.sharingType == .readOnly
+                defaults.set(before, forKey: SettingsKey.hideFromRecordings)
+                DispatchQueue.main.asyncAfter(deadline: .now() + 0.2) { [self] in
+                    print("recording setting live: off=\(visibleToRecorders) restored hidden=\(panel.sharingType == .none)")
+                    let fires = Reminders.fireDates(for: store.tasks, minutes: 9 * 60)
+                    let tomorrow = fires.first { $0.0.title.hasPrefix("Finish SwiftUI") }?.1
+                    print("reminders planned=\(fires.count) swiftui fires=\(tomorrow.map { $0.formatted(date: .abbreviated, time: .shortened) } ?? "nil")")
+                    NSApp.terminate(nil)
+                }
+            }
+        }
+    }
+
     private func registerHotKey() {
         let key = HotKey { [weak self] in DispatchQueue.main.async { self?.togglePanel() } }
-        hotKeyRegistered = key.register(keyCode: kVK_Space, modifiers: controlKey)
+        hotKeyRegistered = key.register(HotKeyCombo.saved)
+        if !hotKeyRegistered { NSLog("Global shortcut \(HotKeyCombo.saved.display) could not be registered") }
         hotKey = key
     }
 
@@ -614,6 +819,8 @@ final class AppController: NSObject, NSApplicationDelegate {
         let menu = NSMenu()
         menu.addItem(withTitle: "New Task", action: #selector(openPanelFromMenu), keyEquivalent: "").target = self
         menu.addItem(withTitle: "New Note", action: #selector(newNoteFromMenu), keyEquivalent: "").target = self
+        menu.addItem(.separator())
+        menu.addItem(withTitle: "Settings…", action: #selector(openSettings), keyEquivalent: "").target = self
         menu.addItem(withTitle: "Hide for 1 Hour", action: #selector(hideForAnHour), keyEquivalent: "").target = self
         menu.addItem(.separator())
         menu.addItem(withTitle: "Quit \(AppInfo.displayName)", action: #selector(NSApplication.terminate(_:)), keyEquivalent: "").target = NSApp
@@ -638,16 +845,6 @@ final class AppController: NSObject, NSApplicationDelegate {
         handle.orderFrontRegardless()
         showNowItem.isHidden = true
         lastActivity = Date()
-    }
-
-    @objc private func toggleLaunchAtLogin() {
-        let service = SMAppService.mainApp
-        do {
-            if service.status == .enabled { try service.unregister() } else { try service.register() }
-        } catch {
-            NSLog("Launch at login change failed: \(error.localizedDescription)")
-        }
-        loginItem.state = service.status == .enabled ? .on : .off
     }
 
     private func runShellSelfTest() {
@@ -778,7 +975,6 @@ final class AppController: NSObject, NSApplicationDelegate {
         guard options.handle == nil else { return }
         handle.setFrame(widgetFrame(), display: true)
         updateCordHitTesting()
-        refreshDebugMenu()
     }
 
     /// Reached with --handle=name: the Phase 1 gallery styles.
@@ -812,13 +1008,20 @@ final class AppController: NSObject, NSApplicationDelegate {
         let rect = NSRect(origin: .zero, size: Tokens.Size.panel)
         panel = PanelWindow(contentRect: rect, styleMask: [.borderless, .nonactivatingPanel], backing: .buffered, defer: false)
         configure(panel)
+        // Esc steps back one layer at a time: the clipboard chip, then search, then the panel.
         panel.onCancel = { [weak self] in
             guard let self, self.capture.dismissClipboardOffer?() != true else { return }
+            if self.search.active {
+                self.search.active = false
+                self.search.query = ""
+                return
+            }
             self.hidePanel()
         }
         // The system window shadow draws square dark corners around the glass in dark mode.
         panel.hasShadow = false
-        panel.contentView = FirstMouseHostingView(rootView: PanelView(density: options.density, presentation: presentation, capture: capture, store: store, tab: options.tab))
+        panel.contentView = FirstMouseHostingView(rootView: PanelView(density: options.density, presentation: presentation, capture: capture, store: store,
+                                                                                search: search, tab: options.tab))
         // Lays the panel out once while invisible, so the first real open is as quick as later ones.
         panel.alphaValue = 0
         panel.orderFrontRegardless()
@@ -831,54 +1034,16 @@ final class AppController: NSObject, NSApplicationDelegate {
         statusItem = NSStatusBar.system.statusItem(withLength: NSStatusItem.squareLength)
         statusItem.button?.image = NSImage(systemSymbolName: "checklist", accessibilityDescription: AppInfo.displayName)
         let menu = NSMenu()
-        if options.handle == nil {
-            let debugItem = menu.addItem(withTitle: "Debug", action: nil, keyEquivalent: "")
-            let debugMenu = NSMenu()
-            debugMenu.addItem(withTitle: "Widget", action: nil, keyEquivalent: "").submenu = widgetMenu
-            debugMenu.addItem(withTitle: "Colour", action: nil, keyEquivalent: "").submenu = colourMenu
-            debugItem.submenu = debugMenu
-            refreshDebugMenu()
-            menu.addItem(.separator())
-        }
+        menu.addItem(withTitle: "Open Panel", action: #selector(openPanelFromMenu), keyEquivalent: "").target = self
         showNowItem.target = self
         showNowItem.isHidden = true
         menu.addItem(showNowItem)
-        loginItem.target = self
-        loginItem.state = SMAppService.mainApp.status == .enabled ? .on : .off
-        menu.addItem(loginItem)
+        menu.addItem(.separator())
+        menu.addItem(withTitle: "Settings…", action: #selector(openSettings), keyEquivalent: ",").target = self
         menu.addItem(.separator())
         let quit = menu.addItem(withTitle: "Quit \(AppInfo.displayName)", action: #selector(NSApplication.terminate(_:)), keyEquivalent: "q")
         quit.target = NSApp
         statusItem.menu = menu
-    }
-
-    private func refreshDebugMenu() {
-        widgetMenu.removeAllItems()
-        for prototype in WidgetPrototype.allCases {
-            let item = widgetMenu.addItem(withTitle: prototype.title, action: #selector(chooseWidget(_:)), keyEquivalent: "")
-            item.target = self
-            item.representedObject = prototype.rawValue
-            item.state = prototype == debug.prototype ? .on : .off
-        }
-        colourMenu.removeAllItems()
-        for colour in WidgetColour.allCases {
-            let item = colourMenu.addItem(withTitle: colour.title, action: #selector(chooseColour(_:)), keyEquivalent: "")
-            item.target = self
-            item.representedObject = colour.rawValue
-            item.state = colour == debug.colour ? .on : .off
-        }
-    }
-
-    @objc private func chooseWidget(_ sender: NSMenuItem) {
-        guard let raw = sender.representedObject as? String, let prototype = WidgetPrototype(rawValue: raw) else { return }
-        debug.prototype = prototype
-        applyPrototype()
-    }
-
-    @objc private func chooseColour(_ sender: NSMenuItem) {
-        guard let raw = sender.representedObject as? String, let colour = WidgetColour(rawValue: raw) else { return }
-        debug.colour = colour
-        refreshDebugMenu()
     }
 
     private func runCordSelfTest() {

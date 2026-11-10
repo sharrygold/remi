@@ -63,7 +63,7 @@ enum WidgetPrototype: String, CaseIterable, Identifiable {
     }
 }
 
-/// Live debug choices, remembered between launches.
+/// The widget's look and live state. Style and colour are chosen in Settings and remembered.
 final class WidgetDebug: ObservableObject {
     private static let prototypeKey = "debug.widgetPrototype"
     private static let colourKey = "debug.widgetColour"
@@ -98,7 +98,10 @@ struct WidgetView: View {
     @ObservedObject var store: LibraryStore
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
-    private var count: Int { store.todayOpenCount() }
+    @AppStorage(SettingsKey.showCount) private var showCount = true
+
+    /// What the widget draws; hidden by the "Show today's task count" setting.
+    private var count: Int { showCount ? store.todayOpenCount() : 0 }
 
     private var tuckOffset: CGSize {
         guard debug.tucked else { return .zero }
@@ -124,7 +127,7 @@ struct WidgetView: View {
         .frame(width: debug.prototype.windowSize.width, height: debug.prototype.windowSize.height)
         .clipped()
         .accessibilityElement()
-        .accessibilityLabel("\(AppInfo.displayName), \(count) tasks today")
+        .accessibilityLabel("\(AppInfo.displayName), \(store.todayOpenCount()) tasks today")
         .accessibilityAddTraits(.isButton)
     }
 }
