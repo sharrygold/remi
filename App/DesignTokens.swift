@@ -18,6 +18,8 @@ enum Tokens {
 
     enum Size {
         static let panel = CGSize(width: 380, height: 600)
+        static let panelMin = CGSize(width: 340, height: 460)
+        static let panelMax = CGSize(width: 560, height: 900)
         static let edgeTab = CGSize(width: 24, height: 72)
         static let tile = CGSize(width: 44, height: 44)
         static let handleGap: CGFloat = 8

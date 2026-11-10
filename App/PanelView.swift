@@ -53,6 +53,7 @@ struct PanelView: View {
     var body: some View {
         VStack(spacing: Tokens.Spacing.s) {
             captureBar
+            if store.isTemporary { storageWarning }
             if showsTokens { tokenRow } else if let clipboardOffer { clipboardChip(clipboardOffer) }
             if search.active {
                 SearchPane(store: store, search: search, density: density, onOpen: openSearchHit, onClose: closeSearch)
@@ -67,7 +68,8 @@ struct PanelView: View {
             footer
         }
         .padding(Tokens.Spacing.s)
-        .frame(width: Tokens.Size.panel.width, height: Tokens.Size.panel.height)
+        // Fills the window, which can be resized from its edges and remembers its size.
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
         .background {
             if reduceTransparency { shape.fill(Color(nsColor: .windowBackgroundColor)) }
         }
@@ -318,6 +320,20 @@ struct PanelView: View {
         withAnimation(Tokens.Motion.quick) { clipboardOffer = nil }
     }
 
+    /// Shown only if the saved library could not be opened and this session runs on a temporary copy.
+    private var storageWarning: some View {
+        HStack(alignment: .top, spacing: Tokens.Spacing.s) {
+            Image(systemName: "exclamationmark.triangle").foregroundStyle(.orange).accessibilityHidden(true)
+            Text("Your library couldn't be opened, so changes now won't be kept. Quit and reopen; if this keeps happening, restore a backup in Settings > Data.")
+                .fixedSize(horizontal: false, vertical: true)
+        }
+        .font(Tokens.TextRole.detail)
+        .padding(Tokens.Spacing.s)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(Color.orange.opacity(0.12), in: RoundedRectangle(cornerRadius: Tokens.Radius.medium, style: .continuous))
+        .accessibilityElement(children: .combine)
+    }
+
     // MARK: Keyboard
 
     /// The current list in the order it is drawn.
@@ -437,6 +453,7 @@ struct PanelView: View {
     // MARK: Spaces and tabs
 
     private var spaceSwitcher: some View {
+        ScrollViewReader { proxy in
         ScrollView(.horizontal, showsIndicators: false) {
             HStack(spacing: Tokens.Spacing.xs) {
                 spaceChip(name: "All", symbol: "square.grid.2x2", tint: .accentColor, id: nil)
@@ -457,6 +474,10 @@ struct PanelView: View {
             }
             .padding(.trailing, Tokens.Spacing.l)
         }
+        // Keeps the chosen Space in view, so a long list never hides it off the end.
+        .onChange(of: selectedSpaceID) { _, id in
+            withAnimation(Tokens.Motion.quick) { proxy.scrollTo(id?.uuidString ?? "all", anchor: .center) }
+        }
         .mask {
             // Fades the trailing edge so a cut-off Space reads as scrollable.
             HStack(spacing: 0) {
@@ -464,6 +485,7 @@ struct PanelView: View {
                 LinearGradient(colors: [.black, .clear], startPoint: .leading, endPoint: .trailing)
                     .frame(width: Tokens.Spacing.l)
             }
+        }
         }
     }
 
@@ -486,6 +508,9 @@ struct PanelView: View {
                 .background(selected ? tint.opacity(0.18) : .clear, in: Capsule())
         }
         .buttonStyle(.plain)
+        .id(id?.uuidString ?? "all")
+        .help(id == nil ? "All Spaces (⌘[ and ⌘] switch)" : name)
+        .accessibilityAddTraits(selected ? .isSelected : [])
     }
 
     private var tabs: some View {
@@ -501,6 +526,8 @@ struct PanelView: View {
                         .contentShape(Rectangle())
                 }
                 .buttonStyle(.plain)
+                .help("\(item.rawValue) (⌘\((PanelTab.allCases.firstIndex(of: item) ?? 0) + 1))")
+                .accessibilityAddTraits(tab == item ? .isSelected : [])
             }
         }
     }

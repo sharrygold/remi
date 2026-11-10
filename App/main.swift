@@ -159,6 +159,7 @@ final class AppController: NSObject, NSApplicationDelegate {
     private var hiddenUntil: Date?
     private let showNowItem = NSMenuItem(title: "Show Widget Now", action: #selector(showWidgetNow), keyEquivalent: "")
     private static let idleSecondsBeforeTuck: TimeInterval = 4
+    private static let panelSizeKey = "panelSize"
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         SettingsKey.registerDefaults()
@@ -223,6 +224,16 @@ final class AppController: NSObject, NSApplicationDelegate {
         if CommandLine.arguments.contains("--m4-selftest") { runLinksSelfTest() }
         if CommandLine.arguments.contains("--m5-selftest") { runSearchSelfTest() }
         if CommandLine.arguments.contains("--m6-selftest") { runKeyboardSelfTest() }
+        if CommandLine.arguments.contains("--size-selftest") {
+            // Hidden, so it never takes keyboard focus.
+            print("start content=\(panel.contentLayoutRect.size) temporary=\(store.isTemporary)")
+            panel.setContentSize(NSSize(width: 460, height: 760))
+            panel.layoutIfNeeded()
+            print("resized content=\(panel.contentLayoutRect.size) hosting=\(panel.contentView?.frame.size ?? .zero)")
+            panel.setContentSize(NSSize(width: 100, height: 100))
+            print("too small asked, got=\(panel.contentLayoutRect.size) (min \(Tokens.Size.panelMin))")
+            NSApp.terminate(nil)
+        }
         if CommandLine.arguments.contains("--hit-selftest") {
             // A coarse map of the widget window: # catches clicks, . lets them through.
             DispatchQueue.main.asyncAfter(deadline: .now() + 1.5) { [self] in
@@ -1161,7 +1172,17 @@ final class AppController: NSObject, NSApplicationDelegate {
 
     private func buildPanel() {
         let rect = NSRect(origin: .zero, size: Tokens.Size.panel)
-        panel = PanelWindow(contentRect: rect, styleMask: [.borderless, .nonactivatingPanel], backing: .buffered, defer: false)
+        panel = PanelWindow(contentRect: rect, styleMask: [.borderless, .nonactivatingPanel, .resizable], backing: .buffered, defer: false)
+        panel.contentMinSize = Tokens.Size.panelMin
+        panel.contentMaxSize = Tokens.Size.panelMax
+        if let saved = UserDefaults.standard.string(forKey: Self.panelSizeKey) {
+            let size = NSSizeFromString(saved)
+            if size.width >= Tokens.Size.panelMin.width, size.height >= Tokens.Size.panelMin.height { panel.setContentSize(size) }
+        }
+        NotificationCenter.default.addObserver(forName: NSWindow.didEndLiveResizeNotification, object: panel, queue: .main) { [weak self] _ in
+            guard let self else { return }
+            UserDefaults.standard.set(NSStringFromSize(self.panel.frame.size), forKey: Self.panelSizeKey)
+        }
         configure(panel)
         // Esc steps back one layer at a time: the clipboard chip, then search, then the panel.
         panel.onCancel = { [weak self] in
@@ -1175,8 +1196,11 @@ final class AppController: NSObject, NSApplicationDelegate {
         }
         // The system window shadow draws square dark corners around the glass in dark mode.
         panel.hasShadow = false
-        panel.contentView = FirstMouseHostingView(rootView: PanelView(density: options.density, presentation: presentation, capture: capture, store: store,
+        let hosting = FirstMouseHostingView(rootView: PanelView(density: options.density, presentation: presentation, capture: capture, store: store,
                                                                                 search: search, nav: nav, tab: options.tab))
+        // The window decides the size, so the edges can be dragged.
+        hosting.sizingOptions = []
+        panel.contentView = hosting
         // Lays the panel out once while invisible, so the first real open is as quick as later ones.
         panel.alphaValue = 0
         panel.orderFrontRegardless()
