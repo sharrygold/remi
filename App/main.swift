@@ -221,6 +221,19 @@ final class AppController: NSObject, NSApplicationDelegate {
         if CommandLine.arguments.contains("--m3-selftest") { runNotesSelfTest() }
         if CommandLine.arguments.contains("--m4-selftest") { runLinksSelfTest() }
         if CommandLine.arguments.contains("--m5-selftest") { runSearchSelfTest() }
+        if CommandLine.arguments.contains("--hit-selftest") {
+            // A coarse map of the widget window: # catches clicks, . lets them through.
+            DispatchQueue.main.asyncAfter(deadline: .now() + 1.5) { [self] in
+                guard let view = handle.contentView else { return }
+                let size = view.bounds.size
+                for row in stride(from: size.height - 4, through: 0, by: -8) {
+                    print(stride(from: 4, through: size.width, by: 8).map { x in
+                        WidgetHitTest.isDrawn(at: NSPoint(x: x, y: row), in: view) ? "#" : "."
+                    }.joined())
+                }
+                NSApp.terminate(nil)
+            }
+        }
         if CommandLine.arguments.contains("--clipboard-selftest") { runClipboardChipSelfTest() }
     }
 
@@ -942,6 +955,7 @@ final class AppController: NSObject, NSApplicationDelegate {
         if isPointerNearWidget() {
             lastActivity = Date()
             if debug.tucked { debug.tucked = false }
+            if debug.prototype == .cord { debug.cord.wake() }
         }
         let mouse = NSEvent.mouseLocation
         let point = CGPoint(x: mouse.x - handle.frame.minX, y: handle.frame.maxY - mouse.y)
@@ -972,13 +986,17 @@ final class AppController: NSObject, NSApplicationDelegate {
         }
     }
 
+    /// Clicks pass through wherever the widget draws nothing: the cord by its rope's shape, the
+    /// bird and pebble by the pixel under the pointer. Never changed mid-drag.
     private func updateCordHitTesting() {
+        guard NSEvent.pressedMouseButtons == 0, options.handle == nil else { return }
+        let mouse = NSEvent.mouseLocation
         guard debug.prototype == .cord else {
-            handle.ignoresMouseEvents = false
+            guard handle.frame.contains(mouse), let view = handle.contentView else { return }
+            let local = view.convert(handle.convertPoint(fromScreen: mouse), from: nil)
+            handle.ignoresMouseEvents = !WidgetHitTest.isDrawn(at: local, in: view)
             return
         }
-        guard NSEvent.pressedMouseButtons == 0 else { return }
-        let mouse = NSEvent.mouseLocation
         let lifted = debug.tucked ? debug.prototype.tuckDistance : 0
         let point = CGPoint(x: mouse.x - handle.frame.minX, y: handle.frame.maxY - mouse.y + lifted)
         handle.ignoresMouseEvents = !debug.cord.isNear(point)
@@ -1105,6 +1123,15 @@ final class AppController: NSObject, NSApplicationDelegate {
             maxX = max(maxX, cord.points.map(\.x).max() ?? 0)
         }
         print("fast slide rope x range=\(minX)...\(maxX) window=\(CordSimulation.width)")
+        let resting = CordSimulation()
+        resting.configure()
+        resting.tucked = true
+        for second in 1...20 {
+            (0..<60).forEach { _ in resting.stepOnce() }
+            if [2, 5, 10, 15, 20].contains(second) {
+                print("rest t=\(second)s breeze=\(resting.breezeLevel) move=\(resting.largestMove) spanGap=\(resting.spanGap) settled=\(resting.isSettled)")
+            }
+        }
     }
 
     private func togglePanel() {

@@ -82,7 +82,12 @@ final class WidgetDebug: ObservableObject {
     /// The pointer in the bird's window coordinates (y down) while it is close enough to notice.
     @Published var birdPointer: CGPoint?
     @Published var onLeftEdge = false
-    @Published var tucked = false
+    @Published var tucked = false {
+        didSet {
+            cord.tucked = tucked
+            if !tucked { cord.wake() }
+        }
+    }
     let cord = CordSimulation()
 
     init(prototype: WidgetPrototype?, colour: WidgetColour?) {
@@ -114,7 +119,7 @@ struct WidgetView: View {
         Group {
             switch debug.prototype {
             case .pebble:
-                PebbleWidget(colour: debug.colour, count: count, previewHover: debug.previewHover)
+                PebbleWidget(colour: debug.colour, count: count, previewHover: debug.previewHover, resting: debug.tucked)
             case .bird:
                 BirdWidget(colour: debug.colour, count: count, target: debug.previewLook ?? debug.birdPointer, mirrored: debug.onLeftEdge)
             case .cord:
@@ -137,6 +142,7 @@ struct PebbleWidget: View {
     let colour: WidgetColour
     let count: Int
     let previewHover: Bool
+    var resting = false
     @State private var hovering = false
     @State private var inhaled = false
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
@@ -164,10 +170,18 @@ struct PebbleWidget: View {
             .rotationEffect(.degrees(perked && !reduceMotion ? -4 : 0))
             .animation(reduceMotion ? nil : Tokens.Motion.quick, value: perked)
             .onHover { hovering = $0 }
-            .onAppear {
-                guard !reduceMotion else { return }
-                withAnimation(.easeInOut(duration: 3.2).repeatForever(autoreverses: true)) { inhaled = true }
-            }
+            .onAppear { breathe(!resting) }
+            .onChange(of: resting) { _, resting in breathe(!resting) }
+    }
+
+    /// Breathing redraws the shadow every frame, so it stops while tucked away.
+    private func breathe(_ on: Bool) {
+        guard !reduceMotion else { return }
+        if on {
+            withAnimation(.easeInOut(duration: 3.2).repeatForever(autoreverses: true)) { inhaled = true }
+        } else {
+            withAnimation(.easeOut(duration: 0.6)) { inhaled = false }
+        }
     }
 
     private var eye: some View {
@@ -267,7 +281,15 @@ struct BirdWidget: View {
 }
 
 /// A verlet rope pinned at the top. Pulling stretches it; letting go springs it back.
-final class CordSimulation {
+/// It falls asleep (no frames drawn at all) once settled and left alone, and wakes on any touch.
+final class CordSimulation: ObservableObject {
+    /// Seconds without a touch before the breeze fades and the rope may rest.
+    static let restAfter: Double = 20
+    @Published private(set) var asleep = false
+    /// Set while the widget is tucked away, which lets the rope rest straight away.
+    var tucked = false
+    private var lastTouch: Double = 0
+    private var breeze: CGFloat = 1
     static let width: CGFloat = 200
     static let pullToOpen: CGFloat = 24
     static let length: CGFloat = 152
@@ -302,8 +324,28 @@ final class CordSimulation {
         previous = points
     }
 
+    /// Any touch or nearby pointer: the breeze returns and frames resume.
+    func wake() {
+        lastTouch = time
+        if asleep { asleep = false }
+    }
+
+    /// The largest movement in the last step, for the self-test.
+    var largestMove: CGFloat {
+        zip(points, previous).map { max(abs($0.x - $1.x), abs($0.y - $1.y)) }.max() ?? 0
+    }
+    var breezeLevel: CGFloat { breeze }
+    var spanGap: CGFloat { span - length }
+
+    /// True when nothing is moving enough to see.
+    var isSettled: Bool {
+        guard target == nil, abs(span - length) < 0.5 else { return false }
+        return zip(points, previous).allSatisfy { abs($0.x - $1.x) < 0.01 && abs($0.y - $1.y) < 0.01 }
+    }
+
     /// Follows the pointer by its travel since the press; y grows downward.
     func pull(dx: CGFloat, dy: CGFloat) {
+        wake()
         target = CGPoint(x: pin.x + min(max(dx, -Self.maxSideways), Self.maxSideways),
                          y: length + min(max(dy, 0), Self.maxPull))
     }
@@ -311,6 +353,7 @@ final class CordSimulation {
     /// Lets go. Returns true when the pull went far enough to open the panel.
     @discardableResult
     func release() -> Bool {
+        wake()
         guard let released = target else { return false }
         target = nil
         // Starting from rest stops the stretched rope flinging itself upward.
@@ -327,6 +370,7 @@ final class CordSimulation {
 
     /// A small push that builds along the rope, for a click.
     func nudge(_ speed: CGFloat = 1.2) {
+        wake()
         for index in previous.indices {
             previous[index].x -= speed * CGFloat(index) / CGFloat(Self.segments)
         }
@@ -334,6 +378,7 @@ final class CordSimulation {
 
     /// The pointer brushed the rope while moving by dx: only the part it touches is pushed.
     func brush(at point: CGPoint, dx: CGFloat) {
+        wake()
         let push = min(max(dx, -6), 6) * 0.22
         for index in points.indices.dropFirst() {
             let distance = hypot(points[index].x - point.x, points[index].y - point.y)
@@ -344,6 +389,7 @@ final class CordSimulation {
 
     /// The window slid sideways by dx; the rope lags behind it and swings back.
     func carry(dx: CGFloat) {
+        wake()
         for index in points.indices.dropFirst() {
             let lag = dx * 0.5 * CGFloat(index) / CGFloat(Self.segments)
             points[index].x -= lag
@@ -364,12 +410,23 @@ final class CordSimulation {
             stepOnce()
             leftover -= Self.step
         }
+        if !asleep, breeze < 0.001, isSettled {
+            // Published outside the view update that called this.
+            DispatchQueue.main.async { [weak self] in
+                guard let self, self.breeze < 0.001, self.isSettled else { return }
+                self.asleep = true
+            }
+        }
     }
 
     func stepOnce() {
         time += Self.step
         let dt2 = CGFloat(Self.step * Self.step)
-        let wind = windEnabled ? CGFloat(sin(time * 1.1) * 24 + sin(time * 0.37) * 12) : 0
+        // The breeze fades out when left alone (or tucked) and fades back in on a touch.
+        let resting = tucked || time - lastTouch > Self.restAfter
+        breeze += ((resting ? 0 : 1) - breeze) * 0.02
+        if breeze < 0.001 { breeze = 0 }
+        let wind = windEnabled ? CGFloat(sin(time * 1.1) * 24 + sin(time * 0.37) * 12) * breeze : 0
         if target == nil { span += (length - span) * 0.12 }
         let settling = target == nil && span > length + 0.5
         let damping: CGFloat = settling ? 0.97 : 0.98
@@ -431,11 +488,12 @@ final class CordSimulation {
 struct CordWidget: View {
     let colour: WidgetColour
     let count: Int
-    let simulation: CordSimulation
+    @ObservedObject var simulation: CordSimulation
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     var body: some View {
-        TimelineView(.animation) { context in
+        // Paused while asleep, so a resting cord costs nothing.
+        TimelineView(.animation(paused: simulation.asleep)) { context in
             Canvas { canvas, _ in
                 simulation.windEnabled = !reduceMotion
                 simulation.advance(to: context.date)
