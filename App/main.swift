@@ -782,10 +782,33 @@ final class AppController: NSObject, NSApplicationDelegate {
         }
     }
 
+    /// Records ⌥⌘K through a real key event in the Settings window, then puts the original back.
+    private func checkShortcutRecorder() {
+        guard let context = settingsContext, let window = settingsWindow else { return print("recorder: no settings") }
+        let original = HotKeyCombo.saved
+        context.startRecording()
+        guard let press = NSEvent.keyEvent(with: .keyDown, location: .zero, modifierFlags: [.command, .option],
+                                           timestamp: ProcessInfo.processInfo.systemUptime, windowNumber: window.windowNumber,
+                                           context: nil, characters: "˚", charactersIgnoringModifiers: "k", isARepeat: false,
+                                           keyCode: UInt16(kVK_ANSI_K)) else { return }
+        NSApp.sendEvent(press)
+        print("recorder recorded=\(context.shortcut.display) saved=\(HotKeyCombo.saved.display) stillRecording=\(context.recordingShortcut)")
+        context.startRecording()
+        if let plain = NSEvent.keyEvent(with: .keyDown, location: .zero, modifierFlags: [], timestamp: ProcessInfo.processInfo.systemUptime,
+                                        windowNumber: window.windowNumber, context: nil, characters: "k", charactersIgnoringModifiers: "k",
+                                        isARepeat: false, keyCode: UInt16(kVK_ANSI_K)) {
+            NSApp.sendEvent(plain)
+        }
+        print("recorder plain key refused=\(context.recordingShortcut) message=\(context.shortcutMessage ?? "nil")")
+        context.stopRecording(with: original)
+        print("recorder restored=\(HotKeyCombo.saved.display)")
+    }
+
     private func checkSettings() {
         postKey(",", code: 43, flags: .command)
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.8) { [self] in
             print("cmd-comma settings visible=\(settingsWindow?.isVisible ?? false) title=\(settingsWindow?.title ?? "nil") panelHidden=\(!presentation.presented)")
+            checkShortcutRecorder()
             settingsWindow?.close()
             let other = HotKeyCombo(keyCode: kVK_ANSI_K, modifiers: cmdKey | optionKey, display: "⌥⌘K")
             let switched = hotKey?.register(other) ?? false

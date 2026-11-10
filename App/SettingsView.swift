@@ -13,6 +13,12 @@ final class SettingsContext: ObservableObject {
     /// Registers a new global shortcut; false if macOS refused it.
     let applyHotKey: (HotKeyCombo) -> Bool
     @Published var tab: SettingsTab = .general
+    /// True while the shortcut field waits for keys. Shared so the self-test can drive it.
+    @Published var recordingShortcut = false
+    /// The last recording's problem, if any.
+    @Published var shortcutMessage: String?
+    @Published var shortcut = HotKeyCombo.saved
+    private var keyMonitor: Any?
 
     init(store: LibraryStore, widget: WidgetDebug, reminders: Reminders, libraryDirectory: URL?, applyHotKey: @escaping (HotKeyCombo) -> Bool) {
         self.store = store
@@ -20,6 +26,48 @@ final class SettingsContext: ObservableObject {
         self.reminders = reminders
         self.libraryDirectory = libraryDirectory
         self.applyHotKey = applyHotKey
+    }
+
+    /// Takes the next key press from the app's event stream while recording. The current shortcut is
+    /// switched off meanwhile, so it can be pressed and recorded too.
+    func startRecording() {
+        guard !recordingShortcut else { return }
+        recordingShortcut = true
+        shortcutMessage = nil
+        _ = applyHotKey(HotKeyCombo(keyCode: -1, modifiers: 0, display: ""))
+        keyMonitor = NSEvent.addLocalMonitorForEvents(matching: .keyDown) { [weak self] event in
+            guard let self else { return event }
+            if event.keyCode == 53 {
+                self.stopRecording(with: nil)
+            } else if let combo = HotKeyCombo(event: event) {
+                self.stopRecording(with: combo)
+            } else {
+                self.shortcutMessage = "Include ⌘, ⌥ or ⌃, for example ⌥Space."
+            }
+            return nil
+        }
+    }
+
+    func stopRecording(with combo: HotKeyCombo?) {
+        if let keyMonitor { NSEvent.removeMonitor(keyMonitor) }
+        keyMonitor = nil
+        recordingShortcut = false
+        guard let combo else {
+            _ = applyHotKey(shortcut)
+            return
+        }
+        if applyHotKey(combo) {
+            shortcut = combo
+            combo.save()
+            shortcutMessage = nil
+        } else {
+            _ = applyHotKey(shortcut)
+            shortcutMessage = "macOS or another app already uses \(combo.display). Try another."
+        }
+    }
+
+    func resetShortcut() {
+        stopRecording(with: .standard)
     }
 }
 
@@ -100,7 +148,7 @@ private struct GeneralSettings: View {
                 Toggle("Open at login", isOn: Binding(get: { launchAtLogin }, set: setLaunchAtLogin))
                 if let loginNote { note(loginNote) }
                 LabeledContent("Shortcut to open the panel") {
-                    ShortcutField(apply: context.applyHotKey)
+                    ShortcutField(context: context)
                 }
             }
             Section("Links") {
@@ -163,77 +211,23 @@ struct Browser {
 
 /// Click, then press the new shortcut. Esc cancels.
 private struct ShortcutField: View {
-    let apply: (HotKeyCombo) -> Bool
-    @State private var combo = HotKeyCombo.saved
-    @State private var recording = false
-    @State private var message: String?
+    @ObservedObject var context: SettingsContext
 
     var body: some View {
         VStack(alignment: .trailing, spacing: 4) {
             HStack(spacing: 6) {
-                ShortcutRecorder(recording: $recording) { pressed in
-                    recording = false
-                    guard let pressed else { return }
-                    if apply(pressed) {
-                        combo = pressed
-                        pressed.save()
-                        message = nil
-                    } else {
-                        _ = apply(combo)
-                        message = "macOS or another app already uses \(pressed.display). Try another."
-                    }
+                Button(context.recordingShortcut ? "Press keys…" : context.shortcut.display) {
+                    context.recordingShortcut ? context.stopRecording(with: nil) : context.startRecording()
                 }
-                .frame(width: 0, height: 0)
-                Button(recording ? "Press keys…" : combo.display) { recording.toggle() }
-                    .monospaced()
-                    .help("Click, then press the shortcut you want")
-                if combo != .standard {
-                    Button("Reset") {
-                        if apply(.standard) {
-                            combo = .standard
-                            HotKeyCombo.standard.save()
-                            message = nil
-                        }
-                    }
+                .monospaced()
+                .help(context.recordingShortcut ? "Press the shortcut, or Esc to cancel" : "Click, then press the shortcut you want")
+                if context.shortcut != .standard, !context.recordingShortcut {
+                    Button("Reset", action: context.resetShortcut)
                 }
             }
-            if let message { note(message) }
+            if let message = context.shortcutMessage { note(message) }
         }
-    }
-}
-
-/// An invisible view that takes the next key press while recording.
-private struct ShortcutRecorder: NSViewRepresentable {
-    @Binding var recording: Bool
-    let onPress: (HotKeyCombo?) -> Void
-
-    final class KeyView: NSView {
-        var onPress: ((HotKeyCombo?) -> Void)?
-        override var acceptsFirstResponder: Bool { true }
-        override func keyDown(with event: NSEvent) {
-            if event.keyCode == 53 { onPress?(nil); return }
-            if let combo = HotKeyCombo(event: event) { onPress?(combo) } else { NSSound.beep() }
-        }
-        override func performKeyEquivalent(with event: NSEvent) -> Bool {
-            guard window?.firstResponder === self else { return false }
-            keyDown(with: event)
-            return true
-        }
-    }
-
-    func makeNSView(context: Context) -> KeyView {
-        let view = KeyView()
-        view.onPress = onPress
-        return view
-    }
-
-    func updateNSView(_ view: KeyView, context: Context) {
-        view.onPress = onPress
-        if recording, view.window?.firstResponder !== view {
-            DispatchQueue.main.async { view.window?.makeFirstResponder(view) }
-        } else if !recording, view.window?.firstResponder === view {
-            DispatchQueue.main.async { view.window?.makeFirstResponder(nil) }
-        }
+        .onDisappear { if context.recordingShortcut { context.stopRecording(with: nil) } }
     }
 }
 

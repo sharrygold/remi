@@ -72,8 +72,10 @@ final class HotKey {
     }
 
     /// Returns false when macOS refuses the combination, for example if another app owns it.
+    /// A key code below zero just switches the shortcut off.
     func register(_ combo: HotKeyCombo) -> Bool {
         unregister()
+        guard combo.keyCode >= 0 else { return true }
         let id = EventHotKeyID(signature: OSType(0x50524348), id: 1)
         return RegisterEventHotKey(UInt32(combo.keyCode), UInt32(combo.modifiers), id, GetApplicationEventTarget(), 0, &reference) == noErr
     }
