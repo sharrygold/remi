@@ -65,6 +65,8 @@ struct LibraryArchive: Codable, Equatable {
         var createdAt: Date
         var updatedAt: Date
         var deletedAt: Date?
+        /// Optional so archives written before renaming existed still import.
+        var titleEdited: Bool? = nil
     }
 
     static func encoder() -> JSONEncoder {
@@ -117,7 +119,7 @@ extension LibraryStore {
             links: all(LinkItem.self).sorted { $0.createdAt < $1.createdAt }.map {
                 .init(id: $0.id, url: $0.urlString, title: $0.title, iconData: $0.iconData, titleFetched: $0.titleFetched,
                       list: $0.listName, isPinned: $0.isPinned, isWatched: $0.isWatched, watchedAt: $0.watchedAt, spaceID: $0.space?.id,
-                      createdAt: $0.createdAt, updatedAt: $0.updatedAt, deletedAt: $0.deletedAt)
+                      createdAt: $0.createdAt, updatedAt: $0.updatedAt, deletedAt: $0.deletedAt, titleEdited: $0.titleEdited)
             }
         )
     }
@@ -224,6 +226,7 @@ extension LibraryStore {
             link.title = record.title
             link.iconData = record.iconData
             link.titleFetched = record.titleFetched
+            link.titleEdited = record.titleEdited ?? false
             link.listName = record.list
             link.isPinned = record.isPinned
             link.isWatched = record.isWatched

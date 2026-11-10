@@ -421,10 +421,24 @@ extension AppController {
         step("⌘] next Space", "]", kVK_ANSI_RightBracket, .command) { "ok" }
         step("⌘1 Today, ↓", "", kVK_DownArrow) { "selected=\(selected())" }
         step("Return edits title", "\r", kVK_Return) { "capture focused=\(self.capture.isFocused) responder=\(String(describing: type(of: self.panel.firstResponder as Any)))" }
+        step("Return keeps title", "\r", kVK_Return) { "capture=\(self.capture.isFocused)" }
+        step("⌘[ back a Space", "[", kVK_ANSI_LeftBracket, .command) { "ok" }
+        var renamed: LinkItem?
+        step("⌘4 Links, ↓", "", kVK_DownArrow) {
+            if case .link(let link) = self.nav.selected { renamed = link }
+            return "selected=\(selected())"
+        }
+        step("⌘R renames", "r", kVK_ANSI_R, .command) { "capture=\(self.capture.isFocused) responder=\(String(describing: type(of: self.panel.firstResponder as Any)))" }
+        step("type J", "J", kVK_ANSI_J) { "capture field=[\(self.capture.text)]" }
+        step("Return saves name", "\r", kVK_Return) { "title=\(renamed?.title ?? "-") edited=\(renamed?.titleEdited ?? false) capture=\(self.capture.isFocused)" }
+        step("↓ again", "", kVK_DownArrow) { "selected=\(selected())" }
+        step("⌘R again", "r", kVK_ANSI_R, .command) { "editing" }
+        step("type Q", "Q", kVK_ANSI_Q) { "typed" }
+        step("Esc cancels", "\u{1b}", kVK_Escape) { "title=\(renamed?.title ?? "-") panel=\(self.presentation.presented) capture=\(self.capture.isFocused)" }
 
         // Some steps need a tab switch first.
         let before: [Int: (String, Int, NSEvent.ModifierFlags)] = [0: ("2", kVK_ANSI_2, .command), 14: ("4", kVK_ANSI_4, .command),
-                                                                   20: ("1", kVK_ANSI_1, .command)]
+                                                                   20: ("1", kVK_ANSI_1, .command), 24: ("4", kVK_ANSI_4, .command)]
         func run(_ index: Int) {
             guard index < steps.count else {
                 NSApp.terminate(nil)

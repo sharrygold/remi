@@ -18,6 +18,8 @@ enum NavItem: Identifiable {
 enum NavCommand {
     /// Return: open a note or link, edit a task's title.
     case open
+    /// ⌘R: rename a link or task.
+    case rename
     /// Space: tick a task, mark a video watched.
     case toggle
     /// ⌘O: run a task's action, or open a link.

@@ -358,11 +358,17 @@ struct PanelView: View {
     private func performNav(_ command: NavCommand, _ item: NavItem) {
         // Keep the cursor in the capture bar, unless this command moves it on purpose.
         defer {
-            if case .open = command {} else { captureFocused = true }
+            switch command {
+            case .open, .rename: break
+            default: captureFocused = true
+            }
         }
         switch (command, item) {
-        case (.open, .task(let task)):
+        case (.open, .task(let task)), (.rename, .task(let task)):
             editRequest = task.id
+            DispatchQueue.main.async { editRequest = nil }
+        case (.rename, .link(let link)):
+            editRequest = link.id
             DispatchQueue.main.async { editRequest = nil }
         case (.open, .note(let note)), (.action, .note(let note)):
             openNoteID = note.id

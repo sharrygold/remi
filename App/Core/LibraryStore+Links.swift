@@ -50,7 +50,7 @@ extension LibraryStore {
     /// Fills in what the page says about itself. Not undoable; it is not something you did.
     func setMetadata(for id: UUID, title: String?, iconData: Data?) {
         guard let link = links.first(where: { $0.id == id }) else { return }
-        if let title, !title.trimmingCharacters(in: .whitespaces).isEmpty {
+        if !link.titleEdited, let title, !title.trimmingCharacters(in: .whitespaces).isEmpty {
             link.title = title.trimmingCharacters(in: .whitespacesAndNewlines)
         }
         if let iconData { link.iconData = iconData }
@@ -66,6 +66,20 @@ extension LibraryStore {
             undo(link)
             link.updatedAt = Date()
         }
+    }
+
+    /// Your own name for the link. A blank name is ignored.
+    func rename(_ link: LinkItem, to title: String) {
+        let cleaned = title.trimmingCharacters(in: .whitespacesAndNewlines)
+        let previous = (link.title, link.titleEdited)
+        guard !cleaned.isEmpty, cleaned != previous.0 else { return }
+        change(link, {
+            $0.title = cleaned
+            $0.titleEdited = true
+        }, undo: {
+            $0.title = previous.0
+            $0.titleEdited = previous.1
+        })
     }
 
     func setPinned(_ link: LinkItem, _ pinned: Bool) {

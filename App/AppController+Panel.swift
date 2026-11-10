@@ -25,6 +25,7 @@ extension AppController {
         case (kVK_ANSI_O, [.command]): nav.run(.action)
         case (kVK_Delete, [.command]), (kVK_ForwardDelete, []): nav.run(.delete)
         case (kVK_ANSI_P, [.command]): nav.run(.pin)
+        case (kVK_ANSI_R, [.command]): nav.run(.rename)
         case (kVK_ANSI_LeftBracket, [.command, .shift]): nav.run(.moveSpace(-1))
         case (kVK_ANSI_RightBracket, [.command, .shift]): nav.run(.moveSpace(1))
         default:

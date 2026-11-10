@@ -141,6 +141,12 @@ struct TaskRowView: View {
     }
 
     @ViewBuilder private var menu: some View {
+        Button("Rename…") {
+            DispatchQueue.main.async {
+                draft = task.title
+                editing = true
+            }
+        }
         actionMenu
         Divider()
         Menu("Move to") {

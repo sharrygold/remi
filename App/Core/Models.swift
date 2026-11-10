@@ -138,6 +138,8 @@ final class LinkItem {
     var title: String = ""
     var iconData: Data?
     var titleFetched: Bool = false
+    /// Set when you rename the link, so a later page fetch keeps your name.
+    var titleEdited: Bool = false
     var listName: String = LinkList.saved.rawValue
     var isPinned: Bool = false
     var isWatched: Bool = false

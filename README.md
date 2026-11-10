@@ -49,6 +49,7 @@ Open the panel by clicking the widget, pulling the cord, or pressing **⌃Space*
 | Space | Tick a task, mark a video watched |
 | ⌘O | Run a task's action |
 | ⌘P | Pin a note or link, mark a task important |
+| ⌘R | Rename a link or task (or right-click > Rename). Esc cancels |
 | ⌘⌫ | Delete (goes to Recently Deleted for 30 days) |
 | ⇧⌘[ and ⇧⌘] | Move the selected item to the previous or next Space |
 | ⌘1–4 | Today, Tasks, Notes, Links |

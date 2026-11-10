@@ -101,6 +101,29 @@ final class LinkStoreTests: XCTestCase {
         XCTAssertFalse(store.isSaved(url("https://other.com")))
     }
 
+    func testRenameSurvivesFetchUndoAndExport() throws {
+        let store = LibraryStore(directory: nil)
+        let link = store.addLink(url("https://www.example.com/jobs/~0123"), currentSpace: nil).link
+        store.rename(link, to: "  ")
+        XCTAssertEqual(link.title, "example.com")
+        store.rename(link, to: " SwiftUI app job \n")
+        XCTAssertEqual(link.title, "SwiftUI app job")
+        // A fetch that finishes after the rename keeps your name but still fills the icon.
+        store.setMetadata(for: link.id, title: "Clients", iconData: Data([1]))
+        XCTAssertEqual(link.title, "SwiftUI app job")
+        XCTAssertEqual(link.iconData, Data([1]))
+
+        let archive = try LibraryArchive.decode(LibraryArchive.encoder().encode(store.makeArchive()))
+        let copy = LibraryStore(directory: nil)
+        copy.importArchive(archive)
+        XCTAssertEqual(copy.links.first?.title, "SwiftUI app job")
+        XCTAssertEqual(copy.links.first?.titleEdited, true)
+
+        store.undo()
+        XCTAssertEqual(link.title, "example.com")
+        XCTAssertFalse(link.titleEdited)
+    }
+
     func testTaskActionsRoundTripAndUndo() throws {
         let store = LibraryStore(directory: nil)
         let task = try XCTUnwrap(store.add(ParsedCapture(title: "Record Loom"), currentSpace: nil))

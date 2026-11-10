@@ -103,34 +103,24 @@ struct LinkRowView: View {
     let showsSpace: Bool
     @Environment(\.panelActions) private var actions
     @State private var hovering = false
+    @State private var editing = false
+    @State private var draft = ""
+    @FocusState private var fieldFocused: Bool
 
     private var isVideo: Bool { link.url.map(LinkClassifier.isVideo) ?? false }
 
     var body: some View {
         HStack(spacing: Tokens.Spacing.s) {
-            Button(action: open) {
-                HStack(spacing: Tokens.Spacing.s) {
-                    LinkIcon(data: link.iconData, fallback: isVideo ? "play.rectangle.fill" : "globe")
-                    VStack(alignment: .leading, spacing: 1) {
-                        Text(link.title).font(Tokens.TextRole.row).lineLimit(1)
-                            .foregroundStyle(link.isWatched ? .secondary : .primary)
-                        HStack(spacing: Tokens.Spacing.s) {
-                            Text(link.domain).foregroundStyle(.secondary)
-                            if showsSpace, let space = link.space {
-                                Label(space.name, systemImage: space.symbol).foregroundStyle(space.tint)
-                            }
-                        }
-                        .font(Tokens.TextRole.detail)
-                        .lineLimit(1)
-                    }
-                    Spacer(minLength: Tokens.Spacing.s)
-                }
-                .contentShape(Rectangle())
+            if editing {
+                // While renaming, the row is a text field rather than a button, so clicks go to the field.
+                details
+            } else {
+                Button(action: open) { details.contentShape(Rectangle()) }
+                    .buttonStyle(.plain)
+                    .help(link.urlString)
+                    .accessibilityLabel("\(link.title), \(link.domain)")
+                    .accessibilityHint("Opens in your browser")
             }
-            .buttonStyle(.plain)
-            .help(link.urlString)
-            .accessibilityLabel("\(link.title), \(link.domain)")
-            .accessibilityHint("Opens in your browser")
 
             if link.isPinned {
                 Image(systemName: "pin.fill").font(.caption).foregroundStyle(.tertiary).accessibilityLabel("Pinned")
@@ -151,6 +141,62 @@ struct LinkRowView: View {
         .id(link.id)
         .onHover { hovering = $0 }
         .contextMenu { menu }
+        .onChange(of: actions.editRequest) { _, id in
+            if id == link.id { startEditing() }
+        }
+    }
+
+    private var details: some View {
+        HStack(spacing: Tokens.Spacing.s) {
+            LinkIcon(data: link.iconData, fallback: isVideo ? "play.rectangle.fill" : "globe")
+            VStack(alignment: .leading, spacing: 1) {
+                if editing {
+                    TextField("Name", text: $draft)
+                        .textFieldStyle(.plain)
+                        .font(Tokens.TextRole.row)
+                        .focused($fieldFocused)
+                        .onSubmit(finishEditing)
+                        .onExitCommand(perform: cancelEditing)
+                        .onChange(of: fieldFocused) { _, focused in
+                            if !focused { finishEditing() }
+                        }
+                        .onAppear { DispatchQueue.main.async { fieldFocused = true } }
+                        .accessibilityLabel("Name for \(link.domain) link")
+                } else {
+                    Text(link.title).font(Tokens.TextRole.row).lineLimit(1)
+                        .foregroundStyle(link.isWatched ? .secondary : .primary)
+                }
+                HStack(spacing: Tokens.Spacing.s) {
+                    Text(link.domain).foregroundStyle(.secondary)
+                    if showsSpace, let space = link.space {
+                        Label(space.name, systemImage: space.symbol).foregroundStyle(space.tint)
+                    }
+                }
+                .font(Tokens.TextRole.detail)
+                .lineLimit(1)
+            }
+            Spacer(minLength: Tokens.Spacing.s)
+        }
+    }
+
+    private func startEditing() {
+        guard !editing else { return }
+        draft = link.title
+        editing = true
+    }
+
+    /// Return or clicking elsewhere keeps the name; Esc leaves it as it was.
+    private func finishEditing() {
+        guard editing else { return }
+        editing = false
+        store.rename(link, to: draft)
+        actions.focusCapture()
+    }
+
+    private func cancelEditing() {
+        guard editing else { return }
+        editing = false
+        actions.focusCapture()
     }
 
     private func open() {
@@ -160,6 +206,7 @@ struct LinkRowView: View {
 
     @ViewBuilder private var menu: some View {
         Button("Open") { open() }
+        Button("Rename…") { DispatchQueue.main.async { startEditing() } }
         Button("Copy Link") {
             NSPasteboard.general.clearContents()
             NSPasteboard.general.setString(link.urlString, forType: .string)
