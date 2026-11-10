@@ -195,14 +195,17 @@ struct PanelView: View {
     }
 
     private func token(_ text: String, symbol: String, tint: Color) -> some View {
-        Label(text, systemImage: symbol)
-            .lineLimit(1)
-            .fixedSize()
-            .font(Tokens.TextRole.detail)
-            .foregroundStyle(tint)
-            .padding(.horizontal, Tokens.Spacing.s)
-            .padding(.vertical, 2)
-            .background(tint.opacity(0.14), in: Capsule())
+        Label {
+            Text(text).foregroundStyle(.primary)
+        } icon: {
+            Image(systemName: symbol).foregroundStyle(tint)
+        }
+        .lineLimit(1)
+        .fixedSize()
+        .font(Tokens.TextRole.detail)
+        .padding(.horizontal, Tokens.Spacing.s)
+        .padding(.vertical, 2)
+        .background(tint.opacity(0.14), in: Capsule())
     }
 
     /// The list a captured link will go to: Watch later for videos, unless Tab switched it.
@@ -500,12 +503,17 @@ struct PanelView: View {
     private func spaceChip(name: String, symbol: String, tint: Color, id: UUID?) -> some View {
         let selected = selectedSpaceID == id
         return Button { selectedSpaceID = id } label: {
-            Label(name, systemImage: symbol)
-                .font(Tokens.TextRole.detail)
-                .padding(.horizontal, Tokens.Spacing.s)
-                .padding(.vertical, Tokens.Spacing.xs)
-                .foregroundStyle(selected ? AnyShapeStyle(tint) : AnyShapeStyle(.secondary))
-                .background(selected ? tint.opacity(0.18) : .clear, in: Capsule())
+            // Colour only on the icon: tinted text on a tinted wash was hard to read over the glass.
+            Label {
+                Text(name).foregroundStyle(selected ? .primary : .secondary)
+            } icon: {
+                Image(systemName: symbol).foregroundStyle(selected ? AnyShapeStyle(tint) : AnyShapeStyle(.secondary))
+            }
+            .font(Tokens.TextRole.detail.weight(selected ? .semibold : .regular))
+            .padding(.horizontal, Tokens.Spacing.s)
+            .padding(.vertical, Tokens.Spacing.xs)
+            .background(selected ? AnyShapeStyle(.quaternary) : AnyShapeStyle(.clear), in: Capsule())
+            .contentShape(Capsule())
         }
         .buttonStyle(.plain)
         .id(id?.uuidString ?? "all")

@@ -209,6 +209,10 @@ final class AppController: NSObject, NSApplicationDelegate {
             search.query = String(text.dropFirst("--search=".count))
         }
         if options.open { showPanel() }
+        // For screenshots: --space-step=1 picks the first Space after All.
+        if let step = CommandLine.arguments.first(where: { $0.hasPrefix("--space-step=") }).flatMap({ Int($0.dropFirst("--space-step=".count)) }) {
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) { self.nav.switchSpace(step) }
+        }
         // For screenshots: show the keyboard selection on the first row.
         if CommandLine.arguments.contains("--select-first") {
             DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) { self.nav.move(1) }
@@ -1313,7 +1317,8 @@ final class AppController: NSObject, NSApplicationDelegate {
         let origin = panel.frame.origin
         presentation.anchor = UnitPoint(x: min(max((anchor.midX - origin.x) / size.width, 0), 1),
                                         y: min(max(1 - (anchor.midY - origin.y) / size.height, 0), 1))
-        panel.makeKeyAndOrderFront(nil)
+        // --no-focus shows the panel without taking the keyboard, for screenshots while the user works.
+        if CommandLine.arguments.contains("--no-focus") { panel.orderFrontRegardless() } else { panel.makeKeyAndOrderFront(nil) }
         presentation.presented = true
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.4) { [weak self] in self?.panel.invalidateShadow() }
         // Global monitors only see clicks in other apps, so the handle can still toggle the panel.
