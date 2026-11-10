@@ -14,6 +14,9 @@ extension AppController {
         if !presentation.pinned && presentation.presented { hidePanel() }
         let window = settingsWindow ?? makeSettingsWindow()
         settingsContext?.tab = tab
+        // Open on the desktop you are looking at. A window left open on another desktop is
+        // brought over rather than leaving you to go and find it.
+        if window.isVisible && !window.isOnActiveSpace { window.orderOut(nil) }
         if !window.isVisible { window.center() }
         window.orderFrontRegardless()
         window.makeKey()
@@ -33,6 +36,7 @@ extension AppController {
         window.isFloatingPanel = false
         window.hidesOnDeactivate = false
         window.isReleasedWhenClosed = false
+        window.collectionBehavior = [.moveToActiveSpace, .fullScreenAuxiliary]
         window.center()
         settingsContext = context
         settingsWindow = window

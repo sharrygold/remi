@@ -51,21 +51,21 @@ struct PanelView: View {
     }
 
     var body: some View {
+        // Browsing at the top, typing at the bottom: the capture bar is the main way in, like a message box.
         VStack(spacing: Tokens.Spacing.s) {
-            captureBar
+            header
             if store.isTemporary { storageWarning }
-            if showsTokens { tokenRow } else if let clipboardOffer { clipboardChip(clipboardOffer) }
             if search.active {
                 SearchPane(store: store, search: search, density: density, onOpen: openSearchHit, onClose: closeSearch)
                     .frame(maxHeight: .infinity)
                     .background(Color(nsColor: .textBackgroundColor).opacity(reduceTransparency ? 1 : Tokens.Surface.contentOpacity),
                                 in: RoundedRectangle(cornerRadius: Tokens.Radius.large, style: .continuous))
             } else {
-                spaceSwitcher
                 tabs
                 content
             }
-            footer
+            if showsTokens { tokenRow } else if let clipboardOffer { clipboardChip(clipboardOffer) }
+            captureBar
         }
         .padding(Tokens.Spacing.s)
         // Fills the window, which can be resized from its edges and remembers its size.
@@ -139,17 +139,20 @@ struct PanelView: View {
     // MARK: Capture
 
     private var captureBar: some View {
-        HStack(spacing: Tokens.Spacing.s) {
+        HStack(alignment: .firstTextBaseline, spacing: Tokens.Spacing.s) {
             Image(systemName: "plus").foregroundStyle(.secondary).accessibilityHidden(true)
-            TextField("Capture a task, note or link", text: $capture.text)
+            // Wraps as you type, grows to three lines, then scrolls. Return still saves.
+            TextField("Capture a task, note or link", text: $capture.text, axis: .vertical)
                 .textFieldStyle(.plain)
                 .font(Tokens.TextRole.row)
+                .lineLimit(1...3)
                 .focused($captureFocused)
                 .onSubmit(submit)
                 .accessibilityLabel("Capture")
         }
         .padding(.horizontal, Tokens.Spacing.m - Tokens.Spacing.xs)
-        .frame(height: 40)
+        .padding(.vertical, Tokens.Spacing.s + 3)
+        .frame(minHeight: 40)
         .background(.quaternary.opacity(0.6), in: RoundedRectangle(cornerRadius: Tokens.Radius.large, style: .continuous))
     }
 
@@ -692,32 +695,35 @@ struct PanelView: View {
         }
     }
 
-    private var footer: some View {
-        HStack {
-            Button { search.requests += 1 } label: {
-                HStack(spacing: Tokens.Spacing.xs) {
-                    Label("Search", systemImage: "magnifyingglass")
-                    Text("⌘F").foregroundStyle(.tertiary)
+    /// Spaces on the left; search, pin and Settings as quiet icons on the right.
+    private var header: some View {
+        HStack(spacing: Tokens.Spacing.s) {
+            spaceSwitcher
+            HStack(spacing: Tokens.Spacing.xs) {
+                iconButton(search.active ? "magnifyingglass.circle.fill" : "magnifyingglass", help: "Search (⌘F)", label: "Search") {
+                    if search.active { closeSearch() } else { search.requests += 1 }
                 }
-                .contentShape(Rectangle())
+                iconButton(presentation.pinned ? "pin.fill" : "pin",
+                           help: presentation.pinned ? "Unpin: close when you click away" : "Pin: keep open when you click away",
+                           label: presentation.pinned ? "Unpin panel" : "Pin panel open") {
+                    presentation.pinned.toggle()
+                }
+                iconButton("gearshape", help: "Settings (⌘,)", label: "Settings") { presentation.openSettings() }
             }
-            .buttonStyle(.plain)
-            .accessibilityLabel("Search")
-            Spacer()
-            Button { presentation.pinned.toggle() } label: {
-                Image(systemName: presentation.pinned ? "pin.fill" : "pin")
-            }
-            .buttonStyle(.plain)
-            .accessibilityLabel(presentation.pinned ? "Unpin panel" : "Pin panel open")
-            Button { presentation.openSettings() } label: { Image(systemName: "gearshape") }
-                .buttonStyle(.plain)
-                .help("Settings (⌘,)")
-                .accessibilityLabel("Settings")
         }
-        .font(Tokens.TextRole.detail)
-        .foregroundStyle(.secondary)
-        .padding(.horizontal, Tokens.Spacing.s)
-        .frame(height: Tokens.Spacing.l)
+    }
+
+    private func iconButton(_ symbol: String, help: String, label: String, action: @escaping () -> Void) -> some View {
+        Button(action: action) {
+            Image(systemName: symbol)
+                .font(Tokens.TextRole.detail)
+                .foregroundStyle(.secondary)
+                .frame(width: 26, height: 26)
+                .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .help(help)
+        .accessibilityLabel(label)
     }
 }
 
