@@ -26,6 +26,7 @@ struct WelcomeCard: View {
         .flatMap { Int($0.dropFirst("--preview-welcome-page=".count)) } ?? 0
     @State private var launchAtLogin = LoginItem.isEnabled
     @State private var loginNote: String?
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     private static let lastPage = 2
     private static let tricks = [
@@ -49,8 +50,13 @@ struct WelcomeCard: View {
             }
             .padding(Tokens.Spacing.m)
             .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+            .id(page)
+            .transition(reduceMotion ? .opacity : .asymmetric(insertion: .opacity.combined(with: .offset(x: 24)),
+                                                              removal: .opacity.combined(with: .offset(x: -24))))
             footer
         }
+        .clipped()
+        .animation(Tokens.Motion.adaptive(Tokens.Motion.page, reduce: reduceMotion), value: page)
     }
 
     private var openPage: some View {

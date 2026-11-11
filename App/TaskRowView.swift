@@ -59,6 +59,7 @@ struct TaskRowView: View {
             }
         }
         .onHover { hovering = $0 }
+        .animation(.easeOut(duration: 0.15), value: hovering)
         .padding(.vertical, density.rowPadding)
         .contentShape(Rectangle())
         .keyboardHighlight(task.id)

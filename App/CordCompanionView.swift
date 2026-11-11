@@ -89,6 +89,12 @@ final class CordCompanionView: NSView, CompanionSurface {
     // MARK: CompanionSurface
 
     func configure(plumage: Plumage, onLeftEdge: Bool) {
+        if plumage != self.plumage, !reduceMotion {
+            let fade = CATransition()
+            fade.type = .fade
+            fade.duration = 0.45
+            stage.add(fade, forKey: "plumage")
+        }
         self.plumage = plumage
         let art = Self.art, scale = window?.backingScaleFactor ?? 2
         withoutAnimation {

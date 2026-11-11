@@ -29,8 +29,22 @@ enum Tokens {
         static let contentOpacity: Double = 0.94
     }
 
+    /// One small vocabulary of motion, so everything moves the same way: selections glide, pages
+    /// cross-fade, small things ease in. With Reduce Motion everything becomes a short fade.
     enum Motion {
         static let quick = Animation.spring(response: 0.28, dampingFraction: 0.82)
+        /// A highlight sliding to what you picked.
+        static let select = Animation.spring(response: 0.34, dampingFraction: 0.86)
+        /// One page or list giving way to another.
+        static let page = Animation.spring(response: 0.36, dampingFraction: 0.92)
+        static let reduced = Animation.easeInOut(duration: 0.15)
+
+        static func adaptive(_ animation: Animation, reduce: Bool) -> Animation { reduce ? reduced : animation }
+
+        /// Pages fade with a slight lift; with Reduce Motion they only fade.
+        static func pageTransition(reduce: Bool) -> AnyTransition {
+            reduce ? .opacity : .opacity.combined(with: .offset(y: 6))
+        }
         static let tuck = Animation.spring(response: 0.35, dampingFraction: 0.86)
         static let panel = Animation.spring(response: 0.3, dampingFraction: 0.84)
         static let panelCloseSeconds = 0.22

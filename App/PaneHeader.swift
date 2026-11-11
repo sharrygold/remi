@@ -42,6 +42,7 @@ struct AddButton: View {
         .buttonStyle(.plain)
         .fixedSize()
         .onHover { hovering = $0 }
+        .animation(Tokens.Motion.quick, value: hovering)
         .help(help ?? title)
     }
 }

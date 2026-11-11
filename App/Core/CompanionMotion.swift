@@ -160,7 +160,7 @@ final class CordMotion {
     var pullTarget: Double { pull.target }
 
     private func lowerSpring() { pull.retune(response: 0.45, damping: 0.55) }
-    private func tuckSpring() { pull.retune(response: 0.55, damping: 0.92) }
+    private func tuckSpring() { pull.retune(response: 0.75, damping: 0.95) }
 
     /// True when the pointer is close enough for the cord to notice.
     func pointer(near: Bool, now: Double) {

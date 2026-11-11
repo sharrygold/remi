@@ -116,6 +116,8 @@ enum SettingsTab: String, CaseIterable {
 
 struct SettingsView: View {
     @ObservedObject var context: SettingsContext
+    @Namespace private var sidebarHighlight
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
     /// Read so the accent redraws when Plumage changes.
     @AppStorage(CompanionKeys.plumage) private var plumageName = Plumage.ivory.rawValue
 
@@ -130,7 +132,12 @@ struct SettingsView: View {
                             .padding(.horizontal, 10)
                             .padding(.vertical, 6)
                             .foregroundStyle(context.tab == item ? Color.onBrand : Color.primary)
-                            .background(context.tab == item ? Color.brand : .clear, in: RoundedRectangle(cornerRadius: 6))
+                            .background {
+                                if context.tab == item {
+                                    RoundedRectangle(cornerRadius: 6).fill(Color.brand)
+                                        .matchedGeometryEffect(id: "tab", in: sidebarHighlight)
+                                }
+                            }
                             .contentShape(Rectangle())
                     }
                     .buttonStyle(.plain)
@@ -143,9 +150,12 @@ struct SettingsView: View {
             .background(.background.secondary)
             Divider()
             page(context.tab)
+                .id(context.tab)
+                .transition(Tokens.Motion.pageTransition(reduce: reduceMotion))
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
         }
         .frame(width: 700, height: 520)
+        .animation(Tokens.Motion.adaptive(Tokens.Motion.select, reduce: reduceMotion), value: context.tab)
     }
 
     @ViewBuilder private func page(_ tab: SettingsTab) -> some View {

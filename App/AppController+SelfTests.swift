@@ -25,6 +25,25 @@ extension AppController {
         }
     }
 
+    /// Samples the tuck and untuck as drawn, to show they travel rather than jump.
+    func runTuckSelfTest() {
+        guard let perched else { return }
+        var samples: [String] = [], ticks = 0
+        DispatchQueue.main.asyncAfter(deadline: .now() + 1) {
+            perched.setMood(.tucked)
+            Timer.scheduledTimer(withTimeInterval: 0.1, repeats: true) { timer in
+                ticks += 1
+                samples.append(String(format: "%.0f", perched.slideReadout))
+                if ticks == 12 { perched.setMood(.rest) }
+                guard ticks == 26 else { return }
+                timer.invalidate()
+                print("tuck in, every 0.1 s: \(samples[0..<12].joined(separator: " "))")
+                print("untuck, every 0.1 s: \(samples[12...].joined(separator: " "))")
+                NSApp.terminate(nil)
+            }
+        }
+    }
+
     /// Feeds the bird made-up pointer positions at mouse speed. Never touches the real mouse or keyboard.
     func runHeadSelfTest() {
         guard let perched else { return }

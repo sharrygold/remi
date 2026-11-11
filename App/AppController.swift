@@ -208,6 +208,7 @@ final class AppController: NSObject, NSApplicationDelegate {
         }
         if CommandLine.arguments.contains("--head-selftest") { runHeadSelfTest() }
         if CommandLine.arguments.contains("--motion-selftest") { runMotionSelfTest() }
+        if CommandLine.arguments.contains("--tuck-selftest") { runTuckSelfTest() }
         if CommandLine.arguments.contains("--clipboard-selftest") { runClipboardChipSelfTest() }
         if CommandLine.arguments.contains("--add-selftest") { runAddSelfTest() }
     }

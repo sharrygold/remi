@@ -193,9 +193,25 @@ extension AppController {
         handle.setFrameOrigin(NSPoint(x: x, y: visible.maxY - handle.frame.height))
     }
 
+    /// A new style or size fades out and back in, rather than popping.
     func applyStyle() {
-        handle.setFrame(widgetFrame(), display: true)
-        installSurface()
+        guard !NSWorkspace.shared.accessibilityDisplayShouldReduceMotion else {
+            handle.setFrame(widgetFrame(), display: true)
+            installSurface()
+            return
+        }
+        NSAnimationContext.runAnimationGroup({ context in
+            context.duration = 0.18
+            handle.animator().alphaValue = 0
+        }, completionHandler: { [weak self] in
+            guard let self else { return }
+            self.handle.setFrame(self.widgetFrame(), display: true)
+            self.installSurface()
+            NSAnimationContext.runAnimationGroup { context in
+                context.duration = 0.3
+                self.handle.animator().alphaValue = 1
+            }
+        })
     }
 
     /// Launch flags for screenshots, so each pose can be captured without a mouse.

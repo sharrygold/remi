@@ -56,6 +56,8 @@ final class PerchedBirdView: NSView, CompanionSurface {
     }
 
     private var hitMask: (data: [UInt8], width: Int)?
+    private var shownCount = ""
+    private var shownKept = false
 
     override init(frame: NSRect) {
         super.init(frame: frame)
@@ -90,7 +92,7 @@ final class PerchedBirdView: NSView, CompanionSurface {
         stage.addSublayer(birdRoot)
         birdRoot.addSublayer(legs)
         birdRoot.addSublayer(feet)
-        feet.isHidden = true
+        feet.opacity = 0
         birdRoot.addSublayer(tail)
         birdRoot.addSublayer(breath)
         for layer in [bodyLayer, wing, cradle, neck, eggPlace] { breath.addSublayer(layer) }
@@ -127,7 +129,7 @@ final class PerchedBirdView: NSView, CompanionSurface {
         skull.frame = CGRect(origin: .zero, size: canvas)
         breath.addSublayer(headShade)
         breath.addSublayer(headDoze)
-        headDoze.isHidden = true
+        headDoze.opacity = 0
 
         applyHead()
     }
@@ -135,6 +137,13 @@ final class PerchedBirdView: NSView, CompanionSurface {
     // MARK: CompanionSurface
 
     func configure(plumage: Plumage, onLeftEdge: Bool) {
+        // A new plumage fades in over the old one.
+        if plumage != self.plumage, !reduceMotion {
+            let fade = CATransition()
+            fade.type = .fade
+            fade.duration = 0.45
+            stage.add(fade, forKey: "plumage")
+        }
         self.plumage = plumage
         mirrored = !onLeftEdge
         let scale = window?.backingScaleFactor ?? 2
@@ -243,6 +252,9 @@ final class PerchedBirdView: NSView, CompanionSurface {
                 read(eye, "transform.scale.y"), read(tail, "transform.rotation.z") * 180 / .pi)
     }
 
+    /// For the self-test: how far the bird has slid toward the edge, in points.
+    var slideReadout: CGFloat { (slider.presentation() ?? slider).position.x }
+
     /// For the self-test.
     var headReadout: (target: Double, angle: Double) { (head.angle.target, head.angle.value) }
 
@@ -278,15 +290,20 @@ final class PerchedBirdView: NSView, CompanionSurface {
     private func applyMood() {
         let dozing = mood == .dozing || mood == .tucked
         let carried = mood == .carried
-        withoutAnimation {
-            for layer in [neck, headBob, headShade] { layer.isHidden = dozing }
-            headDoze.isHidden = !dozing
-            peg.isHidden = carried
-            legs.isHidden = carried
-            feet.isHidden = !carried
+        // Waking and dozing cross-fade, and being picked up eases in, rather than swapping instantly.
+        CATransaction.begin()
+        CATransaction.setAnimationDuration(reduceMotion ? 0.15 : 0.45)
+        CATransaction.setAnimationTimingFunction(CAMediaTimingFunction(name: .easeInEaseOut))
+        for layer in [neck, headBob, headShade] { layer.opacity = dozing ? 0 : 1 }
+        headDoze.opacity = dozing ? 1 : 0
+        peg.opacity = carried ? 0 : 1
+        legs.opacity = carried ? 0 : 1
+        feet.opacity = carried ? 1 : 0
+        if !reduceMotion {
             birdRoot.transform = carried ? CATransform3DMakeRotation(radians(9), 0, 0, 1) : CATransform3DIdentity
             wing.transform = carried ? CATransform3DMakeRotation(radians(-12), 0, 0, 1) : CATransform3DIdentity
         }
+        CATransaction.commit()
         installLoops()
         if mood == .working {
             head.move(to: HeadFollow.workingT)
@@ -299,7 +316,18 @@ final class PerchedBirdView: NSView, CompanionSurface {
     /// Ambient motion runs as repeating Core Animation, which costs the app nothing between frames.
     private func installLoops() {
         for layer in [breath, eggRock, eye, tail, headBob] {
+            // Ease out of a loop from wherever it is, instead of jumping back to rest.
+            let now = layer.presentation()?.transform ?? layer.transform
+            let looping = layer.animation(forKey: "loop") != nil
             for key in ["loop", "loop2"] { layer.removeAnimation(forKey: key) }
+            if looping, !reduceMotion {
+                let settle = CABasicAnimation(keyPath: "transform")
+                settle.fromValue = NSValue(caTransform3D: now)
+                settle.toValue = NSValue(caTransform3D: layer.transform)
+                settle.duration = 0.6
+                settle.timingFunction = CAMediaTimingFunction(name: .easeOut)
+                layer.add(settle, forKey: "settle")
+            }
         }
         guard !reduceMotion else { return }
         switch mood {
@@ -375,16 +403,33 @@ final class PerchedBirdView: NSView, CompanionSurface {
         let to = tucked ? CGPoint(x: offset, y: 0) : .zero
         let from = slider.presentation()?.position ?? slider.position
         withoutAnimation { slider.position = to }
-        guard !reduceMotion else { return }
-        // Slight overshoot, about 0.55 s, and interruptible because it starts from where it is now.
-        let spring = CASpringAnimation(keyPath: "position.x")
-        spring.fromValue = from.x
-        spring.toValue = to.x
-        spring.mass = 1
-        spring.stiffness = 170
-        spring.damping = 18
-        spring.duration = spring.settlingDuration
-        slider.add(spring, forKey: "slide")
+        guard !reduceMotion else {
+            let fade = CABasicAnimation(keyPath: "opacity")
+            fade.fromValue = 0.3
+            fade.toValue = 1
+            fade.duration = 0.2
+            slider.add(fade, forKey: "slide")
+            return
+        }
+        // Tucking in is an unhurried glide; coming out is a soft spring with a slight overshoot.
+        // Both start from where the bird is now, so changing its mind midway never jumps.
+        if tucked {
+            let glide = CABasicAnimation(keyPath: "position.x")
+            glide.fromValue = from.x
+            glide.toValue = to.x
+            glide.duration = 0.85
+            glide.timingFunction = CAMediaTimingFunction(controlPoints: 0.45, 0, 0.25, 1)
+            slider.add(glide, forKey: "slide")
+        } else {
+            let spring = CASpringAnimation(keyPath: "position.x")
+            spring.fromValue = from.x
+            spring.toValue = to.x
+            spring.mass = 1
+            spring.stiffness = 90
+            spring.damping = 13
+            spring.duration = spring.settlingDuration
+            slider.add(spring, forKey: "slide")
+        }
     }
 
     // MARK: One-shots
@@ -486,6 +531,15 @@ final class PerchedBirdView: NSView, CompanionSurface {
     private func refreshCount() {
         let showing = UserDefaults.standard.object(forKey: SettingsKey.showCount) as? Bool ?? true
         let text = showing && count > 0 ? String(min(count, 99)) : ""
+        if text != shownCount || allKept != shownKept {
+            let fade = CATransition()
+            fade.type = .fade
+            fade.duration = reduceMotion ? 0.1 : 0.3
+            countLayer.add(fade, forKey: "count")
+            checkLayer.add(fade, forKey: "count")
+            shownCount = text
+            shownKept = allKept
+        }
         checkLayer.isHidden = !allKept
         countLayer.isHidden = allKept || text.isEmpty
         countLayer.contents = text.isEmpty ? nil : CompanionArt.countImage(text, colour: plumage.colourway.perched.eggText)

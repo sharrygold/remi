@@ -80,6 +80,10 @@ struct LinksPane: View {
             }
         }
         .environment(\.panelActions, renameActions)
+        .animation(Tokens.Motion.page, value: groupID)
+        .animation(Tokens.Motion.page, value: list)
+        .animation(Tokens.Motion.quick, value: naming)
+        .animation(Tokens.Motion.quick, value: adding)
         .onChange(of: addRequests) { _, _ in adding = true }
         .onAppear {
             // For screenshots, after any list chosen at launch has settled.

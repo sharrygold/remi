@@ -70,6 +70,7 @@ struct PanelView: View {
     @FocusState private var captureFocused: Bool
     @Environment(\.accessibilityReduceTransparency) private var reduceTransparency
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @Namespace private var tabHighlight
     /// Read so the accent redraws when Plumage changes.
     @AppStorage(CompanionKeys.plumage) private var plumageName = Plumage.ivory.rawValue
 
@@ -101,12 +102,16 @@ struct PanelView: View {
                                 in: RoundedRectangle(cornerRadius: Tokens.Radius.large, style: .continuous))
             } else if search.active {
                 SearchPane(store: store, search: search, density: density, onOpen: openSearchHit, onClose: closeSearch)
+                    .transition(Tokens.Motion.pageTransition(reduce: reduceMotion))
                     .frame(maxHeight: .infinity)
                     .background(Color(nsColor: .textBackgroundColor).opacity(reduceTransparency ? 1 : Tokens.Surface.contentOpacity),
                                 in: RoundedRectangle(cornerRadius: Tokens.Radius.large, style: .continuous))
             } else {
-                tabs
-                content
+                Group {
+                    tabs
+                    content
+                }
+                .transition(Tokens.Motion.pageTransition(reduce: reduceMotion))
             }
             if showsTokens {
                 tokenRow
@@ -117,6 +122,11 @@ struct PanelView: View {
             }
             captureBar
         }
+        .animation(Tokens.Motion.adaptive(Tokens.Motion.page, reduce: reduceMotion), value: search.active)
+        .animation(Tokens.Motion.adaptive(Tokens.Motion.page, reduce: reduceMotion), value: presentation.showWelcome)
+        .animation(Tokens.Motion.adaptive(Tokens.Motion.quick, reduce: reduceMotion), value: showsTokens)
+        .animation(Tokens.Motion.adaptive(Tokens.Motion.quick, reduce: reduceMotion), value: clipboardOffer)
+        .animation(Tokens.Motion.adaptive(Tokens.Motion.quick, reduce: reduceMotion), value: tabOffer)
         .padding(Tokens.Spacing.s)
         // Fills the window, which can be resized from its edges and remembers its size.
         .frame(maxWidth: .infinity, maxHeight: .infinity)
@@ -633,8 +643,13 @@ struct PanelView: View {
                         .font(Tokens.TextRole.meta.weight(tab == item ? .semibold : .regular))
                         .foregroundStyle(tab == item ? .primary : .secondary)
                         .frame(maxWidth: .infinity, minHeight: 32)
-                        .background(tab == item ? AnyShapeStyle(.quaternary) : AnyShapeStyle(.clear),
-                                    in: RoundedRectangle(cornerRadius: Tokens.Radius.small, style: .continuous))
+                        .background {
+                            if tab == item {
+                                RoundedRectangle(cornerRadius: Tokens.Radius.small, style: .continuous)
+                                    .fill(.quaternary)
+                                    .matchedGeometryEffect(id: "tab", in: tabHighlight)
+                            }
+                        }
                         .contentShape(Rectangle())
                 }
                 .buttonStyle(.plain)
@@ -642,6 +657,12 @@ struct PanelView: View {
                 .accessibilityAddTraits(tab == item ? .isSelected : [])
             }
         }
+        .animation(Tokens.Motion.adaptive(Tokens.Motion.select, reduce: reduceMotion), value: tab)
+    }
+
+    /// Changes when what the list area shows changes, so the old page fades out as the new one comes in.
+    private var pageKey: String {
+        "\(tab.rawValue)|\(selectedSpaceID?.uuidString ?? "all")|\(reviewing)"
     }
 
     // MARK: Content
@@ -678,6 +699,16 @@ struct PanelView: View {
                 }
             }
         }
+        .id(pageKey)
+        .transition(Tokens.Motion.pageTransition(reduce: reduceMotion))
+        .animation(Tokens.Motion.adaptive(Tokens.Motion.page, reduce: reduceMotion), value: pageKey)
+        // Rows, notes opening and inline fields ease in and out instead of appearing.
+        .animation(Tokens.Motion.adaptive(Tokens.Motion.quick, reduce: reduceMotion), value: store.tasks.count)
+        .animation(Tokens.Motion.adaptive(Tokens.Motion.page, reduce: reduceMotion), value: openNoteID)
+        .animation(Tokens.Motion.adaptive(Tokens.Motion.quick, reduce: reduceMotion), value: addingTask)
+        .animation(Tokens.Motion.adaptive(Tokens.Motion.quick, reduce: reduceMotion), value: confirmingFreshStart)
+        .animation(Tokens.Motion.adaptive(Tokens.Motion.quick, reduce: reduceMotion), value: showSetAside)
+        .animation(Tokens.Motion.adaptive(Tokens.Motion.quick, reduce: reduceMotion), value: showDone)
         .frame(maxHeight: .infinity)
         .background(Color(nsColor: .textBackgroundColor).opacity(reduceTransparency ? 1 : Tokens.Surface.contentOpacity),
                     in: RoundedRectangle(cornerRadius: Tokens.Radius.large, style: .continuous))
