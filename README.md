@@ -8,7 +8,7 @@
 
 <p align="center">
   Tasks, notes and links on your Mac, one click or one shortcut away.<br>
-  Remi sits on the edge of your screen and holds what you meant to do.
+  Remi sits on the edge of your screen and holds what you plan to do.
 </p>
 
 <p align="center">

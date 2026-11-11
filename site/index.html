@@ -218,6 +218,10 @@ section.knot{position:relative;padding:88px 0}
 .mode h3{font-size:26px}
 .mode p{margin-top:8px;color:var(--ink2);font-size:15.5px}
 .cord{height:230px;margin:0 auto 12px}
+.cord-pull{width:120px;margin:0 auto 12px;padding-bottom:50px;cursor:grab;touch-action:none;user-select:none;-webkit-user-select:none;border-radius:12px}
+.cord-pull.held{cursor:grabbing}
+.cord-pull svg{width:120px;height:230px;overflow:visible}
+.cord-pull .cord{margin:0;-webkit-user-drag:none}
 .cord-jet{display:none}
 .swatches{margin-top:18px;display:flex;flex-wrap:wrap;gap:10px}
 .sw{min-height:44px;padding:0 14px 0 10px;display:inline-flex;align-items:center;gap:9px;border-radius:22px;border:1px solid var(--line);background:none;color:var(--ink);font:500 14px Inter,sans-serif;cursor:pointer}
@@ -389,7 +393,7 @@ footer{padding:56px 0 72px}
 <div class="wrap hero-grid">
 <div class="hero-copy">
 <div class="eyebrow">Remi for Mac</div>
-<h1>It sits on the edge of your screen and holds what you meant to do.</h1>
+<h1>It sits on the edge of your screen and holds what you plan to do.</h1>
 <p class="tagline">a little bird that remembers for you</p>
 <div class="cta">
 <a class="btn primary" href="https://github.com/sharrygold/remi/releases/latest/download/Remi.zip">Download for Mac</a>
@@ -505,10 +509,12 @@ footer{padding:56px 0 72px}
 </div>
 </div>
 <div class="mode reveal">
-<img class="cord cord-ivory" src="img/cord-ivory.svg" alt="Remi on a swing at the end of a braided cord with knots tied into it">
-<img class="cord cord-jet" src="img/cord-jet.svg" alt="Remi on a swing at the end of a braided cord with knots tied into it">
+<div class="cord-pull" role="button" tabindex="0" aria-label="Pull the cord. Remi swings back when you let go.">
+<img class="cord cord-ivory" src="img/cord-ivory.svg" alt="" draggable="false">
+<img class="cord cord-jet" src="img/cord-jet.svg" alt="" draggable="false">
+</div>
 <h3>On the cord</h3>
-<p>A braided cord hangs from the top of the screen with Remi on a swing at the end. It ties one knot for each task due today. Pull the cord to open your list, and watch a knot come loose each time you finish something.</p>
+<p>A braided cord hangs from the top of the screen with Remi on a swing at the end. It ties one knot for each task due today. Pull the cord to open your list, and watch a knot come loose each time you finish something. Try pulling this one.</p>
 </div>
 </div>
 </div>
@@ -755,6 +761,68 @@ Scripts/install.sh</pre>
     })();
   }
   if(reduce){typed.textContent='';tokens(null)} else setTimeout(typeLine,1600);
+
+
+  /* ----- The cord: drag it down and let go, like the app (CordMotion in App/Core/CompanionMotion.swift) ----- */
+  (function(){
+    var box=document.querySelector('.cord-pull'); if(!box) return;
+    var MAX=56, BRAID=160, layers=[];
+    function inline(img){
+      return fetch(img.getAttribute('src')).then(function(r){return r.ok?r.text():Promise.reject()}).then(function(text){
+        var doc=new DOMParser().parseFromString(text,'image/svg+xml'), svg=doc.documentElement;
+        if(svg.nodeName!=='svg') return;
+        svg.setAttribute('class',img.className); svg.setAttribute('aria-hidden','true'); svg.setAttribute('focusable','false');
+        var NS='http://www.w3.org/2000/svg', hang=doc.createElementNS(NS,'g');
+        ['swing','remi','feet'].forEach(function(id){var el=svg.querySelector('#'+id); if(el) hang.appendChild(el)});
+        svg.appendChild(hang);
+        var knots=[].map.call(svg.querySelectorAll('.knot'),function(k){var e=k.querySelector('ellipse');return {el:k,y:e?+e.getAttribute('cy'):0}});
+        img.replaceWith(svg);
+        layers.push({braid:svg.querySelector('#braid'),knots:knots,hang:hang});
+      }).catch(function(){});
+    }
+    Promise.all([].map.call(box.querySelectorAll('img'),inline)).then(function(){render(0,0)});
+    function render(pull,rock){
+      var k=(BRAID+pull)/BRAID;
+      layers.forEach(function(l){
+        if(l.braid) l.braid.setAttribute('transform','scale(1 '+k.toFixed(4)+')');
+        l.knots.forEach(function(n){n.el.setAttribute('transform','translate(0 '+(n.y*(k-1)).toFixed(2)+')')});
+        l.hang.setAttribute('transform','translate(0 '+pull.toFixed(2)+') rotate('+rock.toFixed(2)+' 60 '+BRAID+')');
+      });
+    }
+    // The same spring as the app: omega = 2pi/response, damped.
+    var value=0, vel=0, target=0, omega=2*Math.PI/0.08, damp=1, held=false, startY=0, scale=1, releasedAt=-1, raf=0, last=0;
+    function tune(response,d){omega=2*Math.PI/response;damp=d}
+    function rockAt(t){var T=[0,.2,.55,.9,1.25,1.6],V=[0,9,-7,4,-2,0]; if(t<0||t>=1.6) return 0;
+      for(var i=0;i<5;i++) if(t<T[i+1]){var f=(t-T[i])/(T[i+1]-T[i]);return V[i]+(V[i+1]-V[i])*(.5-.5*Math.cos(Math.PI*f))} return 0}
+    function frame(now){
+      var dt=Math.min(.05,(now-(last||now))/1000); last=now;
+      for(var left=dt;left>0;left-=1/480){var h=Math.min(left,1/480); vel+=(omega*omega*(target-value)-2*damp*omega*vel)*h; value+=vel*h}
+      var t=releasedAt<0?-1:(now-releasedAt)/1000, rock=reduce?0:rockAt(t);
+      render(Math.max(value,-6),rock);
+      if(held||Math.abs(value-target)>.05||Math.abs(vel)>.05||(t>=0&&t<1.6)){raf=requestAnimationFrame(frame)}else{raf=0;last=0;releasedAt=-1;render(target,0)}
+    }
+    function go(){if(!raf){last=0;raf=requestAnimationFrame(frame)}}
+    function letGo(){
+      held=false; box.classList.remove('held'); target=0;
+      if(reduce){value=0;vel=0;render(0,0);return}
+      tune(0.45,0.55); releasedAt=performance.now(); go();
+    }
+    box.addEventListener('pointerdown',function(e){
+      if(e.button>0) return; e.preventDefault(); box.setPointerCapture(e.pointerId);
+      held=true; box.classList.add('held'); startY=e.clientY; scale=230/(box.getBoundingClientRect().height||230);
+      tune(0.08,1); releasedAt=-1; if(reduce){value=target} go();
+    });
+    box.addEventListener('pointermove',function(e){
+      if(!held) return; target=Math.min(Math.max((e.clientY-startY)*scale,0),MAX);
+      if(reduce){value=target;render(value,0)}
+    });
+    box.addEventListener('pointerup',letGo); box.addEventListener('pointercancel',letGo);
+    box.addEventListener('dragstart',function(e){e.preventDefault()});
+    box.addEventListener('keydown',function(e){
+      if(e.key!=='Enter'&&e.key!==' ') return; e.preventDefault();
+      if(reduce) return; tune(0.08,1); target=40; held=true; go(); setTimeout(letGo,260);
+    });
+  })();
 
   /* ----- Scroll reveals: once, when 12% is visible (MOTION.md) ----- */
   var els=document.querySelectorAll('.reveal');
