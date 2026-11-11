@@ -38,8 +38,10 @@ enum CompanionArt {
         let p = way.perched
         // The kit's peg has a darker underside; on Brass the metal is already black.
         let pegShadow = plumage == .brass ? p.metal : "#7E6436"
+        // White light barely shows on Ivory; on the darker plumages full strength looks like polished metal.
+        let headLight = plumage == .ivory ? "0.55" : "0.26"
         return ["body": p.body, "feather": p.feather, "stitch": p.stitch, "wingSatin": p.wingSatin, "egg": p.egg, "eggText": p.eggText,
-                "beak": p.beak, "crest": p.crest, "eye": p.eye, "metal": p.metal, "halo": p.halo, "pegShadow": pegShadow]
+                "beak": p.beak, "crest": p.crest, "eye": p.eye, "metal": p.metal, "halo": p.halo, "pegShadow": pegShadow, "headLight": headLight]
     }
 
     // MARK: The count on the egg

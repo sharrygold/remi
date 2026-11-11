@@ -1,7 +1,7 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 120 120"><defs>
 <pattern id="satin" width="2.4" height="2.4" patternUnits="userSpaceOnUse" patternTransform="rotate(32)"><rect width="1.1" height="2.4" fill="#C9A25A" /></pattern>
 <radialGradient id="shadeBody" cx="42%" cy="22%" r="85%"><stop offset="0" stop-color="#FFFFFF" stop-opacity="0.45" /><stop offset="0.55" stop-color="#F2ECE0" stop-opacity="0" /><stop offset="1" stop-color="#7A6A50" stop-opacity="0.32" /></radialGradient>
-<radialGradient id="shadeHead" cx="38%" cy="28%" r="78%"><stop offset="0" stop-color="#FFFFFF" stop-opacity="0.55" /><stop offset="0.5" stop-color="#F2ECE0" stop-opacity="0" /><stop offset="1" stop-color="#7A6A50" stop-opacity="0.4" /></radialGradient>
+<radialGradient id="shadeHead" cx="38%" cy="28%" r="78%"><stop offset="0" stop-color="#FFFFFF" stop-opacity="{{headLight}}" /><stop offset="0.5" stop-color="#F2ECE0" stop-opacity="0" /><stop offset="1" stop-color="#7A6A50" stop-opacity="0.4" /></radialGradient>
 </defs>
 <path id="neck-doze" d="M88 70 Q93 55 80 43" fill="none" stroke="{{body}}" stroke-width="13.6" stroke-linecap="round" />
 <g transform="translate(79 42) scale(1.15) translate(-79 -42)"><g id="crest" transform="translate(79 42) rotate(160)">

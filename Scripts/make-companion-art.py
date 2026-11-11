@@ -126,11 +126,19 @@ write("perched-head", CENTRED, enlarge((0, 0),
       paint(by_id(head, "beak"), fill="beak"),
       by_id(head, "mouth")))
 
+def soften_head_light(defs):
+    """The head's highlight strength depends on the plumage, so it becomes a token."""
+    gradient = defs.find(f".//{Q('radialGradient')}[@id='shadeHead']")
+    gradient.findall(Q("stop"))[0].set("stop-opacity", "{{headLight}}")
+    return defs
+
+
 shade = load("companion/head-shade.svg")
+soften_head_light(shade.find(Q("defs")))
 write("perched-head-shade", CANVAS, enlarge((81, 35), by_id(shade, "head-shade")), defs=shade.find(Q("defs")))
 
 doze = load("companion/stitched/head-doze.svg")
-doze_defs = doze.find(Q("defs"))
+doze_defs = soften_head_light(doze.find(Q("defs")))
 pieces = [node for node in doze if node.tag != Q("defs")]
 paint(pieces[0], stroke="body")                  # neck
 paint(by_id(doze, "skull-doze"), fill="body", stroke="stitch")
