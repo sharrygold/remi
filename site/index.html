@@ -124,13 +124,16 @@ p{margin:0}
 
 /* ---------- Hero ---------- */
 .hero{padding:190px 0 72px}
-.hero-grid{display:grid;gap:48px;align-items:center}
+.hero-grid{display:grid;grid-template-columns:minmax(0,1fr);gap:48px;align-items:center}
 .eyebrow{font-size:12.5px;font-weight:600;letter-spacing:.3em;text-transform:uppercase;color:var(--gold)}
 .hero h1{margin-top:18px;font-size:clamp(40px,6vw,64px);line-height:1.05}
 .tagline{margin-top:16px;font-family:"Libre Bodoni",serif;font-style:italic;font-size:clamp(21px,2.4vw,25px);color:var(--gold)}
 .cta{margin-top:28px;display:flex;flex-wrap:wrap;gap:14px}
 .meta{margin-top:14px;font-size:13.5px;color:var(--ink3)}
-.keys{margin-top:34px;padding-top:24px;display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:22px;position:relative}
+.keys{margin-top:34px;padding-top:24px;display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:22px;position:relative}
+/* Phones: the three shortcuts stay on one row, with slightly smaller keys */
+@media (max-width:520px){.keys{gap:12px}.keyrow{gap:4px}.keys kbd{height:28px;min-width:28px;padding:0 7px;font-size:12.5px;border-radius:7px}.keys kbd svg{width:12px;height:12px}.keys p{font-size:13px}}
+@media (max-width:360px){.keys{gap:10px}.keyrow{gap:3px}.keys kbd{height:26px;min-width:24px;padding:0 5px;font-size:12px}.keys kbd svg{width:11px;height:11px}}
 .keys::before{content:"";position:absolute;left:0;right:0;top:0;height:2px;background:repeating-linear-gradient(90deg,var(--thread) 0 7px,transparent 7px 13px);opacity:.75}
 .keyrow{display:flex;gap:6px;margin-bottom:9px}
 kbd{height:32px;min-width:32px;padding:0 9px;display:inline-flex;align-items:center;justify-content:center;border-radius:8px;background:var(--card);border:1px solid var(--line);font-family:inherit;font-size:13.5px;font-weight:500;color:var(--ink)}
@@ -203,6 +206,7 @@ section.knot{position:relative;padding:88px 0}
 .try input::placeholder{color:var(--ink3)}
 .examples{margin-top:14px;display:flex;flex-wrap:wrap;gap:8px}
 .ex{min-height:44px;padding:0 14px;border-radius:12px;border:1px solid var(--line);background:none;color:var(--ink);font:500 13.5px ui-monospace,SFMono-Regular,Menlo,monospace;cursor:pointer;text-align:left;transition:border-color .2s var(--ease),transform .08s var(--ease)}
+.ex{max-width:100%;overflow-wrap:anywhere}
 .ex:hover{border-color:var(--thread)}.ex:active{transform:scale(.97)}
 .result{margin-top:18px;padding-top:18px;border-top:1px solid var(--line);display:grid;grid-template-columns:auto 1fr;gap:8px 18px;font-size:15px;min-height:96px;align-content:start}
 .result dt{color:var(--ink3);font-size:13px;padding-top:2px}
@@ -275,6 +279,10 @@ footer{padding:56px 0 72px}
 .foot nav a{text-decoration:none;padding:10px 0}
 .foot nav a:hover{color:var(--ink)}
 .fine{margin-top:18px;font-size:13px;color:var(--ink3)}
+.foot-end{display:flex;flex-wrap:wrap;align-items:center;justify-content:space-between;gap:12px 24px}
+.to-top{display:inline-flex;align-items:center;gap:8px;min-height:44px;margin-top:18px;padding:0 16px;border-radius:12px;border:1px solid var(--line);font-size:14px;font-weight:500;color:var(--ink2);text-decoration:none;transition:color .2s var(--ease),border-color .2s var(--ease)}
+.to-top:hover{color:var(--ink);border-color:var(--thread)}
+.to-top svg{width:14px;height:14px}
 
 /* theme-dependent swaps */
 @media (prefers-color-scheme: dark){
@@ -299,7 +307,7 @@ footer{padding:56px 0 72px}
 }
 </style>
 </head>
-<body>
+<body id="top-page">
 
 <svg width="0" height="0" style="position:absolute" aria-hidden="true">
   <symbol id="k-ctrl" viewBox="0 0 14 14"><path d="M3 8.5 L7 4.5 L11 8.5" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></symbol>
@@ -600,7 +608,10 @@ Scripts/install.sh</pre>
 <a href="https://github.com/sharrygold/remi/blob/main/LICENSE">MIT licence</a>
 </nav>
 </div>
+<div class="foot-end">
 <p class="fine">Made by <a href="https://github.com/sharrygold">Sharon</a>. Free and open source. Set in Libre Bodoni and Inter.</p>
+<a class="to-top" href="#top-page"><svg viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M7 12V2M2.5 6.5 7 2l4.5 4.5"/></svg>Back to top</a>
+</div>
 </div>
 </footer>
 
