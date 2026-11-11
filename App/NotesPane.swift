@@ -43,7 +43,10 @@ struct NotesPane: View {
                     emptyState
                 } else {
                     if !pinned.isEmpty { group("Pinned", symbol: "pin", notes: pinned) }
-                    if !others.isEmpty { group(pinned.isEmpty ? nil : "Notes", symbol: "note.text", notes: others) }
+                    // Newest first, under headings for when each was last written in.
+                    ForEach(LibraryStore.groupedByDate(others), id: \.title) { section in
+                        group(section.title, symbol: "calendar", notes: section.notes)
+                    }
                 }
             }
             .padding(Tokens.Spacing.m)

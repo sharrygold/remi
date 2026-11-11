@@ -109,6 +109,7 @@ final class PerchedBirdView: NSView, CompanionSurface {
         check.move(to: CGPoint(x: 55.5, y: 60))
         check.addLine(to: CGPoint(x: 59, y: 56.5))
         check.addLine(to: CGPoint(x: 65, y: 64))
+        checkLayer.frame = CGRect(origin: .zero, size: canvas)
         checkLayer.path = check
         checkLayer.fillColor = nil
         checkLayer.lineWidth = 1.7
@@ -476,10 +477,12 @@ final class PerchedBirdView: NSView, CompanionSurface {
 
     private func playPuff() {
         guard !reduceMotion else { return }
+        // On the bird, not the stage: the stage is mirrored on the right edge (a negative x scale), and
+        // animating its scale made Core Animation interpolate through a half turn, so the bird flipped.
         let puff = CAKeyframeAnimation(keyPath: "transform.scale")
         puff.values = [1, 1.07, 1]
         puff.duration = 0.8
-        stage.add(puff, forKey: "puff")
+        birdRoot.add(puff, forKey: "puff")
     }
 
     func playMorningStretch() {
@@ -545,6 +548,7 @@ final class PerchedBirdView: NSView, CompanionSurface {
         countLayer.contents = text.isEmpty ? nil : CompanionArt.countImage(text, colour: plumage.colourway.perched.eggText)
         // The bird is mirrored on the right edge; the number never is.
         countLayer.transform = mirrored ? CATransform3DMakeScale(-1, 1, 1) : CATransform3DIdentity
+        checkLayer.transform = countLayer.transform
     }
 
     // MARK: Hit testing

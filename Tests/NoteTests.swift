@@ -120,4 +120,16 @@ final class NoteStoreTests: XCTestCase {
         XCTAssertEqual(reopened.notes.map(\.body), ["Kept\n- [x] done"])
         XCTAssertEqual(reopened.notes.first?.isPinned, true)
     }
+
+    func testNotesGroupUnderDateHeadings() {
+        var calendar = Calendar(identifier: .gregorian)
+        calendar.timeZone = TimeZone(identifier: "UTC")!
+        let now = Date(timeIntervalSince1970: 1_800_000_000)
+        func daysAgo(_ n: Int) -> Date { now.addingTimeInterval(Double(-n) * 86_400) }
+        XCTAssertEqual(LibraryStore.dateGroup(for: daysAgo(0), now: now, calendar: calendar), "Today")
+        XCTAssertEqual(LibraryStore.dateGroup(for: daysAgo(1), now: now, calendar: calendar), "Yesterday")
+        XCTAssertEqual(LibraryStore.dateGroup(for: daysAgo(5), now: now, calendar: calendar), "Previous 7 Days")
+        XCTAssertEqual(LibraryStore.dateGroup(for: daysAgo(20), now: now, calendar: calendar), "Previous 30 Days")
+        XCTAssertEqual(LibraryStore.dateGroup(for: daysAgo(90), now: now, calendar: calendar), "Earlier")
+    }
 }

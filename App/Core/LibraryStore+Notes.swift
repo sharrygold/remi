@@ -11,6 +11,28 @@ extension LibraryStore {
             }
     }
 
+    /// The heading a note sits under, by when it was last written in, like Apple Notes.
+    static func dateGroup(for date: Date, now: Date = Date(), calendar: Calendar = .current) -> String {
+        let days = calendar.dateComponents([.day], from: calendar.startOfDay(for: date), to: calendar.startOfDay(for: now)).day ?? 0
+        switch days {
+        case ..<1: return "Today"
+        case 1: return "Yesterday"
+        case 2...7: return "Previous 7 Days"
+        case 8...30: return "Previous 30 Days"
+        default: return "Earlier"
+        }
+    }
+
+    /// Notes split under those headings, newest first, keeping their order within each.
+    static func groupedByDate(_ notes: [Note], now: Date = Date(), calendar: Calendar = .current) -> [(title: String, notes: [Note])] {
+        var groups: [(title: String, notes: [Note])] = []
+        for note in notes {
+            let title = dateGroup(for: note.updatedAt, now: now, calendar: calendar)
+            if groups.last?.title == title { groups[groups.count - 1].notes.append(note) } else { groups.append((title, [note])) }
+        }
+        return groups
+    }
+
     /// ⌘Return in the capture bar. Only `#space` is read; words like "today" stay in the note.
     @discardableResult
     func addNote(fromCapture text: String, currentSpace: Space?) -> Note? {
