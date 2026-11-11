@@ -1,0 +1,10 @@
+// Ad hoc by default, so anyone with Xcode can build without an Apple account.
+// To sign with your own team (macOS then keeps permissions across rebuilds), create
+// Config/Signing.local.xcconfig, which git ignores, with:
+//   APP_SIGN_STYLE = Automatic
+//   APP_SIGN_IDENTITY = Apple Development
+//   APP_TEAM = YOURTEAMID
+APP_SIGN_STYLE = Manual
+APP_SIGN_IDENTITY = -
+APP_TEAM =
+#include? "Signing.local.xcconfig"

@@ -12,6 +12,9 @@ targets:
     type: application
     platform: macOS
     sources: [App]
+    configFiles:
+      Debug: Config/Signing.xcconfig
+      Release: Config/Signing.xcconfig
     scheme:
       testTargets: [PerchTests]
     settings:
@@ -25,11 +28,10 @@ targets:
         MARKETING_VERSION: "0.1"
         CURRENT_PROJECT_VERSION: "1"
         SWIFT_VERSION: "5.0"
-        # Signed with a free Apple ID (Personal Team), so macOS keeps permissions such as
-        # notifications and Open at login across rebuilds. Use "-" to build without an account.
-        CODE_SIGN_STYLE: Automatic
-        DEVELOPMENT_TEAM: YOURTEAMID
-        CODE_SIGN_IDENTITY: Apple Development
+        # Values come from Config/Signing.xcconfig: ad hoc unless a local override names a team.
+        CODE_SIGN_STYLE: $(APP_SIGN_STYLE)
+        DEVELOPMENT_TEAM: $(APP_TEAM)
+        CODE_SIGN_IDENTITY: $(APP_SIGN_IDENTITY)
         ENABLE_HARDENED_RUNTIME: NO
   PerchTests:
     type: bundle.unit-test

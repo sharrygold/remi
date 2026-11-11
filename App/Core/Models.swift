@@ -4,7 +4,7 @@ import SwiftData
 // Every property has a default and relationships are optional, which is what CloudKit sync would need later.
 
 @Model
-final class Space {
+final class Space: Identifiable {
     var id: UUID = UUID()
     var name: String = ""
     var symbol: String = "folder"
@@ -25,7 +25,7 @@ final class Space {
 }
 
 @Model
-final class TaskItem {
+final class TaskItem: Identifiable {
     var id: UUID = UUID()
     var title: String = ""
     var notes: String = ""
@@ -61,7 +61,7 @@ final class TaskItem {
 
 /// The body is stored as plain Markdown, so export and future sync never depend on the editor.
 @Model
-final class Note {
+final class Note: Identifiable {
     var id: UUID = UUID()
     var body: String = ""
     var space: Space?
@@ -139,7 +139,7 @@ enum LinkList: String, CaseIterable {
 }
 
 @Model
-final class LinkItem {
+final class LinkItem: Identifiable {
     var id: UUID = UUID()
     var urlString: String = ""
     /// The page title once fetched; until then, the site name.

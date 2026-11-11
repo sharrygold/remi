@@ -22,3 +22,6 @@ docs/m3/
 docs/m4/
 docs/m5/
 docs/m6/
+
+# Personal signing team
+Config/Signing.local.xcconfig
