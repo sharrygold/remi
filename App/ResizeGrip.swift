@@ -11,13 +11,13 @@ struct ResizeGrip: View {
 
     var body: some View {
         ZStack(alignment: leading ? .bottomLeading : .bottomTrailing) {
-            // An arc that follows the panel's rounded corner.
+            // An arc on the panel's own rounded edge, clear of the capture bar, so it reads as part of the frame.
             Path { path in
                 let middle = leading ? 135.0 : 45.0
-                path.addArc(center: CGPoint(x: 24, y: 24), radius: 17,
+                path.addArc(center: CGPoint(x: 24, y: 24), radius: 21,
                             startAngle: .degrees(middle - 28), endAngle: .degrees(middle + 28), clockwise: false)
             }
-            .stroke(hovering ? AnyShapeStyle(Color.brand) : AnyShapeStyle(.secondary), style: StrokeStyle(lineWidth: 3.5, lineCap: .round))
+            .stroke(hovering ? AnyShapeStyle(Color.brand) : AnyShapeStyle(.secondary), style: StrokeStyle(lineWidth: 3, lineCap: .round))
             .opacity(hovering ? 1 : 0.75)
             .frame(width: 48, height: 48)
             .allowsHitTesting(false)

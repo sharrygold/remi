@@ -65,6 +65,8 @@ final class AppController: NSObject, NSApplicationDelegate {
 
     var saveTabHotKey: HotKey?
 
+    var appearanceMenu: NSMenu?
+
     var lastActivity = Date()
 
     var hiddenUntil: Date?
@@ -116,6 +118,7 @@ final class AppController: NSObject, NSApplicationDelegate {
         buildWidget()
         buildPanel()
         buildStatusItem()
+        applyAppearance()
         registerHotKey()
         applyWindowSettings()
         NotificationCenter.default.addObserver(self, selector: #selector(settingsChanged), name: UserDefaults.didChangeNotification, object: nil)
@@ -248,6 +251,12 @@ final class AppController: NSObject, NSApplicationDelegate {
         default: nil
         }
         if NSApp.appearance?.name != wanted?.name { NSApp.appearance = wanted }
+        for item in appearanceMenu?.items ?? [] { item.state = (item.representedObject as? String) == choice ? .on : .off }
+    }
+
+    @objc func chooseAppearance(_ sender: NSMenuItem) {
+        guard let value = sender.representedObject as? String else { return }
+        UserDefaults.standard.set(value, forKey: SettingsKey.appearance)
     }
 
     @objc func settingsChanged() {
@@ -424,6 +433,15 @@ final class AppController: NSObject, NSApplicationDelegate {
         showNowItem.isHidden = true
         menu.addItem(showNowItem)
         menu.addItem(.separator())
+        let appearanceItem = menu.addItem(withTitle: "Appearance", action: nil, keyEquivalent: "")
+        let appearanceMenu = NSMenu(title: "Appearance")
+        for (title, value) in [("Automatic", "system"), ("Light", "light"), ("Dark", "dark")] {
+            let item = appearanceMenu.addItem(withTitle: title, action: #selector(chooseAppearance(_:)), keyEquivalent: "")
+            item.target = self
+            item.representedObject = value
+        }
+        appearanceItem.submenu = appearanceMenu
+        self.appearanceMenu = appearanceMenu
         menu.addItem(withTitle: "Settings…", action: #selector(openSettings), keyEquivalent: ",").target = self
         menu.addItem(.separator())
         let quit = menu.addItem(withTitle: "Quit \(AppInfo.displayName)", action: #selector(NSApplication.terminate(_:)), keyEquivalent: "q")
