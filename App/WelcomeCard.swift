@@ -60,6 +60,7 @@ struct WelcomeCard: View {
             fact("Open it from anywhere", "Press \(shortcut), or click or pull your companion at the edge of the screen.")
             fact("Save the tab you're on", "Press \(HotKeyCombo.savedSaveTab.display) in your browser. It's saved without opening anything, and your companion reacts.")
             fact("Let things go", "Hover a task to delete it, and ⌘Z brings it back. Each morning you can keep or let go of what's left from before.")
+            fact("Make room", "Drag the curved handle in the panel's bottom corner to make it bigger.")
         }
     }
 

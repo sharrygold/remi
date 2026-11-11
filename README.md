@@ -81,7 +81,7 @@ Links has **Saved links** and **Watch later**, and you can make your own lists f
 | ⌘, | Settings |
 | Esc | Step back: list, search, then close |
 
-In a note: `# ` heading, `- ` bullet, `[] ` checkbox, `**bold**` (or ⌘B), ⇧⌘L checklist line, ⇧⌘U tick, Esc back to the list. Drag the panel's edges to resize it.
+In a note: `# ` heading, `- ` bullet, `[] ` checkbox, `**bold**` (or ⌘B), ⇧⌘L checklist line, ⇧⌘U tick, Esc back to the list. Drag the curved handle in the panel's bottom corner, or its edges, to resize it.
 
 ## Where things are kept
 

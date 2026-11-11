@@ -71,7 +71,7 @@ final class AppController: NSObject, NSApplicationDelegate {
 
     let showNowItem = NSMenuItem(title: "Show Widget Now", action: #selector(showWidgetNow), keyEquivalent: "")
 
-    static let idleSecondsBeforeTuck: TimeInterval = 7
+    static let idleSecondsBeforeTuck: TimeInterval = 5
 
     static let idleSecondsBeforeDoze: TimeInterval = 45
 
@@ -104,9 +104,7 @@ final class AppController: NSObject, NSApplicationDelegate {
         if !isScratchSession { CompanionSize.keepChosenSizeAfterRescale() }
         SettingsKey.registerDefaults()
         store.rollForwardRepeating()
-        if let name = options.appearance {
-            NSApp.appearance = NSAppearance(named: name == "dark" ? .darkAqua : .aqua)
-        }
+        applyAppearance()
         store.onLinkAdded = { [weak self] link in
             self?.metadata.fetch(link)
             self?.refreshCompanion(event: .linkCaught)
@@ -241,9 +239,21 @@ final class AppController: NSObject, NSApplicationDelegate {
         }
     }
 
+    /// Light, dark or following the Mac. A launch flag wins, for screenshots.
+    func applyAppearance() {
+        let choice = options.appearance ?? UserDefaults.standard.string(forKey: SettingsKey.appearance) ?? "system"
+        let wanted: NSAppearance? = switch choice {
+        case "light": NSAppearance(named: .aqua)
+        case "dark": NSAppearance(named: .darkAqua)
+        default: nil
+        }
+        if NSApp.appearance?.name != wanted?.name { NSApp.appearance = wanted }
+    }
+
     @objc func settingsChanged() {
         DispatchQueue.main.async {
             self.applyWindowSettings()
+            self.applyAppearance()
             self.refreshCompanion(event: nil)
         }
     }

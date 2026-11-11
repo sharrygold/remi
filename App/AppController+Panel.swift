@@ -107,10 +107,9 @@ extension AppController {
             if size.width >= Tokens.Size.panelMin.width, size.height >= Tokens.Size.panelMin.height { panel.setContentSize(size) }
         }
         NotificationCenter.default.addObserver(forName: NSWindow.didEndLiveResizeNotification, object: panel, queue: .main) { [weak self] _ in
-            guard let self else { return }
-            UserDefaults.standard.set(NSStringFromSize(self.panel.frame.size), forKey: Self.panelSizeKey)
-            self.panel.invalidateShadow()
+            self?.rememberPanelSize()
         }
+        presentation.onResizeEnd = { [weak self] in self?.rememberPanelSize() }
         configure(panel)
         // Esc steps back one layer at a time: the clipboard chip, then search, then the panel.
         panel.onCancel = { [weak self] in
@@ -136,6 +135,11 @@ extension AppController {
         panel.displayIfNeeded()
         panel.orderOut(nil)
         panel.alphaValue = 1
+    }
+
+    func rememberPanelSize() {
+        UserDefaults.standard.set(NSStringFromSize(panel.frame.size), forKey: Self.panelSizeKey)
+        panel.invalidateShadow()
     }
 
     func togglePanel() {

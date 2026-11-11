@@ -30,6 +30,8 @@ final class PanelPresentation: ObservableObject {
     /// Closes the panel after something opens elsewhere, unless it is pinned. Set by the app.
     var closeAfterOpening: () -> Void = {}
     var openSettings: () -> Void = {}
+    /// Called when the resize handle is let go, so the size is remembered.
+    var onResizeEnd: () -> Void = {}
     /// Whether the morning review may appear: real sessions once a day, screenshots on demand.
     enum ReviewPolicy { case daily, always, never }
     var reviewPolicy = ReviewPolicy.daily
@@ -126,6 +128,9 @@ struct PanelView: View {
         // Opening grows out of the widget. Closing doesn't shrink the mask (the glass drops out under a
         // shrinking mask and leaves the darker list card behind as a box); the whole panel eases a
         // little toward the widget while the window fades (see hidePanel).
+        .overlay(alignment: presentation.anchor.x > 0.5 ? .bottomLeading : .bottomTrailing) {
+            ResizeGrip(leading: presentation.anchor.x > 0.5, onEnd: presentation.onResizeEnd)
+        }
         .mask {
             shape.scaleEffect(presentation.presented || presentation.shown || reduceMotion ? 1 : 0.08, anchor: presentation.anchor)
         }

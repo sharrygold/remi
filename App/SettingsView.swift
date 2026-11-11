@@ -170,6 +170,7 @@ private struct GeneralSettings: View {
     @AppStorage(SettingsKey.showOverFullScreen) private var showOverFullScreen = true
     @AppStorage(SettingsKey.clipboardNudge) private var clipboardNudge = true
     @AppStorage(SettingsKey.preferredBrowser) private var browser = ""
+    @AppStorage(SettingsKey.appearance) private var appearance = "system"
     @State private var launchAtLogin = LoginItem.isEnabled
     @State private var loginNote: String?
 
@@ -183,6 +184,11 @@ private struct GeneralSettings: View {
                 }
                 LabeledContent("Shortcut to save the current tab") {
                     ShortcutField(context: context, kind: .saveTab)
+                }
+                Picker("Appearance", selection: $appearance) {
+                    Text("Automatic").tag("system")
+                    Text("Light").tag("light")
+                    Text("Dark").tag("dark")
                 }
                 LabeledContent("First-time tips") {
                     Button("Show Welcome Again", action: context.showWelcome)

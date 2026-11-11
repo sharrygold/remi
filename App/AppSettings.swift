@@ -19,6 +19,8 @@ enum SettingsKey {
     static let clipboardNudge = ClipboardNudge.preferenceKey
     static let preferredBrowser = LinkOpener.preferenceKey
     static let welcomeSeen = "welcomeSeen"
+    /// "system", "light" or "dark". Separate from Plumage, which only colours the companion and accent.
+    static let appearance = "appearance"
 
     /// Defaults agreed in Phase 0: tuck on, count shown, hidden from recordings, reminders on at 09:00, ⌃Space.
     static func registerDefaults() {
@@ -28,6 +30,7 @@ enum SettingsKey {
             hideFromRecordings: true,
             showOverFullScreen: true,
             reminders: true,
+            appearance: "system",
             reminderMinutes: 9 * 60,
             clipboardNudge: true,
             hotKeyCode: HotKeyCombo.standard.keyCode,
