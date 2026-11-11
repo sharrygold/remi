@@ -285,7 +285,7 @@ final class AppController: NSObject, NSApplicationDelegate {
         }
         for style in CompanionStyle.allCases { add(style.title, style.rawValue, #selector(chooseStyle(_:)), on: companion.style == style) }
         menu.addItem(.sectionHeader(title: "Size"))
-        for size in CompanionSize.allCases { add(size.title, size.rawValue, #selector(chooseSize(_:)), on: companion.size == size) }
+        for size in CompanionSize.choices(for: companion.style) { add(size.title, size.rawValue, #selector(chooseSize(_:)), on: companion.size == size) }
         menu.addItem(.sectionHeader(title: "Colour"))
         for plumage in Plumage.allCases { add(plumage.title, plumage.rawValue, #selector(choosePlumage(_:)), on: companion.plumage == plumage) }
         item.submenu = menu

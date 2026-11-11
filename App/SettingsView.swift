@@ -217,7 +217,7 @@ private struct GeneralSettings: View {
                     ForEach(CompanionStyle.allCases) { Text($0.title).tag($0) }
                 }
                 Picker("Size", selection: $widget.size) {
-                    ForEach(CompanionSize.allCases) { Text($0.title).tag($0) }
+                    ForEach(CompanionSize.choices(for: widget.style)) { Text($0.title).tag($0) }
                 }
                 Picker("Colour", selection: $widget.plumage) {
                     ForEach(Plumage.allCases) { Text($0.title).tag($0) }

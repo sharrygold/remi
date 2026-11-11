@@ -95,7 +95,7 @@ struct WelcomeCard: View {
             }
             choice("Size") {
                 Picker("Size", selection: $widget.size) {
-                    ForEach(CompanionSize.allCases) { Text($0.title).tag($0) }
+                    ForEach(CompanionSize.choices(for: widget.style)) { Text($0.title).tag($0) }
                 }
             }
             choice("Colour") {

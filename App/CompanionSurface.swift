@@ -24,13 +24,19 @@ enum CompanionStyle: String, CaseIterable, Identifiable {
 
 /// How large the companion is drawn. Both companions read this when they are built.
 enum CompanionSize: String, CaseIterable, Identifiable {
-    case small, medium, large
+    case mini, small, medium, large
 
     var id: String { rawValue }
     var title: String { rawValue.capitalized }
 
+    /// Mini is for the perched bird only; the cord starts at Small.
+    static func choices(for style: CompanionStyle) -> [CompanionSize] {
+        style == .cord ? allCases.filter { $0 != .mini } : allCases
+    }
+
     var perchedScale: CGFloat {
         switch self {
+        case .mini: 0.9
         case .small: 1.15
         case .medium: 1.4
         case .large: 1.7
@@ -39,7 +45,7 @@ enum CompanionSize: String, CaseIterable, Identifiable {
 
     var cordScale: CGFloat {
         switch self {
-        case .small: 275.0 / 230
+        case .mini, .small: 275.0 / 230
         case .medium: 320.0 / 230
         case .large: 375.0 / 230
         }
@@ -65,7 +71,11 @@ enum CompanionSize: String, CaseIterable, Identifiable {
 /// The companion's look, chosen in Settings and remembered.
 final class CompanionSettings: ObservableObject {
     @Published var style: CompanionStyle {
-        didSet { UserDefaults.standard.set(style.rawValue, forKey: CompanionKeys.style) }
+        didSet {
+            UserDefaults.standard.set(style.rawValue, forKey: CompanionKeys.style)
+            // The cord has no Mini, so it starts at Small.
+            if style == .cord, size == .mini { size = .small }
+        }
     }
     @Published var plumage: Plumage {
         didSet { UserDefaults.standard.set(plumage.rawValue, forKey: CompanionKeys.plumage) }
