@@ -15,6 +15,7 @@ enum SettingsKey {
     static let hotKeyDisplay = "hotKeyDisplay"
     static let clipboardNudge = ClipboardNudge.preferenceKey
     static let preferredBrowser = LinkOpener.preferenceKey
+    static let welcomeSeen = "welcomeSeen"
 
     /// Defaults agreed in Phase 0: tuck on, count shown, hidden from recordings, reminders on at 09:00, ⌃Space.
     static func registerDefaults() {

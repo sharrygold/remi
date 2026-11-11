@@ -24,12 +24,20 @@ final class Reminders: NSObject, UNUserNotificationCenterDelegate {
     func start() {
         watching = store.$tasks
             .debounce(for: .seconds(1), scheduler: DispatchQueue.main)
-            .sink { [weak self] _ in self?.reschedule() }
-        guard Self.isEnabled else { return }
+            .sink { [weak self] _ in
+                self?.askFirstTimeIfNeeded()
+                self?.reschedule()
+            }
+        askFirstTimeIfNeeded()
+        reschedule()
+    }
+
+    /// macOS's prompt waits until there is something to remind you about: the first dated task.
+    private func askFirstTimeIfNeeded() {
+        guard Self.isEnabled, store.tasks.contains(where: { $0.dueDate != nil && !$0.isCompleted }) else { return }
         center.getNotificationSettings { [weak self] settings in
             if settings.authorizationStatus == .notDetermined { self?.requestPermission() }
         }
-        reschedule()
     }
 
     /// Shows macOS's one-time Allow prompt.

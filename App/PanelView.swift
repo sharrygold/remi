@@ -20,6 +20,11 @@ final class PanelPresentation: ObservableObject {
     @Published var addLinkRequests = 0
     /// Opens a particular note, for example from search.
     @Published var noteToOpen: UUID?
+    /// The welcome card stands in for the lists on first launch.
+    @Published var showWelcome = false
+    var onWelcomeDone: () -> Void = {}
+    /// Handed to the welcome card so the companion can be chosen there.
+    var widget: WidgetDebug?
     /// Closes the panel after something opens elsewhere, unless it is pinned. Set by the app.
     var closeAfterOpening: () -> Void = {}
     var openSettings: () -> Void = {}
@@ -77,7 +82,12 @@ struct PanelView: View {
         VStack(spacing: Tokens.Spacing.s) {
             header
             if store.isTemporary { storageWarning }
-            if search.active {
+            if presentation.showWelcome, let widget = presentation.widget {
+                WelcomeCard(widget: widget, shortcut: HotKeyCombo.saved.display, onDone: presentation.onWelcomeDone)
+                    .frame(maxHeight: .infinity)
+                    .background(Color(nsColor: .textBackgroundColor).opacity(reduceTransparency ? 1 : Tokens.Surface.contentOpacity),
+                                in: RoundedRectangle(cornerRadius: Tokens.Radius.large, style: .continuous))
+            } else if search.active {
                 SearchPane(store: store, search: search, density: density, onOpen: openSearchHit, onClose: closeSearch)
                     .frame(maxHeight: .infinity)
                     .background(Color(nsColor: .textBackgroundColor).opacity(reduceTransparency ? 1 : Tokens.Surface.contentOpacity),
@@ -765,6 +775,7 @@ struct PanelView: View {
     private var reviewCount: Int { store.leftFromBefore().count + store.pausedRepeating().count }
 
     private func startMorningReviewIfDue() {
+        guard !presentation.showWelcome else { return }
         switch presentation.reviewPolicy {
         case .never: return
         case .always: break

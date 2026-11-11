@@ -18,6 +18,7 @@ final class SettingsContext: ObservableObject {
     /// The last recording's problem, if any.
     @Published var shortcutMessage: String?
     @Published var shortcut = HotKeyCombo.saved
+    var showWelcome: () -> Void = {}
     private var keyMonitor: Any?
 
     init(store: LibraryStore, widget: WidgetDebug, reminders: Reminders, libraryDirectory: URL?, applyHotKey: @escaping (HotKeyCombo) -> Bool) {
@@ -139,7 +140,7 @@ private struct GeneralSettings: View {
     @AppStorage(SettingsKey.showOverFullScreen) private var showOverFullScreen = true
     @AppStorage(SettingsKey.clipboardNudge) private var clipboardNudge = true
     @AppStorage(SettingsKey.preferredBrowser) private var browser = ""
-    @State private var launchAtLogin = SMAppService.mainApp.status == .enabled
+    @State private var launchAtLogin = LoginItem.isEnabled
     @State private var loginNote: String?
 
     var body: some View {
@@ -149,6 +150,9 @@ private struct GeneralSettings: View {
                 if let loginNote { note(loginNote) }
                 LabeledContent("Shortcut to open the panel") {
                     ShortcutField(context: context)
+                }
+                LabeledContent("First-time tips") {
+                    Button("Show Welcome Again", action: context.showWelcome)
                 }
             }
             Section("Links") {
@@ -178,14 +182,8 @@ private struct GeneralSettings: View {
     }
 
     private func setLaunchAtLogin(_ on: Bool) {
-        let service = SMAppService.mainApp
-        do {
-            if on { try service.register() } else { try service.unregister() }
-            loginNote = nil
-        } catch {
-            loginNote = "This works once the app is in your Applications folder."
-        }
-        launchAtLogin = service.status == .enabled
+        loginNote = LoginItem.set(on)
+        launchAtLogin = LoginItem.isEnabled
     }
 }
 

@@ -29,6 +29,7 @@ extension AppController {
         let context = SettingsContext(store: store, widget: debug, reminders: reminders, libraryDirectory: store.directory) { [weak self] combo in
             self?.hotKey?.register(combo) ?? false
         }
+        context.showWelcome = { [weak self] in self?.showWelcome() }
         let window = SettingsPanel(contentRect: NSRect(x: 0, y: 0, width: 700, height: 520),
                                    styleMask: [.titled, .closable, .nonactivatingPanel], backing: .buffered, defer: false)
         window.contentViewController = NSHostingController(rootView: SettingsView(context: context))

@@ -124,7 +124,10 @@ final class AppController: NSObject, NSApplicationDelegate {
             search.active = true
             search.query = String(text.dropFirst("--search=".count))
         }
+        presentation.widget = debug
+        presentation.onWelcomeDone = { [weak self] in self?.finishWelcome() }
         if options.open { showPanel() }
+        showWelcomeOnFirstRun()
         // For screenshots of the closing animation: --close-at=SECONDS closes the panel then.
         if let text = CommandLine.arguments.first(where: { $0.hasPrefix("--close-at=") }),
            let seconds = Double(text.dropFirst("--close-at=".count)) {
@@ -244,6 +247,32 @@ final class AppController: NSObject, NSApplicationDelegate {
         edit.addItem(withTitle: "Select All", action: #selector(NSText.selectAll(_:)), keyEquivalent: "a")
         editItem.submenu = edit
         NSApp.mainMenu = main
+    }
+
+    /// First launch only. Someone who already has things saved has no need of it.
+    func showWelcomeOnFirstRun() {
+        if CommandLine.arguments.contains("--preview-welcome") {
+            showWelcome()
+            return
+        }
+        guard !isScratchSession, !UserDefaults.standard.bool(forKey: SettingsKey.welcomeSeen) else { return }
+        if store.tasks.isEmpty && store.notes.isEmpty && store.links.isEmpty {
+            showWelcome()
+        } else {
+            UserDefaults.standard.set(true, forKey: SettingsKey.welcomeSeen)
+        }
+    }
+
+    func showWelcome() {
+        presentation.showWelcome = true
+        showPanel()
+    }
+
+    func finishWelcome() {
+        presentation.showWelcome = false
+        if !CommandLine.arguments.contains("--preview-welcome") {
+            UserDefaults.standard.set(true, forKey: SettingsKey.welcomeSeen)
+        }
     }
 
     @objc func dayChanged() {
