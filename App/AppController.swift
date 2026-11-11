@@ -73,8 +73,9 @@ final class AppController: NSObject, NSApplicationDelegate {
 
     let showNowItem = NSMenuItem(title: "Show Widget Now", action: #selector(showWidgetNow), keyEquivalent: "")
 
-    /// The same as the cord, so both companions tuck away at the same moment.
-    static let idleSecondsBeforeTuck: TimeInterval = CordMotion.awayDelay
+    /// How long the perched bird waits, once the pointer has gone, before tucking into the edge.
+    /// Longer than the cord's lift (`CordMotion.awayDelay`) on purpose: sliding back in too soon feels hurried.
+    static let idleSecondsBeforeTuck: TimeInterval = 4
 
     static let idleSecondsBeforeDoze: TimeInterval = 45
 
