@@ -119,7 +119,7 @@ struct KeyboardHighlight: ViewModifier {
             .background {
                 if selection == id {
                     RoundedRectangle(cornerRadius: Tokens.Radius.small, style: .continuous)
-                        .fill(Color.accentColor.opacity(0.16))
+                        .fill(Color.brand.opacity(0.16))
                         .padding(.horizontal, -Tokens.Spacing.s + 2)
                 }
             }

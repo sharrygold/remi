@@ -33,10 +33,10 @@ struct AddButton: View {
             Label(title, systemImage: "plus")
                 .labelStyle(AddLabelStyle())
                 .font(Tokens.TextRole.detail.weight(.semibold))
-                .foregroundStyle(Color.accentColor)
+                .foregroundStyle(Color.brand)
                 .padding(.horizontal, Tokens.Spacing.s + 2)
                 .padding(.vertical, Tokens.Spacing.xs + 1)
-                .background(Color.accentColor.opacity(hovering ? 0.18 : 0.11), in: Capsule())
+                .background(Color.brand.opacity(hovering ? 0.18 : 0.11), in: Capsule())
                 .contentShape(Capsule())
         }
         .buttonStyle(.plain)
@@ -71,6 +71,7 @@ struct InlineAddField: View {
         HStack(spacing: Tokens.Spacing.s) {
             Image(systemName: symbol).foregroundStyle(.tertiary).accessibilityHidden(true)
             TextField(placeholder, text: $text)
+                .brandTextInput()
                 .textFieldStyle(.plain)
                 .font(Tokens.TextRole.row)
                 .focused($focused)

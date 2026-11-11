@@ -67,11 +67,11 @@ struct WelcomeCard: View {
                         .font(Tokens.TextRole.detail.weight(.semibold))
                         .padding(.horizontal, Tokens.Spacing.m)
                         .padding(.vertical, Tokens.Spacing.xs + 2)
-                        .background(Color.accentColor.opacity(0.16), in: Capsule())
+                        .background(Color.brand.opacity(0.16), in: Capsule())
                         .contentShape(Capsule())
                 }
                 .buttonStyle(.plain)
-                .foregroundStyle(Color.accentColor)
+                .foregroundStyle(Color.brand)
             }
             .padding(Tokens.Spacing.m)
         }

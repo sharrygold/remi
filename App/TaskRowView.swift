@@ -29,7 +29,7 @@ struct TaskRowView: View {
         HStack(spacing: Tokens.Spacing.s) {
             Button(action: toggle) {
                 Image(systemName: task.isCompleted ? "checkmark.circle.fill" : "circle")
-                    .foregroundStyle(task.isCompleted ? AnyShapeStyle(task.space?.tint ?? .accentColor) : AnyShapeStyle(.tertiary))
+                    .foregroundStyle(task.isCompleted ? AnyShapeStyle(task.space?.tint ?? .brand) : AnyShapeStyle(.tertiary))
                     .contentTransition(.symbolEffect(.replace))
             }
             .buttonStyle(.plain)
@@ -67,6 +67,7 @@ struct TaskRowView: View {
     @ViewBuilder private var title: some View {
         if editing {
             TextField("Task", text: $draft)
+                .brandTextInput()
                 .textFieldStyle(.plain)
                 .font(Tokens.TextRole.row)
                 .focused($fieldFocused)
@@ -96,10 +97,10 @@ struct TaskRowView: View {
         return Button { actions.open(action) } label: {
             Image(systemName: Self.symbol(for: action))
                 .font(Tokens.TextRole.detail.weight(.semibold))
-                .foregroundStyle(available ? AnyShapeStyle(task.space?.tint ?? .accentColor) : AnyShapeStyle(.tertiary))
+                .foregroundStyle(available ? AnyShapeStyle(task.space?.tint ?? .brand) : AnyShapeStyle(.tertiary))
                 .padding(.horizontal, Tokens.Spacing.s - 2)
                 .padding(.vertical, 2)
-                .background((task.space?.tint ?? .accentColor).opacity(available ? 0.14 : 0.05), in: Capsule())
+                .background((task.space?.tint ?? .brand).opacity(available ? 0.14 : 0.05), in: Capsule())
         }
         .buttonStyle(.plain)
         .disabled(!available)

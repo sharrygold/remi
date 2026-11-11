@@ -88,6 +88,8 @@ enum SettingsTab: String, CaseIterable {
 
 struct SettingsView: View {
     @ObservedObject var context: SettingsContext
+    /// Read so the accent redraws when Plumage changes.
+    @AppStorage(CompanionKeys.plumage) private var plumageName = Plumage.ivory.rawValue
 
     /// A sidebar like System Settings. TabView put its tabs in a toolbar overflow on macOS 27.
     var body: some View {
@@ -99,8 +101,8 @@ struct SettingsView: View {
                             .frame(maxWidth: .infinity, alignment: .leading)
                             .padding(.horizontal, 10)
                             .padding(.vertical, 6)
-                            .foregroundStyle(context.tab == item ? Color.white : Color.primary)
-                            .background(context.tab == item ? Color.accentColor : .clear, in: RoundedRectangle(cornerRadius: 6))
+                            .foregroundStyle(context.tab == item ? Color.onBrand : Color.primary)
+                            .background(context.tab == item ? Color.brand : .clear, in: RoundedRectangle(cornerRadius: 6))
                             .contentShape(Rectangle())
                     }
                     .buttonStyle(.plain)
@@ -146,7 +148,7 @@ private struct GeneralSettings: View {
     var body: some View {
         Form {
             Section {
-                Toggle("Open at login", isOn: Binding(get: { launchAtLogin }, set: setLaunchAtLogin))
+                Toggle("Open at login", isOn: Binding(get: { launchAtLogin }, set: setLaunchAtLogin)).tint(Color.brand)
                 if let loginNote { note(loginNote) }
                 LabeledContent("Shortcut to open the panel") {
                     ShortcutField(context: context)
@@ -161,7 +163,7 @@ private struct GeneralSettings: View {
                     ForEach(Browser.installed, id: \.id) { item in Text(item.name).tag(item.id) }
                     Text("System default").tag("system")
                 }
-                Toggle("Offer to save a link I've copied", isOn: $clipboardNudge)
+                Toggle("Offer to save a link I've copied", isOn: $clipboardNudge).tint(Color.brand)
             }
             Section("Companion") {
                 Picker("Companion", selection: $widget.style) {
@@ -170,12 +172,12 @@ private struct GeneralSettings: View {
                 Picker("Plumage", selection: $widget.plumage) {
                     ForEach(Plumage.allCases) { Text($0.title).tag($0) }
                 }
-                Toggle("Show today's task count", isOn: $showCount)
-                Toggle("Tuck into the edge when idle", isOn: $autoTuck)
-                Toggle("Show over full-screen apps", isOn: $showOverFullScreen)
+                Toggle("Show today's task count", isOn: $showCount).tint(Color.brand)
+                Toggle("Tuck into the edge when idle", isOn: $autoTuck).tint(Color.brand)
+                Toggle("Show over full-screen apps", isOn: $showOverFullScreen).tint(Color.brand)
             }
             Section("Privacy") {
-                Toggle("Hide from screen recordings and screenshots", isOn: $hideFromRecordings)
+                Toggle("Hide from screen recordings and screenshots", isOn: $hideFromRecordings).tint(Color.brand)
             }
         }
         .formStyle(.grouped)
@@ -378,7 +380,7 @@ private struct ReminderSettings: View {
     var body: some View {
         Form {
             Section {
-                Toggle("Remind me on a task's due date", isOn: $enabled)
+                Toggle("Remind me on a task's due date", isOn: $enabled).tint(Color.brand)
                 DatePicker("At", selection: time, displayedComponents: .hourAndMinute)
                     .disabled(!enabled)
             } footer: {

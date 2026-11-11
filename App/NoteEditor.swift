@@ -40,7 +40,7 @@ final class CheckboxAttachment: NSTextAttachment {
         super.init(data: nil, ofType: nil)
         let font = NoteStyle.body
         let size = round(font.pointSize * 1.1)
-        let colours: [NSColor] = checked ? [.white, .controlAccentColor] : [.tertiaryLabelColor]
+        let colours: [NSColor] = checked ? [.onBrand, .brand] : [.tertiaryLabelColor]
         let configuration = NSImage.SymbolConfiguration(pointSize: size, weight: .regular)
             .applying(NSImage.SymbolConfiguration(paletteColors: colours))
         let image = NSImage(systemSymbolName: checked ? "checkmark.circle.fill" : "circle",
@@ -216,7 +216,9 @@ final class NoteEditorController: NSObject, NSTextViewDelegate {
         textView.autoresizingMask = [.width]
         textView.maxSize = NSSize(width: CGFloat.greatestFiniteMagnitude, height: .greatestFiniteMagnitude)
         textView.textContainer?.widthTracksTextView = true
-        textView.linkTextAttributes = [.foregroundColor: NSColor.linkColor, .underlineStyle: NSUnderlineStyle.single.rawValue,
+        textView.insertionPointColor = .brand
+        textView.selectedTextAttributes = [.backgroundColor: NSColor.brand.withAlphaComponent(0.3)]
+        textView.linkTextAttributes = [.foregroundColor: NSColor.brand, .underlineStyle: NSUnderlineStyle.single.rawValue,
                                        .cursor: NSCursor.pointingHand]
         textView.setAccessibilityLabel("Note")
         textView.onEscape = { [weak self] in self?.onEscape?() }

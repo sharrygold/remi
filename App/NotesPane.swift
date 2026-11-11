@@ -140,7 +140,7 @@ struct NotesPane: View {
                     Label("Notes", systemImage: "chevron.left")
                 }
                 .buttonStyle(.plain)
-                .foregroundStyle(Color.accentColor)
+                .foregroundStyle(Color.brand)
                 .help("Back to notes (Esc)")
                 Spacer()
                 Menu {

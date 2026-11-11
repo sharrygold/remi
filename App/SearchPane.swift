@@ -47,6 +47,7 @@ struct SearchPane: View {
             HStack(spacing: Tokens.Spacing.s) {
                 Image(systemName: "magnifyingglass").foregroundStyle(.secondary).accessibilityHidden(true)
                 TextField("Search tasks, notes and links", text: $search.query)
+                .brandTextInput()
                     .textFieldStyle(.plain)
                     .focused($focused)
                     .onSubmit {
@@ -133,7 +134,7 @@ struct SearchPane: View {
         }
         .padding(.horizontal, Tokens.Spacing.s)
         .padding(.vertical, density.rowPadding)
-        .background(selected ? Color.accentColor.opacity(0.14) : .clear, in: RoundedRectangle(cornerRadius: Tokens.Radius.small, style: .continuous))
+        .background(selected ? Color.brand.opacity(0.14) : .clear, in: RoundedRectangle(cornerRadius: Tokens.Radius.small, style: .continuous))
         .contentShape(Rectangle())
         .accessibilityElement(children: .combine)
         .accessibilityAddTraits(selected ? [.isButton, .isSelected] : .isButton)

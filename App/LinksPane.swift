@@ -202,6 +202,7 @@ struct LinkRowView: View {
             VStack(alignment: .leading, spacing: 1) {
                 if editing {
                     TextField("Name", text: $draft)
+                .brandTextInput()
                         .textFieldStyle(.plain)
                         .font(Tokens.TextRole.row)
                         .focused($fieldFocused)

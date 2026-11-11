@@ -1,0 +1,19 @@
+{
+  "groups" : [
+    {
+      "layers" : [ { "image-name" : "foreground-egg-beak.svg", "name" : "foreground-egg-beak" } ],
+      "shadow" : { "kind" : "neutral", "opacity" : 0.5 },
+      "translucency" : { "enabled" : false, "value" : 0 }
+    },
+    {
+      "layers" : [ { "image-name" : "foreground-bird.svg", "name" : "foreground-bird" } ],
+      "shadow" : { "kind" : "neutral", "opacity" : 0.5 },
+      "translucency" : { "enabled" : false, "value" : 0 }
+    },
+    {
+      "layers" : [ { "image-name" : "background.svg", "name" : "background" } ],
+      "translucency" : { "enabled" : false, "value" : 0 }
+    }
+  ],
+  "supported-platforms" : { "squares" : [ "macOS" ] }
+}

@@ -65,6 +65,8 @@ struct PanelView: View {
     @FocusState private var captureFocused: Bool
     @Environment(\.accessibilityReduceTransparency) private var reduceTransparency
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    /// Read so the accent redraws when Plumage changes.
+    @AppStorage(CompanionKeys.plumage) private var plumageName = Plumage.ivory.rawValue
 
     private let shape = RoundedRectangle(cornerRadius: Tokens.Radius.panel, style: .continuous)
 
@@ -125,6 +127,7 @@ struct PanelView: View {
         .environment(\.panelActions, PanelActions(open: openItem, confirm: { show(confirmation: $0) },
                                                    focusCapture: { captureFocused = true }, editRequest: editRequest))
         .environment(\.keyboardSelection, nav.selectedID)
+        .tint(Color.brand)
         .onChange(of: tab) { _, _ in
             nav.clear()
             addingTask = false
@@ -212,6 +215,7 @@ struct PanelView: View {
                 .font(Tokens.TextRole.row)
                 .lineLimit(1...3)
                 .focused($captureFocused)
+                .brandTextInput()
                 .onSubmit(submit)
                 .accessibilityLabel("Capture")
         }
@@ -231,7 +235,7 @@ struct PanelView: View {
                 token(confirmation, symbol: "checkmark", tint: .secondary)
             } else if parsed.isLink {
                 spaceToken
-                token(captureLinkList.title, symbol: captureLinkList.symbol, tint: .accentColor)
+                token(captureLinkList.title, symbol: captureLinkList.symbol, tint: .brand)
             } else {
                 spaceToken
                 if let rule = parsed.repeatRule {
@@ -256,7 +260,7 @@ struct PanelView: View {
     @ViewBuilder private var spaceToken: some View {
         switch parsed.space {
         case .new(let name):
-            token("New space: \(name)", symbol: "plus", tint: .accentColor)
+            token("New space: \(name)", symbol: "plus", tint: .brand)
         case .existing(let name):
             let space = store.spaces.first { $0.name == name }
             token(name, symbol: space?.symbol ?? "folder", tint: space?.tint ?? .secondary)
@@ -357,7 +361,7 @@ struct PanelView: View {
                     .contentShape(Rectangle())
             }
             .buttonStyle(.plain)
-            .foregroundStyle(Color.accentColor)
+            .foregroundStyle(Color.brand)
             .help("Save this link (Return)")
             .accessibilityLabel("Save link")
             Button { dismissClipboard(offer) } label: {
@@ -375,7 +379,7 @@ struct PanelView: View {
         .padding(.leading, Tokens.Spacing.s + Tokens.Spacing.xs)
         .padding(.trailing, Tokens.Spacing.xs)
         .frame(height: Tokens.Spacing.l + Tokens.Spacing.xs)
-        .background(Color.accentColor.opacity(0.1), in: Capsule())
+        .background(Color.brand.opacity(0.1), in: Capsule())
         .transition(.opacity)
     }
 
@@ -410,7 +414,7 @@ struct PanelView: View {
                 Image(systemName: "safari").foregroundStyle(.secondary).accessibilityHidden(true)
                 Text("Save this tab from \(browser.name)").lineLimit(1)
                 Spacer(minLength: Tokens.Spacing.xs)
-                Text("⌘S").fontWeight(.semibold).foregroundStyle(Color.accentColor)
+                Text("⌘S").fontWeight(.semibold).foregroundStyle(Color.brand)
             }
             .padding(.horizontal, Tokens.Spacing.s + Tokens.Spacing.xs)
             .frame(height: Tokens.Spacing.l + Tokens.Spacing.xs)
@@ -418,7 +422,7 @@ struct PanelView: View {
         }
         .buttonStyle(.plain)
         .font(Tokens.TextRole.detail)
-        .background(Color.accentColor.opacity(0.1), in: Capsule())
+        .background(Color.brand.opacity(0.1), in: Capsule())
         .help("Save the tab you're looking at to Links (⌘S)")
         .transition(.opacity)
     }
@@ -759,7 +763,7 @@ struct PanelView: View {
             }
             .buttonStyle(.plain)
             .fontWeight(.semibold)
-            .foregroundStyle(Color.accentColor)
+            .foregroundStyle(Color.brand)
         }
         .font(Tokens.TextRole.detail)
         .padding(.horizontal, Tokens.Spacing.m)
@@ -868,7 +872,7 @@ struct PanelView: View {
 
     private func highlight(_ task: TaskItem) -> some View {
         RoundedRectangle(cornerRadius: Tokens.Radius.small, style: .continuous)
-            .fill(task.id == highlightedTaskID ? (task.space?.tint ?? .accentColor).opacity(0.18) : .clear)
+            .fill(task.id == highlightedTaskID ? (task.space?.tint ?? .brand).opacity(0.18) : .clear)
             .padding(.horizontal, Tokens.Spacing.xs)
     }
 
@@ -907,7 +911,7 @@ struct PanelView: View {
         } label: {
             HStack(spacing: 6) {
                 Image(systemName: space?.symbol ?? "square.grid.2x2")
-                    .foregroundStyle(space?.tint ?? .accentColor)
+                    .foregroundStyle(space?.tint ?? .brand)
                 Text(space?.name ?? "All Spaces")
                     .foregroundStyle(.primary)
                     .lineLimit(1)

@@ -239,3 +239,20 @@ final class CompanionMotionTests: XCTestCase {
         XCTAssertEqual(open.rock, 0)
     }
 }
+
+final class BrandAccentTests: XCTestCase {
+    func testTextOnEveryAccentFillIsReadable() {
+        for plumage in ["ivory", "jet", "oxblood", "brass"] {
+            for dark in [true, false] {
+                let accent = BrandAccent.hex(plumage: plumage, dark: dark)
+                let ratio = BrandAccent.contrast(accent, BrandAccent.onAccent(accent))
+                XCTAssertGreaterThanOrEqual(ratio, 4.5, "\(plumage) dark=\(dark) \(accent)")
+            }
+        }
+    }
+
+    func testIvoryFollowsTheBrief() {
+        XCTAssertEqual(BrandAccent.hex(plumage: "ivory", dark: true), "#F2ECE0")
+        XCTAssertEqual(BrandAccent.hex(plumage: "ivory", dark: false), "#C9A25A")
+    }
+}

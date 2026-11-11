@@ -59,7 +59,7 @@ struct MorningReviewCard: View {
                 Button("Done", action: onDone)
                     .buttonStyle(.plain)
                     .fontWeight(.semibold)
-                    .foregroundStyle(Color.accentColor)
+                    .foregroundStyle(Color.brand)
                     .help("Close the review (Esc)")
             }
             .font(Tokens.TextRole.detail)

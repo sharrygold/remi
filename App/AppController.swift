@@ -364,7 +364,12 @@ final class AppController: NSObject, NSApplicationDelegate {
 
     func buildStatusItem() {
         statusItem = NSStatusBar.system.statusItem(withLength: NSStatusItem.squareLength)
-        statusItem.button?.image = NSImage(systemSymbolName: "checklist", accessibilityDescription: AppInfo.displayName)
+        // Black on transparent; as a template image macOS recolours it for light and dark menu bars.
+        let glyph = Bundle.main.url(forResource: "menubar-template", withExtension: "svg").flatMap(NSImage.init(contentsOf:))
+        glyph?.size = NSSize(width: 19, height: 18)
+        glyph?.isTemplate = true
+        glyph?.accessibilityDescription = AppInfo.displayName
+        statusItem.button?.image = glyph
         let menu = NSMenu()
         menu.addItem(withTitle: "Open Panel", action: #selector(openPanelFromMenu), keyEquivalent: "").target = self
         showNowItem.target = self

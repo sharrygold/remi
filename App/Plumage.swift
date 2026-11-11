@@ -46,6 +46,24 @@ enum Plumage: String, CaseIterable, Identifiable {
 }
 
 extension NSColor {
+    private static var currentPlumage: String {
+        UserDefaults.standard.string(forKey: CompanionKeys.plumage) ?? Plumage.ivory.rawValue
+    }
+
+    private static func isDark(_ appearance: NSAppearance) -> Bool {
+        appearance.bestMatch(from: [.darkAqua, .aqua]) == .darkAqua
+    }
+
+    /// The panel's accent. Set once here and read everywhere; it follows Plumage and light or dark.
+    static let brand = NSColor(name: "brandAccent") { appearance in
+        NSColor(hex: BrandAccent.hex(plumage: currentPlumage, dark: isDark(appearance)))
+    }
+
+    /// Text on a brand fill, always at least 4.5:1.
+    static let onBrand = NSColor(name: "onBrandAccent") { appearance in
+        NSColor(hex: BrandAccent.onAccent(BrandAccent.hex(plumage: currentPlumage, dark: isDark(appearance))))
+    }
+
     /// "#RRGGBB"
     convenience init(hex: String) {
         let value = Int(hex.dropFirst(), radix: 16) ?? 0
@@ -56,4 +74,11 @@ extension NSColor {
 
 extension Color {
     init(hex: String) { self.init(nsColor: NSColor(hex: hex)) }
+    static let brand = Color(nsColor: .brand)
+    static let onBrand = Color(nsColor: .onBrand)
+}
+
+extension View {
+    /// Text fields paint their selection in the tint, so a full-strength ivory would hide the white text.
+    func brandTextInput() -> some View { tint(Color.brand.opacity(0.3)) }
 }

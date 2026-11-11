@@ -11,7 +11,12 @@ targets:
   Remi:
     type: application
     platform: macOS
-    sources: [App]
+    sources:
+      - path: App
+        excludes: [AppIcon.icon]
+      - path: App/AppIcon.icon
+        type: file
+        buildPhase: resources
     configFiles:
       Debug: Config/Signing.xcconfig
       Release: Config/Signing.xcconfig
@@ -23,6 +28,7 @@ targets:
         PRODUCT_BUNDLE_IDENTIFIER: io.github.sharrygold.remi
         GENERATE_INFOPLIST_FILE: YES
         INFOPLIST_KEY_LSUIElement: YES
+        ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
         INFOPLIST_KEY_CFBundleDisplayName: $(APP_DISPLAY_NAME)
         INFOPLIST_KEY_NSAppleEventsUsageDescription: $(APP_DISPLAY_NAME) reads the address and title of the current tab when you ask it to save the tab.
         MARKETING_VERSION: "0.1"
