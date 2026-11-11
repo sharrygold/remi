@@ -56,6 +56,7 @@ extension LibraryStore {
             task.skippedSince = previous.1
             task.updatedAt = Date()
         }
+        onTaskCompleted?(task)
     }
 
     /// Moves missed repeating tasks to their next date instead of letting them become overdue.

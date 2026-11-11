@@ -14,6 +14,10 @@ final class LibraryStore: ObservableObject {
     @Published private(set) var links: [LinkItem] = []
     /// Called after a link is saved, so the app can fetch its title and icon. Keeps this file free of networking.
     var onLinkAdded: ((LinkItem) -> Void)?
+    /// A task was captured, by any route. The companion reacts to these.
+    var onTaskAdded: ((TaskItem) -> Void)?
+    /// A task was ticked off.
+    var onTaskCompleted: ((TaskItem) -> Void)?
     /// True when the saved data could not be opened and this session is temporary.
     private(set) var isTemporary = false
     /// Where the library is saved; nil when it lives in memory.
@@ -122,6 +126,7 @@ final class LibraryStore: ObservableObject {
             context.delete(task)
             if let createdSpace { context.delete(createdSpace) }
         }
+        onTaskAdded?(task)
         return task
     }
 
@@ -170,6 +175,7 @@ final class LibraryStore: ObservableObject {
             $0.isCompleted = wasCompleted
             $0.completedAt = previousDate
         })
+        if !wasCompleted { onTaskCompleted?(task) }
     }
 
     func rename(_ task: TaskItem, to title: String) {
@@ -249,6 +255,14 @@ final class LibraryStore: ObservableObject {
     func done(in space: Space? = nil, now: Date = Date()) -> [TaskItem] {
         tasks.filter { $0.isCompleted && !isOpen($0, now: now) && inSpace($0, space) }
             .sorted { ($0.completedAt ?? .distantPast) > ($1.completedAt ?? .distantPast) }
+    }
+
+    /// Today's tasks are all done, and there were some.
+    func allKeptToday(now: Date = Date(), calendar: Calendar = .current) -> Bool {
+        todayOpenCount(now: now, calendar: calendar) == 0 && tasks.contains { task in
+            guard task.isCompleted, let due = task.dueDate else { return false }
+            return calendar.isDate(due, inSameDayAs: now)
+        }
     }
 
     /// The number the widget shows: open tasks due today, never counting ticked ones.

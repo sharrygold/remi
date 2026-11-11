@@ -1,0 +1,14 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 120 120"><defs>
+<pattern id="satin" width="2.4" height="2.4" patternUnits="userSpaceOnUse" patternTransform="rotate(32)"><rect width="1.1" height="2.4" fill="{{wingSatin}}" /></pattern>
+<radialGradient id="shadeBody" cx="42%" cy="22%" r="85%"><stop offset="0" stop-color="#FFFFFF" stop-opacity="0.45" /><stop offset="0.55" stop-color="#F2ECE0" stop-opacity="0" /><stop offset="1" stop-color="#7A6A50" stop-opacity="0.32" /></radialGradient>
+<radialGradient id="shadeHead" cx="38%" cy="28%" r="78%"><stop offset="0" stop-color="#FFFFFF" stop-opacity="0.55" /><stop offset="0.5" stop-color="#F2ECE0" stop-opacity="0" /><stop offset="1" stop-color="#7A6A50" stop-opacity="0.4" /></radialGradient>
+</defs>
+<path id="body" d="M28 82 C30 67 45 58 62 58 C80 58 95 66 96 80 C97 95 82 103 63 103 C45 103 27 97 28 82 Z" fill="{{body}}" stroke="{{stitch}}" stroke-width="0.8" stroke-dasharray="1.8 1.3" />
+<path id="body-shade" d="M28 82 C30 67 45 58 62 58 C80 58 95 66 96 80 C97 95 82 103 63 103 C45 103 27 97 28 82 Z" fill="url(#shadeBody)" />
+<path id="chest" d="M85 79 C87 81 89 81 91 79 M83 85 C85 87 87 87 89 85 M86 91 C88 93 90 93 92 91" fill="none" stroke="{{stitch}}" stroke-width="0.8" stroke-linecap="round" />
+<path id="belly-stitch" d="M76 97 C82 95 88 91 92 86" fill="none" stroke="{{stitch}}" stroke-width="0.6" stroke-dasharray="1.4 1.2" stroke-linecap="round" />
+<g id="thighs" fill="{{feather}}" stroke="{{stitch}}" stroke-width="0.7" stroke-dasharray="1.4 1.1">
+<path d="M50.5 96.5 C51.5 102.5 57.5 104.5 60.5 99 C57.5 97.5 54 96.8 50.5 96.5 Z" />
+<path d="M62.5 98 C63.5 104 69.5 105 72.5 99.5 C69.5 98.3 66 97.8 62.5 98 Z" />
+</g>
+</svg>

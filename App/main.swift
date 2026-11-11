@@ -10,7 +10,7 @@ struct Options {
     private static func value(_ key: String) -> String? {
         CommandLine.arguments.first { $0.hasPrefix("--\(key)=") }?.split(separator: "=").last.map(String.init)
     }
-    let widget = value("widget").flatMap(WidgetPrototype.init)
+    let widget = value("widget").flatMap(CompanionStyle.init)
     let plumage = value("plumage").flatMap(Plumage.init)
     let previewPull = value("preview-pull").flatMap { Double($0) }.map { CGFloat($0) }
     let previewLook: CGPoint? = value("preview-look").flatMap { text in

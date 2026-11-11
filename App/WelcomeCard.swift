@@ -19,7 +19,7 @@ enum LoginItem {
 
 /// Three short steps on first launch, also reachable from Settings > General.
 struct WelcomeCard: View {
-    @ObservedObject var widget: WidgetDebug
+    @ObservedObject var widget: CompanionSettings
     let shortcut: String
     let onDone: () -> Void
     @State private var launchAtLogin = LoginItem.isEnabled
@@ -47,8 +47,8 @@ struct WelcomeCard: View {
 
                     step(3, "Make it yours") {
                         VStack(alignment: .leading, spacing: Tokens.Spacing.s) {
-                            Picker("Companion", selection: $widget.prototype) {
-                                ForEach(WidgetPrototype.allCases) { Text($0.title).tag($0) }
+                            Picker("Companion", selection: $widget.style) {
+                                ForEach(CompanionStyle.allCases) { Text($0.title).tag($0) }
                             }
                             .pickerStyle(.segmented)
                             .labelsHidden()

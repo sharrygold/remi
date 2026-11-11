@@ -26,7 +26,7 @@ extension AppController {
     @discardableResult
     func makeSettingsWindow() -> NSWindow {
         if let settingsWindow { return settingsWindow }
-        let context = SettingsContext(store: store, widget: debug, reminders: reminders, libraryDirectory: store.directory) { [weak self] combo in
+        let context = SettingsContext(store: store, widget: companion, reminders: reminders, libraryDirectory: store.directory) { [weak self] combo in
             self?.hotKey?.register(combo) ?? false
         }
         context.showWelcome = { [weak self] in self?.showWelcome() }

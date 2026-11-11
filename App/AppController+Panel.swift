@@ -149,6 +149,7 @@ extension AppController {
         lastActivity = Date()
         store.save()
         presentation.presented = false
+        surface.setPanelOpen(false)
         presentation.pinned = false
         // The glass, the list card and the shadow all leave together: the window fades as one
         // while the mask shrinks back into the widget.
@@ -173,7 +174,10 @@ extension AppController {
         metadata.fetchMissing()
         // Missed repeating tasks move to their next date rather than piling up as overdue.
         store.rollForwardRepeating()
-        debug.tucked = false
+        perched?.setTucked(false)
+        perched?.setDozing(false)
+        surface.setPanelOpen(true)
+        if !isScratchSession, claimDay("lastStretchDay") { perched?.playMorningStretch() }
         lastActivity = Date()
         let visible = (handle.screen ?? NSScreen.screens[0]).visibleFrame
         let anchor = handle.frame

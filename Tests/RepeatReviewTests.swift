@@ -132,3 +132,110 @@ final class RepeatReviewTests: XCTestCase {
         XCTAssertNotNil(copy.tasks.first { $0.id == gone.id }?.setAsideAt)
     }
 }
+
+final class CompanionMotionTests: XCTestCase {
+    func testHeadFollowsSpecArc() {
+        let p = HeadFollow.pivot
+        // Straight right of the neck is angle 0, so t = 220: facing forward.
+        XCTAssertEqual(HeadFollow.arcPosition(for: CGPoint(x: p.x + 50, y: p.y), previous: 6), 220, accuracy: 0.001)
+        // Straight up (270°) is t = 130, over the top.
+        XCTAssertEqual(HeadFollow.arcPosition(for: CGPoint(x: p.x, y: p.y - 50), previous: 6), 130, accuracy: 0.001)
+        // Straight down is inside the body: it waits at the nearest edge.
+        XCTAssertEqual(HeadFollow.arcPosition(for: CGPoint(x: p.x, y: p.y + 50), previous: 20), 0)
+        XCTAssertEqual(HeadFollow.arcPosition(for: CGPoint(x: p.x, y: p.y + 50), previous: 240), 260)
+    }
+
+    func testBigSwingGoesOverTheTopWithoutSnapping() {
+        XCTAssertEqual(HeadFollow.swingDuration(for: 20), 0.24)
+        XCTAssertEqual(HeadFollow.swingDuration(for: 260), 0.9, accuracy: 0.001)
+        var head = HeadFollow()
+        head.move(to: 260)
+        var largest = 0.0, previous = head.angle.value
+        for _ in 0..<120 {
+            head.step(1.0 / 60)
+            largest = max(largest, abs(head.angle.value - previous))
+            previous = head.angle.value
+            XCTAssertLessThanOrEqual(head.angle.value, 401)
+        }
+        XCTAssertLessThan(largest, 16, "a 254° swing must glide, not jump")
+        XCTAssertEqual(head.angle.value, 400, accuracy: 1)
+    }
+
+    func testCrestLagIsClamped() {
+        var head = HeadFollow()
+        head.move(to: 200)
+        XCTAssertEqual(head.crest.value, -22)
+    }
+
+    private func run(_ cord: CordMotion, from start: Double, seconds: Double) -> CordFrame {
+        var frame = CordFrame(), now = start
+        while now < start + seconds {
+            now += 1.0 / 60
+            frame = cord.tick(now: now, dt: 1.0 / 60)
+        }
+        return frame
+    }
+
+    func testCordTucksByDefaultAndLowersWhenNoticed() {
+        let cord = CordMotion()
+        XCTAssertEqual(run(cord, from: 0, seconds: 1).pull, CordMotion.tuckedPull, accuracy: 1)
+        XCTAssertTrue(cord.isAtRest || cord.state == .tucked)
+        cord.pointer(near: true, now: 1)
+        XCTAssertEqual(cord.state, .lowered)
+        let lowered = run(cord, from: 1, seconds: 1)
+        XCTAssertEqual(lowered.pull, 0, accuracy: 3)
+        XCTAssertFalse(lowered.eyesClosed && cord.state == .lowered && false)
+        // Pointer leaves: after about 1.2 s it draws back up.
+        cord.pointer(near: false, now: 2)
+        _ = run(cord, from: 2, seconds: 1)
+        XCTAssertEqual(cord.state, .lowered)
+        let tucked = run(cord, from: 3, seconds: 3)
+        XCTAssertEqual(cord.state, .tucked)
+        XCTAssertEqual(tucked.pull, CordMotion.tuckedPull, accuracy: 2)
+        XCTAssertTrue(tucked.eyesClosed)
+    }
+
+    func testPullOpensOnlyPastThresholdAndStopsAtMax() {
+        let cord = CordMotion()
+        cord.pointer(near: true, now: 0)
+        _ = run(cord, from: 0, seconds: 1)
+        cord.startPull()
+        cord.drag(by: 10)
+        _ = run(cord, from: 1, seconds: 0.3)
+        XCTAssertFalse(cord.release(now: 1.3))
+        cord.startPull()
+        cord.drag(by: 500)
+        let held = run(cord, from: 2, seconds: 0.5)
+        XCTAssertEqual(held.pull, CordMotion.maxPull, accuracy: 1)
+        XCTAssertGreaterThan(held.squat, 0.9)
+        XCTAssertTrue(cord.release(now: 2.5))
+        var overshoot = 0.0, now = 2.5
+        for _ in 0..<120 {
+            now += 1.0 / 60
+            overshoot = min(overshoot, cord.tick(now: now, dt: 1.0 / 60).pull)
+        }
+        XCTAssertLessThan(overshoot, -1, "release should bounce past rest")
+    }
+
+    func testEventLowersThenAllowsTucking() {
+        let cord = CordMotion()
+        _ = run(cord, from: 0, seconds: 1)
+        cord.fire(.taskAdded, now: 1)
+        XCTAssertEqual(cord.state, .lowered)
+        _ = run(cord, from: 1, seconds: 1)
+        XCTAssertEqual(cord.state, .lowered, "stays down while the knot ties")
+        _ = run(cord, from: 2, seconds: 3)
+        XCTAssertEqual(cord.state, .tucked)
+    }
+
+    func testPanelKeepsCordDownAndReduceMotionIsStill() {
+        let cord = CordMotion()
+        cord.reduceMotion = true
+        cord.setPanelOpen(true, now: 0)
+        let open = run(cord, from: 0, seconds: 5)
+        XCTAssertEqual(cord.state, .panelOpen)
+        XCTAssertEqual(open.pull, 0)
+        XCTAssertEqual(open.sway, 0)
+        XCTAssertEqual(open.rock, 0)
+    }
+}

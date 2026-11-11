@@ -15,16 +15,14 @@ final class AppController: NSObject, NSApplicationDelegate {
 
     var outsideClickMonitor: Any?
 
-    static let birdNoticeRadius: CGFloat = 130
+    lazy var companion = CompanionSettings(style: options.widget, plumage: options.plumage)
 
-    var birdLookAway: DispatchWorkItem?
+    /// The companion's view, which is swapped when the style changes.
+    var surface: CompanionSurface!
 
-    lazy var debug: WidgetDebug = {
-        let debug = WidgetDebug(prototype: options.widget, plumage: options.plumage)
-        debug.previewHover = CommandLine.arguments.contains("--preview-hover")
-        debug.previewLook = options.previewLook
-        return debug
-    }()
+    var host: CompanionHostView!
+
+    var onLeftEdge = false
 
     let presentation = PanelPresentation()
 
@@ -73,6 +71,8 @@ final class AppController: NSObject, NSApplicationDelegate {
 
     static let idleSecondsBeforeTuck: TimeInterval = 4
 
+    static let idleSecondsBeforeDoze: TimeInterval = 45
+
     static let panelSizeKey = "panelSize"
 
     func applicationDidFinishLaunching(_ notification: Notification) {
@@ -104,11 +104,10 @@ final class AppController: NSObject, NSApplicationDelegate {
         if let name = options.appearance {
             NSApp.appearance = NSAppearance(named: name == "dark" ? .darkAqua : .aqua)
         }
-        if CommandLine.arguments.contains("--cord-selftest") {
-            runCordSelfTest()
-            exit(0)
+        store.onLinkAdded = { [weak self] link in
+            self?.metadata.fetch(link)
+            self?.refreshCompanion(event: .linkCaught)
         }
-        store.onLinkAdded = { [weak self] link in self?.metadata.fetch(link) }
         presentation.closeAfterOpening = { [weak self] in
             guard let self, !self.presentation.pinned else { return }
             self.hidePanel()
@@ -119,8 +118,8 @@ final class AppController: NSObject, NSApplicationDelegate {
         registerHotKey()
         applyWindowSettings()
         NotificationCenter.default.addObserver(self, selector: #selector(settingsChanged), name: UserDefaults.didChangeNotification, object: nil)
-        watchers.append(debug.$prototype.dropFirst().removeDuplicates().sink { [weak self] _ in
-            DispatchQueue.main.async { self?.applyPrototype() }
+        watchers.append(companion.$style.dropFirst().removeDuplicates().sink { [weak self] _ in
+            DispatchQueue.main.async { self?.applyStyle() }
         })
         presentation.openSettings = { [weak self] in self?.openSettings() }
         presentation.reviewPolicy = CommandLine.arguments.contains("--preview-review") ? .always : isScratchSession ? .never : .daily
@@ -143,7 +142,7 @@ final class AppController: NSObject, NSApplicationDelegate {
             search.active = true
             search.query = String(text.dropFirst("--search=".count))
         }
-        presentation.widget = debug
+        presentation.widget = companion
         presentation.onWelcomeDone = { [weak self] in self?.finishWelcome() }
         if options.open { showPanel() }
         showWelcomeOnFirstRun()
@@ -172,7 +171,6 @@ final class AppController: NSObject, NSApplicationDelegate {
         if CommandLine.arguments.contains("--open-note") {
             DispatchQueue.main.async { self.presentation.noteToOpen = self.store.notes(in: nil).dropFirst().first?.id }
         }
-        if CommandLine.arguments.contains("--preview-tuck") { debug.tucked = true }
         if CommandLine.arguments.contains("--m1-selftest") { runShellSelfTest() }
         if CommandLine.arguments.contains("--m2-selftest") { runCaptureSelfTest() }
         if CommandLine.arguments.contains("--m3-selftest") { runNotesSelfTest() }
@@ -192,11 +190,10 @@ final class AppController: NSObject, NSApplicationDelegate {
         if CommandLine.arguments.contains("--hit-selftest") {
             // A coarse map of the widget window: # catches clicks, . lets them through.
             DispatchQueue.main.asyncAfter(deadline: .now() + 1.5) { [self] in
-                guard let view = handle.contentView else { return }
-                let size = view.bounds.size
-                for row in stride(from: size.height - 4, through: 0, by: -8) {
+                let size = handle.frame.size
+                for row in stride(from: 4, through: size.height, by: 8) {
                     print(stride(from: 4, through: size.width, by: 8).map { x in
-                        WidgetHitTest.isDrawn(at: NSPoint(x: x, y: row), in: view) ? "#" : "."
+                        surface.isHit(CGPoint(x: x, y: row)) ? "#" : "."
                     }.joined())
                 }
                 NSApp.terminate(nil)

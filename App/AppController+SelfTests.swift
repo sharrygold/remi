@@ -508,63 +508,17 @@ extension AppController {
                     let visible = screen.visibleFrame
                     handle.setFrameOrigin(NSPoint(x: visible.minX + 100, y: visible.minY + 200))
                     finishDrag()
-                    let stored = PlacementStore.load(prototype: debug.prototype, on: screen)
-                    print("snap left=\(stored?.onLeftEdge ?? false) fraction=\(stored?.fraction ?? -1) mirrored=\(debug.onLeftEdge)")
+                    let stored = PlacementStore.load(prototype: companion.style, on: screen)
+                    print("snap left=\(stored?.onLeftEdge ?? false) fraction=\(stored?.fraction ?? -1) mirrored=\(onLeftEdge)")
                     let restored = widgetFrame()
-                    print("restored minX-visibleMinX=\(restored.minX - visible.minX) onLeft=\(debug.onLeftEdge)")
-                    PlacementStore.clear(prototype: debug.prototype, on: screen)
+                    print("restored minX-visibleMinX=\(restored.minX - visible.minX) onLeft=\(onLeftEdge)")
+                    PlacementStore.clear(prototype: companion.style, on: screen)
                     NSApp.terminate(nil)
                 }
             }
         }
     }
 
-    func runCordSelfTest() {
-        let cord = CordSimulation()
-        cord.windEnabled = false
-        cord.configure()
-        func run(_ frames: Int) { (0..<frames).forEach { _ in cord.stepOnce() } }
-        run(240)
-        let rest = cord.tip.y
-        print("rest tip y=\(rest)")
-        for count in [1, 6, 14, 30] {
-            print("knots requested=\(count) drawn=\(cord.knots(count: count).count) radius=\(cord.knotRadius(count: count)) lastY=\(cord.knots(count: count).last?.y ?? 0)")
-        }
-        cord.pull(dx: 0, dy: 10)
-        run(60)
-        print("short pull y=\(cord.tip.y) opens=\(cord.release())")
-        run(240)
-        cord.pull(dx: 8, dy: 500)
-        run(60)
-        print("max pull y=\(cord.tip.y) opens=\(cord.release())")
-        var highest = cord.tip.y
-        var biggestStep: CGFloat = 0
-        var lastY = cord.tip.y
-        for _ in 0..<180 {
-            cord.stepOnce()
-            highest = min(highest, cord.tip.y)
-            biggestStep = max(biggestStep, abs(cord.tip.y - lastY))
-            lastY = cord.tip.y
-        }
-        print("after release highest=\(highest) rest=\(rest) overshoot=\(rest - highest) biggestFrameMove=\(biggestStep) settledY=\(cord.tip.y)")
-        var minX = CGFloat.infinity, maxX = -CGFloat.infinity
-        for _ in 0..<60 {
-            cord.carry(dx: 12)
-            cord.stepOnce()
-            minX = min(minX, cord.points.map(\.x).min() ?? 0)
-            maxX = max(maxX, cord.points.map(\.x).max() ?? 0)
-        }
-        print("fast slide rope x range=\(minX)...\(maxX) window=\(CordSimulation.width)")
-        let resting = CordSimulation()
-        resting.configure()
-        resting.tucked = true
-        for second in 1...20 {
-            (0..<60).forEach { _ in resting.stepOnce() }
-            if [2, 5, 10, 15, 20].contains(second) {
-                print("rest t=\(second)s breeze=\(resting.breezeLevel) move=\(resting.largestMove) spanGap=\(resting.spanGap) settled=\(resting.isSettled)")
-            }
-        }
-    }
 
     /// The "+" buttons: a task typed into the Tasks list's own field, then a link added and named.
     func runAddSelfTest() {

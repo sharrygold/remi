@@ -1,0 +1,10 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 120 120"><defs>
+<pattern id="satin" width="2.4" height="2.4" patternUnits="userSpaceOnUse" patternTransform="rotate(32)"><rect width="1.1" height="2.4" fill="{{wingSatin}}" /></pattern>
+<radialGradient id="shadeBody" cx="42%" cy="22%" r="85%"><stop offset="0" stop-color="#FFFFFF" stop-opacity="0.45" /><stop offset="0.55" stop-color="#F2ECE0" stop-opacity="0" /><stop offset="1" stop-color="#7A6A50" stop-opacity="0.32" /></radialGradient>
+<radialGradient id="shadeHead" cx="38%" cy="28%" r="78%"><stop offset="0" stop-color="#FFFFFF" stop-opacity="0.55" /><stop offset="0.5" stop-color="#F2ECE0" stop-opacity="0" /><stop offset="1" stop-color="#7A6A50" stop-opacity="0.4" /></radialGradient>
+</defs>
+<g id="wing">
+<path d="M38 70 C46 60 62 60 76 66 C84 70 84 78 76 84 C66 91 50 91 42 85 C36 81 35 75 38 70 Z" fill="url(#satin)" />
+<path d="M48 87 C50 80 54 76 60 75 M58 89 C60 82 64 78 70 77 M68 87 C70 81 74 77 79 75" fill="none" stroke="#121110" stroke-width="0.9" stroke-linecap="round" opacity="0.55" />
+</g>
+</svg>

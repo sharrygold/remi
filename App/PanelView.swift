@@ -24,7 +24,7 @@ final class PanelPresentation: ObservableObject {
     @Published var showWelcome = false
     var onWelcomeDone: () -> Void = {}
     /// Handed to the welcome card so the companion can be chosen there.
-    var widget: WidgetDebug?
+    var widget: CompanionSettings?
     /// Closes the panel after something opens elsewhere, unless it is pinned. Set by the app.
     var closeAfterOpening: () -> Void = {}
     var openSettings: () -> Void = {}

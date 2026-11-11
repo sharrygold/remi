@@ -6,7 +6,7 @@ import UserNotifications
 /// What Settings needs from the app, handed over in one object.
 final class SettingsContext: ObservableObject {
     let store: LibraryStore
-    let widget: WidgetDebug
+    let widget: CompanionSettings
     let reminders: Reminders
     /// Where the library and its backups live; nil for an in-memory demo session.
     let libraryDirectory: URL?
@@ -21,7 +21,7 @@ final class SettingsContext: ObservableObject {
     var showWelcome: () -> Void = {}
     private var keyMonitor: Any?
 
-    init(store: LibraryStore, widget: WidgetDebug, reminders: Reminders, libraryDirectory: URL?, applyHotKey: @escaping (HotKeyCombo) -> Bool) {
+    init(store: LibraryStore, widget: CompanionSettings, reminders: Reminders, libraryDirectory: URL?, applyHotKey: @escaping (HotKeyCombo) -> Bool) {
         self.store = store
         self.widget = widget
         self.reminders = reminders
@@ -133,7 +133,7 @@ struct SettingsView: View {
 
 private struct GeneralSettings: View {
     let context: SettingsContext
-    @ObservedObject var widget: WidgetDebug
+    @ObservedObject var widget: CompanionSettings
     @AppStorage(SettingsKey.autoTuck) private var autoTuck = true
     @AppStorage(SettingsKey.showCount) private var showCount = true
     @AppStorage(SettingsKey.hideFromRecordings) private var hideFromRecordings = true
@@ -164,8 +164,8 @@ private struct GeneralSettings: View {
                 Toggle("Offer to save a link I've copied", isOn: $clipboardNudge)
             }
             Section("Companion") {
-                Picker("Companion", selection: $widget.prototype) {
-                    ForEach(WidgetPrototype.allCases) { Text($0.title).tag($0) }
+                Picker("Companion", selection: $widget.style) {
+                    ForEach(CompanionStyle.allCases) { Text($0.title).tag($0) }
                 }
                 Picker("Plumage", selection: $widget.plumage) {
                     ForEach(Plumage.allCases) { Text($0.title).tag($0) }
