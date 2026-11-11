@@ -253,6 +253,11 @@ final class LibraryStore: ObservableObject {
         tasks.filter { isOpen($0, now: now) && inSpace($0, space) }
     }
 
+    /// Finished today, newest first. Older finished tasks leave the lists but stay in search, exports and backups.
+    func doneToday(in space: Space? = nil, now: Date = Date(), calendar: Calendar = .current) -> [TaskItem] {
+        done(in: space, now: now).filter { $0.completedAt.map { calendar.isDate($0, inSameDayAs: now) } ?? false }
+    }
+
     func done(in space: Space? = nil, now: Date = Date()) -> [TaskItem] {
         tasks.filter { $0.isCompleted && !isOpen($0, now: now) && inSpace($0, space) }
             .sorted { ($0.completedAt ?? .distantPast) > ($1.completedAt ?? .distantPast) }

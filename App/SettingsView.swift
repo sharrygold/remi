@@ -216,7 +216,7 @@ private struct GeneralSettings: View {
                 Picker("Size", selection: $widget.size) {
                     ForEach(CompanionSize.allCases) { Text($0.title).tag($0) }
                 }
-                Picker("Plumage", selection: $widget.plumage) {
+                Picker("Colour", selection: $widget.plumage) {
                     ForEach(Plumage.allCases) { Text($0.title).tag($0) }
                 }
                 Toggle("Show today's task count", isOn: $showCount).tint(Color.brand)

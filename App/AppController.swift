@@ -73,7 +73,8 @@ final class AppController: NSObject, NSApplicationDelegate {
 
     let showNowItem = NSMenuItem(title: "Show Widget Now", action: #selector(showWidgetNow), keyEquivalent: "")
 
-    static let idleSecondsBeforeTuck: TimeInterval = 5
+    /// The same as the cord, so both companions tuck away at the same moment.
+    static let idleSecondsBeforeTuck: TimeInterval = CordMotion.awayDelay
 
     static let idleSecondsBeforeDoze: TimeInterval = 45
 
@@ -142,7 +143,7 @@ final class AppController: NSObject, NSApplicationDelegate {
         NotificationCenter.default.addObserver(self, selector: #selector(dayChanged), name: .NSCalendarDayChanged, object: nil)
         NotificationCenter.default.addObserver(self, selector: #selector(screensChanged),
                                                name: NSApplication.didChangeScreenParametersNotification, object: nil)
-        Timer.scheduledTimer(withTimeInterval: 1, repeats: true) { [weak self] _ in self?.idleTick() }
+        Timer.scheduledTimer(withTimeInterval: 0.25, repeats: true) { [weak self] _ in self?.idleTick() }
         if let text = CommandLine.arguments.first(where: { $0.hasPrefix("--capture=") }) {
             capture.text = String(text.dropFirst("--capture=".count))
         }
@@ -258,6 +259,48 @@ final class AppController: NSObject, NSApplicationDelegate {
         }
         if NSApp.appearance?.name != wanted?.name { NSApp.appearance = wanted }
         for item in appearanceMenu?.items ?? [] { item.state = (item.representedObject as? String) == choice ? .on : .off }
+        refreshStatusMenu()
+    }
+
+    /// Companion, size and colour, for changing the bird while you're looking at it.
+    func companionMenuItem() -> NSMenuItem {
+        let item = NSMenuItem(title: "Companion", action: nil, keyEquivalent: "")
+        let menu = NSMenu(title: "Companion")
+        func add(_ title: String, _ value: String, _ selector: Selector, on: Bool) {
+            let entry = menu.addItem(withTitle: title, action: selector, keyEquivalent: "")
+            entry.target = self
+            entry.representedObject = value
+            entry.state = on ? .on : .off
+        }
+        for style in CompanionStyle.allCases { add(style.title, style.rawValue, #selector(chooseStyle(_:)), on: companion.style == style) }
+        menu.addItem(.sectionHeader(title: "Size"))
+        for size in CompanionSize.allCases { add(size.title, size.rawValue, #selector(chooseSize(_:)), on: companion.size == size) }
+        menu.addItem(.sectionHeader(title: "Colour"))
+        for plumage in Plumage.allCases { add(plumage.title, plumage.rawValue, #selector(choosePlumage(_:)), on: companion.plumage == plumage) }
+        item.submenu = menu
+        return item
+    }
+
+    @objc func chooseStyle(_ sender: NSMenuItem) {
+        if let value = sender.representedObject as? String, let style = CompanionStyle(rawValue: value) { companion.style = style }
+        refreshStatusMenu()
+    }
+
+    @objc func chooseSize(_ sender: NSMenuItem) {
+        if let value = sender.representedObject as? String, let size = CompanionSize(rawValue: value) { companion.size = size }
+        refreshStatusMenu()
+    }
+
+    @objc func choosePlumage(_ sender: NSMenuItem) {
+        if let value = sender.representedObject as? String, let plumage = Plumage(rawValue: value) { companion.plumage = plumage }
+        refreshStatusMenu()
+    }
+
+    /// The menu bar menu is built once, so its Companion ticks are rebuilt after a change.
+    func refreshStatusMenu() {
+        guard let menu = statusItem?.menu, let index = menu.items.firstIndex(where: { $0.title == "Companion" }) else { return }
+        menu.removeItem(at: index)
+        menu.insertItem(companionMenuItem(), at: index)
     }
 
     @objc func chooseAppearance(_ sender: NSMenuItem) {
@@ -398,6 +441,7 @@ final class AppController: NSObject, NSApplicationDelegate {
         menu.addItem(withTitle: "New Task", action: #selector(openPanelFromMenu), keyEquivalent: "").target = self
         menu.addItem(withTitle: "New Note", action: #selector(newNoteFromMenu), keyEquivalent: "").target = self
         menu.addItem(.separator())
+        menu.addItem(companionMenuItem())
         menu.addItem(withTitle: "Settings…", action: #selector(openSettings), keyEquivalent: "").target = self
         menu.addItem(withTitle: "Hide for 1 Hour", action: #selector(hideForAnHour), keyEquivalent: "").target = self
         menu.addItem(.separator())
@@ -448,6 +492,7 @@ final class AppController: NSObject, NSApplicationDelegate {
         }
         appearanceItem.submenu = appearanceMenu
         self.appearanceMenu = appearanceMenu
+        menu.addItem(companionMenuItem())
         menu.addItem(withTitle: "Settings…", action: #selector(openSettings), keyEquivalent: ",").target = self
         menu.addItem(.separator())
         let quit = menu.addItem(withTitle: "Quit \(AppInfo.displayName)", action: #selector(NSApplication.terminate(_:)), keyEquivalent: "q")

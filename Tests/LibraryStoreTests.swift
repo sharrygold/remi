@@ -112,4 +112,16 @@ final class LibraryStoreTests: XCTestCase {
         store.undo()
         XCTAssertEqual(task.space?.name, "Personal")
     }
+
+    func testDoneShowsOnlyToday() throws {
+        let store = LibraryStore(directory: nil)
+        let today = try XCTUnwrap(store.add(ParsedCapture(title: "Today's win"), currentSpace: nil))
+        let older = try XCTUnwrap(store.add(ParsedCapture(title: "Last week"), currentSpace: nil))
+        store.toggleCompleted(today)
+        store.toggleCompleted(older, now: Date().addingTimeInterval(-7 * 86_400))
+        let later = Date().addingTimeInterval(LibraryStore.lingerSeconds + 1)
+        XCTAssertEqual(store.doneToday(now: later).map(\.title), ["Today's win"])
+        XCTAssertEqual(store.done(now: later).count, 2, "older finished tasks are kept")
+        XCTAssertEqual(store.search("Last week").tasks.count, 1, "and still found by search")
+    }
 }

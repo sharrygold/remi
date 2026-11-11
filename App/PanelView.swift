@@ -506,7 +506,7 @@ struct PanelView: View {
             let grouped = store.spaces.flatMap { space in today.filter { $0.space?.id == space.id } }
             return (grouped + store.overdue(in: selectedSpace)).map(NavItem.task)
         case .tasks:
-            return (store.open(in: selectedSpace) + (showDone ? store.done(in: selectedSpace) : [])).map(NavItem.task)
+            return (store.open(in: selectedSpace) + (showDone ? store.doneToday(in: selectedSpace) : [])).map(NavItem.task)
         case .notes:
             return openNoteID == nil ? store.notes(in: selectedSpace).map(NavItem.note) : []
         case .links:
@@ -606,6 +606,11 @@ struct PanelView: View {
         closeSearch()
         switch hit {
         case .task(let task):
+            // A task finished on an earlier day isn't in any list any more; say when it was done.
+            if task.isCompleted, let finished = task.completedAt, !Calendar.current.isDateInToday(finished) {
+                show(confirmation: "Done \(DueLabel.text(for: finished).lowercased() == "yesterday" ? "yesterday" : "on " + finished.formatted(.dateTime.weekday(.abbreviated).day().month(.abbreviated)))")
+                return
+            }
             selectedSpaceID = nil
             if task.isCompleted { showDone = true }
             tab = .tasks
@@ -870,7 +875,7 @@ struct PanelView: View {
 
     @ViewBuilder private var tasksList: some View {
         let open = store.open(in: selectedSpace)
-        let done = store.done(in: selectedSpace)
+        let done = store.doneToday(in: selectedSpace)
         let setAside = store.setAsideTasks(in: selectedSpace)
         if open.isEmpty && done.isEmpty && setAside.isEmpty {
             VStack {
@@ -897,7 +902,7 @@ struct PanelView: View {
                     Button { showDone.toggle() } label: {
                         HStack(spacing: 6) {
                             DisclosureChevron(open: showDone)
-                            Text("Done (\(done.count))")
+                            Text("Done today (\(done.count))")
                         }
                         .font(Tokens.TextRole.sectionTitle)
                         .foregroundStyle(.secondary)

@@ -98,8 +98,8 @@ struct WelcomeCard: View {
                     ForEach(CompanionSize.allCases) { Text($0.title).tag($0) }
                 }
             }
-            choice("Plumage") {
-                Picker("Plumage", selection: $widget.plumage) {
+            choice("Colour") {
+                Picker("Colour", selection: $widget.plumage) {
                     ForEach(Plumage.allCases) { Text($0.title).tag($0) }
                 }
             }
