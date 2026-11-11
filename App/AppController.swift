@@ -76,6 +76,28 @@ final class AppController: NSObject, NSApplicationDelegate {
     static let panelSizeKey = "panelSize"
 
     func applicationDidFinishLaunching(_ notification: Notification) {
+        // A login item can only be removed by the app that added it, so the last build under the
+        // old identity does this once and leaves a note for the rename's migration.
+        if CommandLine.arguments.contains("--retire-login-item") {
+            let service = SMAppService.mainApp
+            let wasEnabled = service.status == .enabled
+            UserDefaults.standard.set(wasEnabled, forKey: "loginItemWasEnabled")
+            UserDefaults.standard.synchronize()
+            do { try service.unregister() } catch { print("unregister: \(error.localizedDescription)") }
+            print("login item was enabled=\(wasEnabled), now status=\(service.status.rawValue)")
+            exit(0)
+        }
+        // --export-json=PATH writes the same JSON as Settings > Data > Export. Use with --data-dir=.
+        if let path = CommandLine.arguments.first(where: { $0.hasPrefix("--export-json=") })?.dropFirst("--export-json=".count) {
+            do {
+                let archive = store.makeArchive()
+                try LibraryArchive.encoder().encode(archive).write(to: URL(fileURLWithPath: String(path)), options: .atomic)
+                print("exported tasks=\(archive.tasks.count) notes=\(archive.notes.count) links=\(archive.links.count) spaces=\(archive.spaces.count)")
+            } catch {
+                print("export failed: \(error.localizedDescription)")
+            }
+            exit(0)
+        }
         SettingsKey.registerDefaults()
         store.rollForwardRepeating()
         if let name = options.appearance {
