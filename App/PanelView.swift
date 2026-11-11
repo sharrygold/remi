@@ -30,6 +30,7 @@ final class PanelPresentation: ObservableObject {
     /// Closes the panel after something opens elsewhere, unless it is pinned. Set by the app.
     var closeAfterOpening: () -> Void = {}
     var openSettings: () -> Void = {}
+    var close: () -> Void = {}
     /// Called when the resize handle is let go, so the size is remembered.
     var onResizeEnd: () -> Void = {}
     /// Whether the morning review may appear: real sessions once a day, screenshots on demand.
@@ -1009,6 +1010,7 @@ struct PanelView: View {
     /// The Space menu on the left; search, pin and Settings as quiet icons on the right.
     private var header: some View {
         HStack(spacing: Tokens.Spacing.s) {
+            CloseDot(action: presentation.close)
             spaceMenu
             Spacer(minLength: Tokens.Spacing.s)
             HStack(spacing: 2) {
@@ -1054,3 +1056,33 @@ final class CaptureText: ObservableObject {
     /// The save-tab shortcut while the panel is open, so the chip and the confirmation line stay right.
     var saveTab: ((BrowserTab.Browser) -> Void)?
 }
+
+/// A Mac-style red close button, so closing never depends on clicking somewhere else or
+/// remembering to click the companion. The × appears on hover, as in a window's title bar.
+struct CloseDot: View {
+    let action: () -> Void
+    @State private var hovering = false
+
+    var body: some View {
+        Button(action: action) {
+            ZStack {
+                Circle()
+                    .fill(Color(red: 1, green: 0.373, blue: 0.341))
+                    .overlay(Circle().strokeBorder(.black.opacity(0.12), lineWidth: 0.5))
+                Image(systemName: "xmark")
+                    .font(.system(size: 6.5, weight: .heavy))
+                    .foregroundStyle(.black.opacity(0.55))
+                    .opacity(hovering ? 1 : 0)
+            }
+            .frame(width: 12, height: 12)
+            .padding(6)
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(PressScale(scale: 0.96))
+        .onHover { hovering = $0 }
+        .animation(Motion.hover, value: hovering)
+        .help("Close (Esc)")
+        .accessibilityLabel("Close panel")
+    }
+}
+
