@@ -8,8 +8,9 @@
 <meta property="og:title" content="Remi for Mac">
 <meta property="og:description" content="A little bird that remembers for you. Tasks, notes and links, one shortcut away. Free and open source.">
 <meta property="og:type" content="website">
-<!-- SITE_URL: replace with the final address once the site is live. Open Graph images need an absolute URL. -->
-<meta property="og:image" content="SITE_URL/img/og.png">
+<!-- Open Graph needs an absolute URL; the copy in the public repo works whatever the site's address is. -->
+<meta property="og:image" content="https://raw.githubusercontent.com/sharrygold/remi/main/site/img/og.png">
+<meta property="og:image:width" content="1280"><meta property="og:image:height" content="640">
 <meta name="twitter:card" content="summary_large_image">
 <link rel="icon" href="img/favicon.svg" type="image/svg+xml">
 <link rel="preload" href="fonts/libre-bodoni-latin-500-normal.woff2" as="font" type="font/woff2" crossorigin>
@@ -762,7 +763,7 @@ Scripts/install.sh</pre>
 
   /* ----- Screenshot slots: show the expected file name until the real capture is dropped in ----- */
   document.querySelectorAll('img[data-slot]').forEach(function(img){
-    function miss(){var d=document.createElement('div');d.className='missing '+(img.className||'');d.textContent='Screenshot goes here: img/'+img.dataset.slot;img.replaceWith(d)}
+    function miss(){if(!/^(localhost|127\.0\.0\.1)$/.test(location.hostname)){var s=img.closest('.shot');if(s){s.remove();return}}var d=document.createElement('div');d.className='missing '+(img.className||'');d.textContent='Screenshot goes here: img/'+img.dataset.slot;img.replaceWith(d)}
     if(img.complete&&!img.naturalWidth)miss(); else img.addEventListener('error',miss);
   });
 })();
