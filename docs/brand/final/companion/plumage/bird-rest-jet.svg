@@ -30,7 +30,7 @@
 </g>
 <g id="egg" transform="translate(52 56) rotate(-14)">
 <ellipse rx="8.5" ry="10.5" fill="#C9A25A"/>
-<text y="3.7" text-anchor="middle" font-size="11" font-style="italic" font-weight="500" fill="#121110" font-family="Bodoni Moda, serif">3</text>
+<text y="3.7" text-anchor="middle" font-size="11" font-style="italic" font-weight="500" fill="#121110" font-family="Libre Bodoni, serif">3</text>
 </g>
 <g id="wing">
 <path d="M38 70 C46 60 62 60 76 66 C84 70 84 78 76 84 C66 91 50 91 42 85 C36 81 35 75 38 70 Z" fill="url(#satin)"/>

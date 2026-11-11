@@ -11,7 +11,7 @@ Direction: Couture. A Sankofa-inspired bird in ivory, jet and thread gold, embro
 | Name | **Remi** (`APP_DISPLAY_NAME = Remi`). The app and the bird share the name. |
 | Tagline | a little bird that remembers for you |
 | App icon / mark | **The Sankofa bird**: a solid ivory silhouette built from circles, with wing and eye cut as negative space, head turned back to the gold egg on its back, on jet |
-| Wordmark | Bodoni Moda, lower case: `remi`. Optional flourish: the dot of the i drawn as the gold egg |
+| Wordmark | Libre Bodoni Medium (500), lower case: `remi`. Optional flourish: the dot of the i drawn as the gold egg |
 | Companion modes | **Perched** (Remi on a gold peg at the side edge) and **On the cord** (Remi on a swing at the end of the knotted cord). **Pebble is retired.** |
 | Companion finish | **Stitched** |
 | Companion colour | **Plumage** setting with four colourways (below); default **Ivory** |
@@ -48,7 +48,7 @@ Full token sets (feather, stitch, wing satin, crest, eye, egg text, halo, braid 
 ```
 final/
   mark/       mark.svg (for dark), mark-dark-on-light.svg, mark-mono.svg (currentColor), tile.svg (preview),
-              lockup-remi-on-dark.svg, lockup-remi-on-light.svg, lockup-remi-tagline-on-dark.svg
+              wordmark-on-{dark,light}.svg, lockup-on-{dark,light}.svg, lockup-tagline-on-{dark,light}.svg (letters outlined, no font needed)
   icon/       background.svg, foreground-bird.svg, foreground-egg-beak.svg (1024 canvas, Icon Composer layers)
   menubar/    menubar-template.svg (black on transparent, 19 x 18 pt, template image)
   companion/  stitched/  body.svg, head.svg, head-doze.svg, bird-rest-reference.svg
@@ -65,7 +65,7 @@ Drawn in a 120 x 120 space (y down), shown at about 104 x 108 pt.
 
 **Draw order, back to front:** peg, legs (or feet-tucked), body (tail, body, light, chest, belly stitch, thighs, wing, cradle feather, neck, neck ruff), egg, head, head-shade.
 
-- **Egg:** `egg.svg` placed with `translate(52, 56) rotate(-14°)`. The count is live text in the same group (Bodoni Moda italic 500, size 11), so it tilts and rocks with the egg.
+- **Egg:** `egg.svg` placed with `translate(52, 56) rotate(-14°)`. The count is live text in the same group (Libre Bodoni Medium Italic, size 11), so it tilts and rocks with the egg.
 - **Head:** `head.svg`. Its origin is the neck pivot at **(81, 35)**, beak along +x. It is symmetric about the beak line (eye on the line, crest trailing behind), so it turns a full circle and never flips.
 - **Head light:** `head-shade.svg` at (81, 35) never rotates. The fixed highlight makes the head read as a lit ball.
 - **Crest:** a little fan of three rounded feathers behind the head (centre one along the beak line, two at ±30°), in body colour with stitched edges and a gold quill each (crest token). It replaced the old gold V, which read as a second open beak. The beak stays the only solid gold point on the head.
@@ -153,7 +153,13 @@ The live canvas board "Final · Remi (live)" demonstrates Tucked in, Notices you
 
 - `menubar/menubar-template.svg` as a template image (`isTemplate = true`), 18 pt tall.
 
+## Type
+
+- **Libre Bodoni** replaced Bodoni Moda on 11 Nov 2026, because Bodoni Moda's thin strokes were hard to read on dark backgrounds. Libre Bodoni is a Bodoni drawn for reading, so it keeps the couture feel and stays legible at every size. Wordmark: Libre Bodoni Medium (500). Tagline and the egg's numerals: Libre Bodoni Medium Italic.
+- Anywhere outside the app, use the outlined files in `final/mark/` (`wordmark-on-*.svg`, `lockup-on-*.svg`, `lockup-tagline-on-*.svg`). They need no font installed. The gold egg sits where Libre Bodoni's own dot of the i would be.
+- Interface type: SF Pro in the app, Inter on the web.
+
 ## Wordmark and lockup
 
-- `remi` in Bodoni Moda, lower case, next to or under the mark. The tagline "a little bird that remembers for you" is set in Bodoni Moda italic, in thread gold.
+- `remi` in Libre Bodoni Medium (500), lower case, next to or under the mark. The tagline "a little bird that remembers for you" is set in Libre Bodoni Medium Italic, in thread gold.
 - For the README and listings: **Remi for Mac**.

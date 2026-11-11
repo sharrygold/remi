@@ -47,16 +47,13 @@ enum CompanionArt {
     // MARK: The count on the egg
 
     static func registerFont() {
-        guard let url = Bundle.main.url(forResource: "BodoniModa-Italic", withExtension: "ttf") else { return }
+        guard let url = Bundle.main.url(forResource: "LibreBodoni-MediumItalic", withExtension: "ttf") else { return }
         CTFontManagerRegisterFontsForURL(url as CFURL, .process, nil)
     }
 
+    /// Libre Bodoni Medium Italic, the brand's type, drawn for reading so it holds up at 10 pt.
     private static func countFont(size: CGFloat) -> CTFont {
-        let wght = 0x77676874, opsz = 0x6F70737A // the 'wght' and 'opsz' axes; the smallest optical size keeps hairlines visible at 10 pt
-        let attributes: [CFString: Any] = [kCTFontFamilyNameAttribute: "Bodoni Moda", kCTFontVariationAttribute: [wght: 500, opsz: 6]]
-        let descriptor = CTFontDescriptorCreateWithAttributes(attributes as CFDictionary)
-        let base = CTFontCreateWithFontDescriptor(descriptor, size, nil)
-        return CTFontCreateCopyWithSymbolicTraits(base, size, nil, .traitItalic, .traitItalic) ?? base
+        CTFontCreateWithName("LibreBodoni-MediumItalic" as CFString, size, nil)
     }
 
     /// The number as a bitmap on a 40-unit square, with the egg's centre in the middle.
