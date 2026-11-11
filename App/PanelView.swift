@@ -46,6 +46,10 @@ struct PanelView: View {
     @State private var clipboardOffer: ClipboardOffer?
     /// Bumped on every open and close, so a slow clipboard check from an earlier open is ignored.
     @State private var clipboardCheck = 0
+    /// The browser in front while the panel is open, offered as "Save this tab".
+    @State private var frontBrowser: BrowserTab.Browser?
+    /// The tab was saved this time round, so the chip steps aside.
+    @State private var tabSaved = false
     @FocusState private var captureFocused: Bool
     @Environment(\.accessibilityReduceTransparency) private var reduceTransparency
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
@@ -75,7 +79,13 @@ struct PanelView: View {
                 tabs
                 content
             }
-            if showsTokens { tokenRow } else if let clipboardOffer { clipboardChip(clipboardOffer) }
+            if showsTokens {
+                tokenRow
+            } else if let clipboardOffer {
+                clipboardChip(clipboardOffer)
+            } else if let tabOffer {
+                browserChip(tabOffer)
+            }
             captureBar
         }
         .padding(Tokens.Spacing.s)
@@ -122,6 +132,11 @@ struct PanelView: View {
                 let current = ids.firstIndex { $0 == selectedSpaceID } ?? 0
                 selectedSpaceID = ids[(current + step + ids.count) % ids.count]
             }
+            capture.saveBrowserTab = {
+                guard let tabOffer, clipboardOffer == nil, capture.text.isEmpty else { return false }
+                saveTab(from: tabOffer)
+                return true
+            }
             capture.dismissClipboardOffer = {
                 guard let offer = clipboardOffer, capture.text.isEmpty else { return false }
                 dismissClipboard(offer)
@@ -135,10 +150,15 @@ struct PanelView: View {
                 captureFocused = true
                 store.reload()
                 checkClipboard()
+                refreshFrontBrowser()
             } else {
                 clipboardCheck += 1
                 clipboardOffer = nil
             }
+        }
+        // A pinned panel stays open while you move between apps.
+        .onReceive(NSWorkspace.shared.notificationCenter.publisher(for: NSWorkspace.didActivateApplicationNotification)) { _ in
+            if presentation.presented { refreshFrontBrowser() }
         }
         .onChange(of: presentation.addRequests) { _, _ in
             closeSearch()
@@ -350,6 +370,50 @@ struct PanelView: View {
     private func dismissClipboard(_ offer: ClipboardOffer) {
         ClipboardNudge.markHandled(offer)
         withAnimation(Tokens.Motion.quick) { clipboardOffer = nil }
+    }
+
+    // MARK: Browser tab
+
+    private var tabOffer: BrowserTab.Browser? { tabSaved ? nil : frontBrowser }
+
+    private func refreshFrontBrowser() {
+        tabSaved = false
+        frontBrowser = CommandLine.arguments.contains("--preview-tab-chip") ? BrowserTab.known[0] : BrowserTab.frontmost()
+    }
+
+    private func browserChip(_ browser: BrowserTab.Browser) -> some View {
+        Button { saveTab(from: browser) } label: {
+            HStack(spacing: Tokens.Spacing.s) {
+                Image(systemName: "safari").foregroundStyle(.secondary).accessibilityHidden(true)
+                Text("Save this tab from \(browser.name)").lineLimit(1)
+                Spacer(minLength: Tokens.Spacing.xs)
+                Text("⌘S").fontWeight(.semibold).foregroundStyle(Color.accentColor)
+            }
+            .padding(.horizontal, Tokens.Spacing.s + Tokens.Spacing.xs)
+            .frame(height: Tokens.Spacing.l + Tokens.Spacing.xs)
+            .contentShape(Capsule())
+        }
+        .buttonStyle(.plain)
+        .font(Tokens.TextRole.detail)
+        .background(Color.accentColor.opacity(0.1), in: Capsule())
+        .help("Save the tab you're looking at to Links (⌘S)")
+        .transition(.opacity)
+    }
+
+    private func saveTab(from browser: BrowserTab.Browser) {
+        switch BrowserTab.read(browser) {
+        case .success(let page):
+            let saved = store.addLink(page.url, currentSpace: selectedSpace)
+            if saved.isNew { store.setMetadata(for: saved.link.id, title: page.title, iconData: nil) }
+            tabSaved = true
+            show(confirmation: saved.isNew ? "Saved to \(saved.link.list.title)  ·  ⌘Z to undo" : "Already in \(saved.link.list.title)")
+        case .failure(.notAllowed):
+            show(confirmation: "Allow \(browser.name) in System Settings > Privacy & Security > Automation")
+        case .failure(.notAWebPage):
+            show(confirmation: "This tab isn't a web page")
+        case .failure(.noTab):
+            show(confirmation: "No open tab in \(browser.name)")
+        }
     }
 
     /// Shown only if the saved library could not be opened and this session runs on a temporary copy.
@@ -794,4 +858,6 @@ final class CaptureText: ObservableObject {
     @Published var linkListOverride: LinkList?
     /// Esc first dismisses the clipboard chip; returns false when there is none, so Esc closes the panel.
     var dismissClipboardOffer: (() -> Bool)?
+    /// ⌘S on the "Save this tab" chip; returns false when the chip isn't offered.
+    var saveBrowserTab: (() -> Bool)?
 }

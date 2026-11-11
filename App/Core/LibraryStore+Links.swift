@@ -48,9 +48,10 @@ extension LibraryStore {
     }
 
     /// Fills in what the page says about itself. Not undoable; it is not something you did.
+    /// The first title wins: a saved tab's own title beats a later fetch, which may hit a bot check.
     func setMetadata(for id: UUID, title: String?, iconData: Data?) {
         guard let link = links.first(where: { $0.id == id }) else { return }
-        if !link.titleEdited, let title, !title.trimmingCharacters(in: .whitespaces).isEmpty {
+        if !link.titleEdited, !link.titleFetched, let title, !title.trimmingCharacters(in: .whitespaces).isEmpty {
             link.title = title.trimmingCharacters(in: .whitespacesAndNewlines)
         }
         if let iconData { link.iconData = iconData }
