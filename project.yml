@@ -1,14 +1,14 @@
-name: Perch
+name: Remi
 options:
-  bundleIdPrefix: com.example
+  bundleIdPrefix: io.github.sharrygold
   deploymentTarget:
     macOS: "26.0"
 settings:
   base:
     # The user-facing name lives here. Change it and regenerate to rename the app.
-    APP_DISPLAY_NAME: Perch
+    APP_DISPLAY_NAME: Remi
 targets:
-  Perch:
+  Remi:
     type: application
     platform: macOS
     sources: [App]
@@ -16,11 +16,11 @@ targets:
       Debug: Config/Signing.xcconfig
       Release: Config/Signing.xcconfig
     scheme:
-      testTargets: [PerchTests]
+      testTargets: [RemiTests]
     settings:
       base:
         PRODUCT_NAME: $(APP_DISPLAY_NAME)
-        PRODUCT_BUNDLE_IDENTIFIER: com.example.oldapp
+        PRODUCT_BUNDLE_IDENTIFIER: io.github.sharrygold.remi
         GENERATE_INFOPLIST_FILE: YES
         INFOPLIST_KEY_LSUIElement: YES
         INFOPLIST_KEY_CFBundleDisplayName: $(APP_DISPLAY_NAME)
@@ -33,7 +33,7 @@ targets:
         DEVELOPMENT_TEAM: $(APP_TEAM)
         CODE_SIGN_IDENTITY: $(APP_SIGN_IDENTITY)
         ENABLE_HARDENED_RUNTIME: NO
-  PerchTests:
+  RemiTests:
     type: bundle.unit-test
     platform: macOS
     # Compiles the UI-free core directly, so tests run without launching the floating app.

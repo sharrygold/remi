@@ -43,10 +43,15 @@ final class LibraryStore: ObservableObject {
         reload()
     }
 
-    /// Follows the bundle ID rather than the display name, so renaming the app keeps the data.
+    /// Follows the bundle ID rather than the display name. Debug builds keep their own folder,
+    /// so development runs can never touch real data or look like an existing library.
     static var defaultDirectory: URL {
         let support = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0]
-        return support.appendingPathComponent(Bundle.main.bundleIdentifier ?? "com.example.oldapp", isDirectory: true)
+        var name = Bundle.main.bundleIdentifier ?? "io.github.sharrygold.remi"
+        #if DEBUG
+        name += ".debug"
+        #endif
+        return support.appendingPathComponent(name, isDirectory: true)
     }
 
     private func seedSpacesIfNeeded() {

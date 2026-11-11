@@ -1,7 +1,7 @@
 #!/bin/zsh
 # Captures one widget prototype over the desktop: widget-shot.sh <output-name> <app args...>
 cd "$(dirname "$0")/.."
-BIN=build/Build/Products/Debug/Perch.app/Contents/MacOS/Perch
+BIN=build/Build/Products/Debug/Remi.app/Contents/MacOS/Remi
 OUT=docs/phase1
 mkdir -p "$OUT"
 HELPER=${TMPDIR:-/tmp}/perch-window-region

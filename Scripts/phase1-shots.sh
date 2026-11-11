@@ -1,7 +1,7 @@
 #!/bin/zsh
 # Takes the Phase 1 design screenshots. Set DRY=1 to check launches without capturing.
 cd "$(dirname "$0")/.."
-BIN=build/Build/Products/Debug/Perch.app/Contents/MacOS/Perch
+BIN=build/Build/Products/Debug/Remi.app/Contents/MacOS/Remi
 OUT=docs/phase1
 mkdir -p "$OUT"
 HELPER=$(mktemp -d)/window-region

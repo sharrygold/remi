@@ -98,6 +98,7 @@ final class AppController: NSObject, NSApplicationDelegate {
             }
             exit(0)
         }
+        migrateFromPerchIfNeeded()
         SettingsKey.registerDefaults()
         store.rollForwardRepeating()
         if let name = options.appearance {
@@ -269,6 +270,27 @@ final class AppController: NSObject, NSApplicationDelegate {
         edit.addItem(withTitle: "Select All", action: #selector(NSText.selectAll(_:)), keyEquivalent: "a")
         editItem.submenu = edit
         NSApp.mainMenu = main
+    }
+
+    /// Runs once, from the installed app only, before the library is opened.
+    func migrateFromPerchIfNeeded() {
+        let path = Bundle.main.bundlePath
+        let defaults = UserDefaults.standard
+        guard path.hasPrefix("/Applications/") || path.hasPrefix(NSHomeDirectory() + "/Applications/"),
+              !defaults.bool(forKey: RenameMigration.doneKey), let bundleID = Bundle.main.bundleIdentifier else { return }
+        let old = defaults.persistentDomain(forName: RenameMigration.oldBundleID) ?? [:]
+        do {
+            let support = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0]
+            let copied = try RenameMigration.copyLibrary(support: support, fromID: RenameMigration.oldBundleID, toID: bundleID)
+            NSLog("Rename migration: library copied=\(copied)")
+        } catch {
+            // Left unmarked, so it is tried again next launch; the old data is untouched either way.
+            NSLog("Rename migration failed: \(error.localizedDescription)")
+            return
+        }
+        for (key, value) in RenameMigration.migratedDefaults(from: old) { defaults.set(value, forKey: key) }
+        if old[RenameMigration.loginItemKey] as? Bool == true, let problem = LoginItem.set(true) { NSLog("Rename migration: \(problem)") }
+        defaults.set(true, forKey: RenameMigration.doneKey)
     }
 
     /// First launch only. Someone who already has things saved has no need of it.

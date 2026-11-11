@@ -224,7 +224,7 @@ extension AppController {
         func after(_ seconds: Double, _ work: @escaping () -> Void) {
             DispatchQueue.main.asyncAfter(deadline: .now() + seconds, execute: work)
         }
-        let board = NSPasteboard(name: NSPasteboard.Name("perch-chip-selftest"))
+        let board = NSPasteboard(name: NSPasteboard.Name("remi-chip-selftest"))
         board.clearContents()
         board.setString("https://www.youtube.com/watch?v=jNQXAC9IVRw", forType: .string)
         ClipboardNudge.board = board
@@ -276,7 +276,7 @@ extension AppController {
 
     /// Uses a private pasteboard, so the user's own clipboard is never touched.
     func checkClipboardNudge(then done: @escaping () -> Void) {
-        let board = NSPasteboard(name: NSPasteboard.Name("perch-selftest"))
+        let board = NSPasteboard(name: NSPasteboard.Name("remi-selftest"))
         board.clearContents()
         board.setString("https://www.notion.so/invoice-template", forType: .string)
         Task { @MainActor in

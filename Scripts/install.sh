@@ -6,7 +6,7 @@ cd "$(dirname "$0")/.."
 NAME=$(awk '/APP_DISPLAY_NAME:/ {print $2}' project.yml)
 echo "Building $NAME (Release)…"
 xcodegen generate -q
-xcodebuild -project Perch.xcodeproj -scheme Perch -configuration Release -derivedDataPath build/release -allowProvisioningUpdates build -quiet
+xcodebuild -project "$NAME.xcodeproj" -scheme "$NAME" -configuration Release -derivedDataPath build/release -allowProvisioningUpdates build -quiet
 APP="build/release/Build/Products/Release/$NAME.app"
 DEST=/Applications
 [[ -w "$DEST" ]] || DEST="$HOME/Applications"

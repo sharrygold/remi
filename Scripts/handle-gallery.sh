@@ -1,7 +1,7 @@
 #!/bin/zsh
 # Captures every handle design over the real desktop, in light and dark.
 cd "$(dirname "$0")/.."
-BIN=build/Build/Products/Debug/Perch.app/Contents/MacOS/Perch
+BIN=build/Build/Products/Debug/Remi.app/Contents/MacOS/Remi
 OUT=docs/phase1
 mkdir -p "$OUT"
 HELPER=$(mktemp -d)/window-region
