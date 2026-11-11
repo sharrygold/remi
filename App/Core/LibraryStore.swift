@@ -12,6 +12,7 @@ final class LibraryStore: ObservableObject {
     @Published private(set) var tasks: [TaskItem] = []
     @Published private(set) var notes: [Note] = []
     @Published private(set) var links: [LinkItem] = []
+    @Published private(set) var linkGroups: [LinkGroup] = []
     /// Called after a link is saved, so the app can fetch its title and icon. Keeps this file free of networking.
     var onLinkAdded: ((LinkItem) -> Void)?
     /// A task was captured, by any route. The companion reacts to these.
@@ -32,7 +33,7 @@ final class LibraryStore: ObservableObject {
 
     /// `directory` nil keeps everything in memory, for tests and demos.
     init(directory: URL?) {
-        let schema = Schema([Space.self, TaskItem.self, Note.self, LinkItem.self])
+        let schema = Schema([Space.self, TaskItem.self, Note.self, LinkItem.self, LinkGroup.self])
         var container: ModelContainer?
         if let directory {
             try? FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
@@ -75,6 +76,7 @@ final class LibraryStore: ObservableObject {
         notes = allNotes.filter { $0.deletedAt == nil }
         let allLinks = (try? context.fetch(FetchDescriptor<LinkItem>(sortBy: [SortDescriptor(\.createdAt, order: .reverse)]))) ?? []
         links = allLinks.filter { $0.deletedAt == nil }
+        linkGroups = (try? context.fetch(FetchDescriptor<LinkGroup>(sortBy: [SortDescriptor(\.sortOrder)]))) ?? []
     }
 
     func save() {

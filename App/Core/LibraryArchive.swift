@@ -13,6 +13,16 @@ struct LibraryArchive: Codable, Equatable {
     var tasks: [TaskRecord]
     var notes: [NoteRecord]
     var links: [LinkRecord]
+    /// Optional so archives written before custom lists still import.
+    var linkGroups: [LinkGroupRecord]? = nil
+
+    struct LinkGroupRecord: Codable, Equatable {
+        var id: UUID
+        var name: String
+        var sortOrder: Int
+        var createdAt: Date
+        var updatedAt: Date
+    }
 
     struct SpaceRecord: Codable, Equatable {
         var id: UUID
@@ -72,6 +82,7 @@ struct LibraryArchive: Codable, Equatable {
         var deletedAt: Date?
         /// Optional so archives written before renaming existed still import.
         var titleEdited: Bool? = nil
+        var groupID: UUID? = nil
     }
 
     static func encoder() -> JSONEncoder {
@@ -125,7 +136,10 @@ extension LibraryStore {
             links: all(LinkItem.self).sorted { $0.createdAt < $1.createdAt }.map {
                 .init(id: $0.id, url: $0.urlString, title: $0.title, iconData: $0.iconData, titleFetched: $0.titleFetched,
                       list: $0.listName, isPinned: $0.isPinned, isWatched: $0.isWatched, watchedAt: $0.watchedAt, spaceID: $0.space?.id,
-                      createdAt: $0.createdAt, updatedAt: $0.updatedAt, deletedAt: $0.deletedAt, titleEdited: $0.titleEdited)
+                      createdAt: $0.createdAt, updatedAt: $0.updatedAt, deletedAt: $0.deletedAt, titleEdited: $0.titleEdited, groupID: $0.groupID)
+            },
+            linkGroups: all(LinkGroup.self).sorted { $0.sortOrder < $1.sortOrder }.map {
+                .init(id: $0.id, name: $0.name, sortOrder: $0.sortOrder, createdAt: $0.createdAt, updatedAt: $0.updatedAt)
             }
         )
     }
@@ -164,6 +178,31 @@ extension LibraryStore {
             }
         }
         func space(_ id: UUID?) -> Space? { id.flatMap { spacesByID[$0] } ?? fallbackSpace }
+
+        // A list with the same name as one here is the same list, like Spaces.
+        var groupIDs: [UUID: UUID] = [:]
+        let existingGroups = all(LinkGroup.self)
+        for record in archive.linkGroups ?? [] {
+            if let match = existingGroups.first(where: { $0.id == record.id })
+                ?? existingGroups.first(where: { CaptureParser.normalized($0.name) == CaptureParser.normalized(record.name) }) {
+                if record.updatedAt > match.updatedAt {
+                    match.name = record.name
+                    match.updatedAt = record.updatedAt
+                    summary.updated += 1
+                } else {
+                    summary.unchanged += 1
+                }
+                groupIDs[record.id] = match.id
+            } else {
+                let group = LinkGroup(name: record.name, sortOrder: (existingGroups.map(\.sortOrder).max() ?? -1) + 1 + record.sortOrder)
+                group.id = record.id
+                group.createdAt = record.createdAt
+                group.updatedAt = record.updatedAt
+                context.insert(group)
+                groupIDs[record.id] = group.id
+                summary.added += 1
+            }
+        }
 
         let tasksByID = Dictionary(all(TaskItem.self).map { ($0.id, $0) }, uniquingKeysWith: { first, _ in first })
         for record in archive.tasks {
@@ -238,6 +277,7 @@ extension LibraryStore {
             link.titleFetched = record.titleFetched
             link.titleEdited = record.titleEdited ?? false
             link.listName = record.list
+            link.groupID = record.groupID.flatMap { groupIDs[$0] }
             link.isPinned = record.isPinned
             link.isWatched = record.isWatched
             link.watchedAt = record.watchedAt

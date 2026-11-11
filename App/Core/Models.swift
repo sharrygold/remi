@@ -138,6 +138,21 @@ enum LinkList: String, CaseIterable {
     var symbol: String { self == .saved ? "bookmark" : "play.rectangle" }
 }
 
+/// A list of links you named yourself, alongside Saved links and Watch later.
+@Model
+final class LinkGroup: Identifiable {
+    var id: UUID = UUID()
+    var name: String = ""
+    var sortOrder: Int = 0
+    var createdAt: Date = Date()
+    var updatedAt: Date = Date()
+
+    init(name: String, sortOrder: Int) {
+        self.name = name
+        self.sortOrder = sortOrder
+    }
+}
+
 @Model
 final class LinkItem: Identifiable {
     var id: UUID = UUID()
@@ -149,6 +164,8 @@ final class LinkItem: Identifiable {
     /// Set when you rename the link, so a later page fetch keeps your name.
     var titleEdited: Bool = false
     var listName: String = LinkList.saved.rawValue
+    /// The custom list it lives in; nil for Saved links and Watch later.
+    var groupID: UUID?
     var isPinned: Bool = false
     var isWatched: Bool = false
     var watchedAt: Date?

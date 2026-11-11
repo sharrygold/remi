@@ -151,4 +151,53 @@ final class LinkStoreTests: XCTestCase {
         XCTAssertEqual(reopened.links.first?.title, "Zoo")
         XCTAssertEqual(reopened.links.first?.list, .watchLater)
     }
+
+    func testCustomLists() throws {
+        let store = LibraryStore(directory: nil)
+        let recipes = try XCTUnwrap(store.addLinkGroup(named: " Recipes "))
+        XCTAssertEqual(recipes.name, "Recipes")
+        XCTAssertNil(store.addLinkGroup(named: "recipes"), "names are unique")
+        XCTAssertNil(store.addLinkGroup(named: "Saved links"), "built-in names are taken")
+        XCTAssertNil(store.addLinkGroup(named: "  "))
+
+        let added = store.addLink(url("https://www.youtube.com/watch?v=abc"), group: recipes, currentSpace: nil).link
+        XCTAssertEqual(store.links(in: nil, group: recipes.id).map(\.id), [added.id], "a video goes where you put it")
+        XCTAssertTrue(store.links(in: nil, list: .watchLater).isEmpty)
+        XCTAssertEqual(store.listTitle(added), "Recipes")
+
+        let other = store.addLink(url("https://example.com/a"), currentSpace: nil).link
+        store.move(other, to: recipes)
+        XCTAssertEqual(store.links(in: nil, group: recipes.id).count, 2)
+        XCTAssertTrue(store.links(in: nil, list: .saved).isEmpty, "custom list links leave Saved links")
+        store.move(other, to: .watchLater)
+        XCTAssertNil(other.groupID)
+        store.undo()
+        XCTAssertEqual(other.groupID, recipes.id)
+
+        XCTAssertTrue(store.rename(recipes, to: "Food"))
+        XCTAssertFalse(store.rename(recipes, to: "Watch Later"))
+
+        let id = recipes.id
+        store.delete(recipes)
+        XCTAssertTrue(store.linkGroups.isEmpty)
+        XCTAssertEqual(store.links(in: nil, list: .saved).count, 2, "deleting a list keeps its links")
+        store.undo()
+        XCTAssertEqual(store.linkGroups.map(\.id), [id])
+        XCTAssertEqual(store.links(in: nil, group: id).count, 2)
+    }
+
+    func testCustomListsSurviveExportAndImport() throws {
+        let source = LibraryStore(directory: nil)
+        let group = try XCTUnwrap(source.addLinkGroup(named: "Reading"))
+        let link = source.addLink(url("https://example.com/essay"), group: group, currentSpace: nil).link
+        let data = try LibraryArchive.encoder().encode(source.makeArchive())
+
+        let target = LibraryStore(directory: nil)
+        _ = target.importArchive(try LibraryArchive.decode(data))
+        target.reload()
+        XCTAssertEqual(target.linkGroups.map(\.name), ["Reading"])
+        XCTAssertEqual(target.links(in: nil, group: group.id).map(\.id), [link.id])
+        let twice = target.importArchive(try LibraryArchive.decode(data))
+        XCTAssertEqual(twice.added, 0)
+    }
 }

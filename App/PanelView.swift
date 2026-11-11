@@ -55,6 +55,7 @@ struct PanelView: View {
     @State private var confirmation: String?
     @State private var openNoteID: UUID?
     @State private var linkList: LinkList = .saved
+    @State private var linkGroupID: UUID?
     /// The "+ New task" field at the top of Today and Tasks.
     @State private var addingTask = false
     @State private var clipboardOffer: ClipboardOffer?
@@ -145,6 +146,7 @@ struct PanelView: View {
         }
         .onChange(of: selectedSpaceID) { _, _ in nav.clear() }
         .onChange(of: linkList) { _, _ in nav.clear() }
+        .onChange(of: linkGroupID) { _, _ in nav.clear() }
         .onChange(of: openNoteID) { _, _ in nav.clear() }
         .onChange(of: search.active) { _, _ in nav.clear() }
         .onAppear {
@@ -164,6 +166,9 @@ struct PanelView: View {
                 selectedSpaceID = ids[(current + step + ids.count) % ids.count]
             }
             capture.saveTab = { saveTab(from: $0) }
+            if let name = CommandLine.arguments.first(where: { $0.hasPrefix("--link-list=") })?.dropFirst("--link-list=".count) {
+                linkGroupID = store.linkGroups.first { $0.name == name }?.id
+            }
             capture.dismissClipboardOffer = {
                 if reviewing {
                     closeReview()
@@ -321,8 +326,8 @@ struct PanelView: View {
         if result.isLink, let url = result.url {
             let saved = store.addLink(url, list: captureLinkList, spaceMatch: result.space, currentSpace: selectedSpace)
             capture.text = ""
-            show(confirmation: saved.isNew ? "Saved to \(saved.link.list.title)  ·  ⌘Z to undo"
-                                           : "Already in \(saved.link.list.title)")
+            show(confirmation: saved.isNew ? "Saved to \(store.listTitle(saved.link))  ·  ⌘Z to undo"
+                                           : "Already in \(store.listTitle(saved.link))")
             return
         }
         guard let task = store.add(result, currentSpace: selectedSpace) else { return }
@@ -407,7 +412,7 @@ struct PanelView: View {
             return
         }
         let saved = store.addLink(url, currentSpace: selectedSpace)
-        show(confirmation: saved.isNew ? "Saved to \(saved.link.list.title)  ·  ⌘Z to undo" : "Already in \(saved.link.list.title)")
+        show(confirmation: saved.isNew ? "Saved to \(store.listTitle(saved.link))  ·  ⌘Z to undo" : "Already in \(store.listTitle(saved.link))")
     }
 
     private func dismissClipboard(_ offer: ClipboardOffer) {
@@ -449,7 +454,7 @@ struct PanelView: View {
             let saved = store.addLink(page.url, currentSpace: selectedSpace)
             if saved.isNew { store.setMetadata(for: saved.link.id, title: page.title, iconData: nil) }
             tabSaved = true
-            show(confirmation: saved.isNew ? "Saved to \(saved.link.list.title)  ·  ⌘Z to undo" : "Already in \(saved.link.list.title)")
+            show(confirmation: saved.isNew ? "Saved to \(store.listTitle(saved.link))  ·  ⌘Z to undo" : "Already in \(store.listTitle(saved.link))")
         case .failure(.notAllowed):
             show(confirmation: "Allow \(browser.name) in System Settings > Privacy & Security > Automation")
         case .failure(.notAWebPage):
@@ -488,7 +493,7 @@ struct PanelView: View {
         case .notes:
             return openNoteID == nil ? store.notes(in: selectedSpace).map(NavItem.note) : []
         case .links:
-            return store.links(in: selectedSpace, list: linkList).map(NavItem.link)
+            return (linkGroupID.map { store.links(in: selectedSpace, group: $0) } ?? store.links(in: selectedSpace, list: linkList)).map(NavItem.link)
         }
     }
 
@@ -538,10 +543,19 @@ struct PanelView: View {
         case (.moveSpace(let step), _):
             moveToSpace(item, step: step)
         case (.switchList, _) where tab == .links:
-            linkList = linkList == .saved ? .watchLater : .saved
+            switchLinkList()
         default:
             break
         }
+    }
+
+    /// ← and → walk through Saved links, Watch later and the custom lists.
+    private func switchLinkList() {
+        let shelves: [(LinkList, UUID?)] = [(.saved, nil), (.watchLater, nil)] + store.linkGroups.map { (.saved, $0.id) }
+        let index = shelves.firstIndex { $0.0 == linkList && $0.1 == linkGroupID } ?? 0
+        let next = shelves[(index + 1) % shelves.count]
+        linkList = next.0
+        linkGroupID = next.1
     }
 
     private func moveToSpace(_ item: NavItem, step: Int) {
@@ -639,7 +653,7 @@ struct PanelView: View {
                           openNoteID: $openNoteID, onNewNote: startNewNote, onClose: { captureFocused = true },
                           onConfirm: { show(confirmation: $0) })
             } else if tab == .links {
-                LinksPane(store: store, density: density, space: selectedSpace, showsSpace: selectedSpaceID == nil, list: $linkList,
+                LinksPane(store: store, density: density, space: selectedSpace, showsSpace: selectedSpaceID == nil, list: $linkList, groupID: $linkGroupID,
                           addRequests: presentation.addLinkRequests)
             } else if reviewing {
                 MorningReviewCard(store: store, onFreshStart: letGoOfReview, onDone: closeReview)
@@ -732,6 +746,7 @@ struct PanelView: View {
         let count = store.watchLaterCount(in: selectedSpace)
         if count > 0 {
             Button {
+                linkGroupID = nil
                 linkList = .watchLater
                 tab = .links
             } label: {
