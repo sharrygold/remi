@@ -273,7 +273,7 @@ private struct ShortcutField: View {
 
 private struct SpacesSettings: View {
     @ObservedObject var store: LibraryStore
-    @State private var newName = ""
+    @State private var creating = CommandLine.arguments.contains("--preview-new-space")
     @State private var deleting: Space?
 
     var body: some View {
@@ -289,20 +289,71 @@ private struct SpacesSettings: View {
                 }
             }
             .listStyle(.inset(alternatesRowBackgrounds: false))
-            HStack {
-                TextField("New Space", text: $newName)
-                    .textFieldStyle(.roundedBorder)
-                    .onSubmit(add)
-                Button("Add", action: add).disabled(newName.trimmingCharacters(in: .whitespaces).isEmpty)
+            if creating {
+                NewSpaceForm(store: store) { creating = false }
+                    .padding()
+            } else {
+                HStack {
+                    Button("New Space…", systemImage: "plus") { creating = true }
+                    Spacer()
+                    note("Drag to reorder.")
+                }
+                .padding()
             }
-            .padding()
-            note("Drag to reorder. In the capture bar, #name files an item in a Space, and a new #name creates one.")
-                .padding([.horizontal, .bottom])
+        }
+    }
+}
+
+/// Name, icon and colour for a new Space.
+private struct NewSpaceForm: View {
+    @ObservedObject var store: LibraryStore
+    let onClose: () -> Void
+    @State private var name = ""
+    @State private var symbol = LibraryStore.spaceSymbols[5]
+    @State private var tint = LibraryStore.spaceTints[0]
+    @State private var problem: String?
+
+    private var cleaned: String { name.trimmingCharacters(in: .whitespaces) }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            HStack(spacing: 8) {
+                Image(systemName: symbol).foregroundStyle(Tokens.Tint.named(tint)).frame(width: 22)
+                TextField("Space name", text: $name)
+                    .textFieldStyle(.roundedBorder)
+                    .onSubmit(create)
+            }
+            IconGrid(symbols: LibraryStore.spaceSymbols, selected: symbol, tint: Tokens.Tint.named(tint), columns: 12) { symbol = $0 }
+            HStack(spacing: 10) {
+                ForEach(LibraryStore.spaceTints, id: \.self) { item in
+                    Button { tint = item } label: {
+                        Circle().fill(Tokens.Tint.named(item)).frame(width: 20, height: 20)
+                            .overlay { if item == tint { Circle().stroke(.primary, lineWidth: 2).padding(-3) } }
+                            .padding(3)
+                    }
+                    .buttonStyle(.plain)
+                    .accessibilityLabel("Colour \(item)")
+                }
+                if let problem { note(problem) }
+                Spacer()
+                Button("Cancel", action: onClose)
+                Button("Create Space", action: create)
+                    .keyboardShortcut(.defaultAction)
+                    .tint(Color.brand)
+                    .buttonStyle(.borderedProminent)
+                    .foregroundStyle(Color.onBrand)
+                    .disabled(cleaned.isEmpty)
+            }
         }
     }
 
-    private func add() {
-        if store.addSpace(named: newName) != nil { newName = "" }
+    private func create() {
+        guard !cleaned.isEmpty else { return }
+        if store.addSpace(named: cleaned, symbol: symbol, tint: tint) != nil {
+            onClose()
+        } else {
+            problem = "You already have a Space with that name."
+        }
     }
 }
 
@@ -372,17 +423,8 @@ private struct LookPicker: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
-            LazyVGrid(columns: Array(repeating: GridItem(.fixed(28)), count: 8), spacing: 8) {
-                ForEach(LibraryStore.spaceSymbols, id: \.self) { symbol in
-                    Button { store.setLook(space, symbol: symbol) } label: {
-                        Image(systemName: symbol)
-                            .frame(width: 28, height: 28)
-                            .background(symbol == space.symbol ? space.tint.opacity(0.2) : .clear, in: RoundedRectangle(cornerRadius: 6))
-                    }
-                    .buttonStyle(.borderless)
-                    .accessibilityLabel(symbol)
-                }
-            }
+            IconGrid(symbols: LibraryStore.spaceSymbols, selected: space.symbol, tint: space.tint) { store.setLook(space, symbol: $0) }
+                .frame(width: 280)
             HStack(spacing: 10) {
                 ForEach(LibraryStore.spaceTints, id: \.self) { tint in
                     Button { store.setLook(space, tint: tint) } label: {

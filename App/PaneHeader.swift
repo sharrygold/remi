@@ -105,3 +105,29 @@ struct InlineAddField: View {
         .transition(.opacity)
     }
 }
+
+/// A short grid of symbols to choose from, for Spaces and link lists.
+struct IconGrid: View {
+    let symbols: [String]
+    let selected: String
+    var tint: Color = .brand
+    var columns = 8
+    let onPick: (String) -> Void
+
+    var body: some View {
+        LazyVGrid(columns: Array(repeating: GridItem(.flexible(minimum: 24)), count: columns), spacing: 4) {
+            ForEach(symbols, id: \.self) { symbol in
+                Button { onPick(symbol) } label: {
+                    Image(systemName: symbol)
+                        .frame(maxWidth: .infinity, minHeight: 26)
+                        .foregroundStyle(symbol == selected ? AnyShapeStyle(tint) : AnyShapeStyle(.secondary))
+                        .background(symbol == selected ? tint.opacity(0.2) : .clear, in: RoundedRectangle(cornerRadius: 6, style: .continuous))
+                        .contentShape(Rectangle())
+                }
+                .buttonStyle(.plain)
+                .accessibilityLabel(symbol)
+                .accessibilityAddTraits(symbol == selected ? .isSelected : [])
+            }
+        }
+    }
+}

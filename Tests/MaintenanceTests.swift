@@ -212,4 +212,12 @@ final class MaintenanceTests: XCTestCase {
         store.reorderSpaces(reversed)
         XCTAssertEqual(store.spaces.map(\.name), reversed.map(\.name))
     }
+
+    func testNewSpaceKeepsChosenLook() throws {
+        let store = LibraryStore(directory: nil)
+        let space = try XCTUnwrap(store.addSpace(named: "Garden", symbol: "leaf", tint: "learning"))
+        XCTAssertEqual(space.symbol, "leaf")
+        XCTAssertEqual(space.tintName, "learning")
+        XCTAssertNil(store.addSpace(named: "garden"), "names stay unique")
+    }
 }

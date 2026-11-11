@@ -141,14 +141,17 @@ enum LinkList: String, CaseIterable {
 /// A list of links you named yourself, alongside Saved links and Watch later.
 @Model
 final class LinkGroup: Identifiable {
+    static let defaultSymbol = "list.bullet"
     var id: UUID = UUID()
     var name: String = ""
+    var symbol: String = LinkGroup.defaultSymbol
     var sortOrder: Int = 0
     var createdAt: Date = Date()
     var updatedAt: Date = Date()
 
-    init(name: String, sortOrder: Int) {
+    init(name: String, symbol: String = LinkGroup.defaultSymbol, sortOrder: Int) {
         self.name = name
+        self.symbol = symbol
         self.sortOrder = sortOrder
     }
 }

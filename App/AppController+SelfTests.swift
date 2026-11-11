@@ -88,10 +88,10 @@ extension AppController {
             ("https://www.youtube.com/watch?v=invoices101", "How to write invoices that win", "Work", false),
             ("https://www.youtube.com/watch?v=swiftuilayout", "SwiftUI layout, explained", "Learning", false),
         ]
-        if let inspiration = store.addLinkGroup(named: "Inspiration"), let url = URL(string: "https://www.awwwards.com/websites/portfolio") {
+        if let inspiration = store.addLinkGroup(named: "Inspiration", symbol: "lightbulb"), let url = URL(string: "https://www.awwwards.com/websites/portfolio") {
             let link = store.addLink(url, group: inspiration, currentSpace: store.spaces.first { $0.name == "Learning" }).link
             store.setMetadata(for: link.id, title: "Sites worth studying", iconData: nil)
-            store.addLinkGroup(named: "Recipes")
+            store.addLinkGroup(named: "Recipes", symbol: "fork.knife")
         }
         for (address, title, spaceName, pinned) in links {
             guard let url = URL(string: address) else { continue }

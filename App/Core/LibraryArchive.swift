@@ -19,6 +19,7 @@ struct LibraryArchive: Codable, Equatable {
     struct LinkGroupRecord: Codable, Equatable {
         var id: UUID
         var name: String
+        var symbol: String? = nil
         var sortOrder: Int
         var createdAt: Date
         var updatedAt: Date
@@ -139,7 +140,7 @@ extension LibraryStore {
                       createdAt: $0.createdAt, updatedAt: $0.updatedAt, deletedAt: $0.deletedAt, titleEdited: $0.titleEdited, groupID: $0.groupID)
             },
             linkGroups: all(LinkGroup.self).sorted { $0.sortOrder < $1.sortOrder }.map {
-                .init(id: $0.id, name: $0.name, sortOrder: $0.sortOrder, createdAt: $0.createdAt, updatedAt: $0.updatedAt)
+                .init(id: $0.id, name: $0.name, symbol: $0.symbol, sortOrder: $0.sortOrder, createdAt: $0.createdAt, updatedAt: $0.updatedAt)
             }
         )
     }
@@ -187,6 +188,7 @@ extension LibraryStore {
                 ?? existingGroups.first(where: { CaptureParser.normalized($0.name) == CaptureParser.normalized(record.name) }) {
                 if record.updatedAt > match.updatedAt {
                     match.name = record.name
+                    match.symbol = record.symbol ?? match.symbol
                     match.updatedAt = record.updatedAt
                     summary.updated += 1
                 } else {
@@ -194,7 +196,7 @@ extension LibraryStore {
                 }
                 groupIDs[record.id] = match.id
             } else {
-                let group = LinkGroup(name: record.name, sortOrder: (existingGroups.map(\.sortOrder).max() ?? -1) + 1 + record.sortOrder)
+                let group = LinkGroup(name: record.name, symbol: record.symbol ?? LinkGroup.defaultSymbol, sortOrder: (existingGroups.map(\.sortOrder).max() ?? -1) + 1 + record.sortOrder)
                 group.id = record.id
                 group.createdAt = record.createdAt
                 group.updatedAt = record.updatedAt

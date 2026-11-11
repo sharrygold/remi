@@ -146,6 +146,10 @@ extension LibraryStore {
 
     // MARK: Custom lists
 
+    /// The short set offered when naming a list.
+    static let linkGroupSymbols = ["list.bullet", "star", "heart", "folder", "briefcase", "lightbulb", "book", "newspaper",
+                                   "fork.knife", "cart", "airplane", "paintbrush", "graduationcap", "music.note", "person.2", "sparkles"]
+
     private func isListNameFree(_ name: String, ignoring group: LinkGroup? = nil) -> Bool {
         let key = CaptureParser.normalized(name)
         let taken = LinkList.allCases.map(\.title) + linkGroups.filter { $0.id != group?.id }.map(\.name)
@@ -154,10 +158,10 @@ extension LibraryStore {
 
     /// Nil when the name is blank or already used by another list.
     @discardableResult
-    func addLinkGroup(named name: String) -> LinkGroup? {
+    func addLinkGroup(named name: String, symbol: String = LinkGroup.defaultSymbol) -> LinkGroup? {
         let cleaned = name.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !cleaned.isEmpty, isListNameFree(cleaned) else { return nil }
-        let group = LinkGroup(name: cleaned, sortOrder: (linkGroups.map(\.sortOrder).max() ?? -1) + 1)
+        let group = LinkGroup(name: cleaned, symbol: symbol, sortOrder: (linkGroups.map(\.sortOrder).max() ?? -1) + 1)
         context.insert(group)
         commit { [context] in context.delete(group) }
         return group
@@ -165,14 +169,16 @@ extension LibraryStore {
 
     /// False when the name is blank or already used by another list.
     @discardableResult
-    func rename(_ group: LinkGroup, to name: String) -> Bool {
+    func rename(_ group: LinkGroup, to name: String, symbol: String? = nil) -> Bool {
         let cleaned = name.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !cleaned.isEmpty, isListNameFree(cleaned, ignoring: group) else { return false }
-        let previous = group.name
+        let previous = (group.name, group.symbol)
         group.name = cleaned
+        group.symbol = symbol ?? group.symbol
         group.updatedAt = Date()
         commit {
-            group.name = previous
+            group.name = previous.0
+            group.symbol = previous.1
             group.updatedAt = Date()
         }
         return true
@@ -181,11 +187,11 @@ extension LibraryStore {
     /// Removes the list and moves its links to Saved links; nothing in it is lost.
     func delete(_ group: LinkGroup) {
         let members = links.filter { $0.groupID == group.id }
-        let (id, name, order, created) = (group.id, group.name, group.sortOrder, group.createdAt)
+        let (id, name, symbol, order, created) = (group.id, group.name, group.symbol, group.sortOrder, group.createdAt)
         for link in members { link.groupID = nil }
         context.delete(group)
         commit { [context] in
-            let restored = LinkGroup(name: name, sortOrder: order)
+            let restored = LinkGroup(name: name, symbol: symbol, sortOrder: order)
             restored.id = id
             restored.createdAt = created
             context.insert(restored)

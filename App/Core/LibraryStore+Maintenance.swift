@@ -107,12 +107,14 @@ extension LibraryStore {
     static let spaceTints = ["work", "clients", "personal", "learning", "homeReno"]
 
     @discardableResult
-    func addSpace(named name: String) -> Space? {
+    func addSpace(named name: String, symbol: String? = nil, tint: String? = nil) -> Space? {
         let cleaned = name.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !cleaned.isEmpty, !spaces.contains(where: { CaptureParser.normalized($0.name) == CaptureParser.normalized(cleaned) }) else {
             return nil
         }
         let space = resolveSpace(.new(cleaned), currentSpace: nil).space
+        if let symbol { space?.symbol = symbol }
+        if let tint { space?.tintName = tint }
         save()
         reload()
         return space

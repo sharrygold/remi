@@ -174,7 +174,9 @@ final class LinkStoreTests: XCTestCase {
         store.undo()
         XCTAssertEqual(other.groupID, recipes.id)
 
-        XCTAssertTrue(store.rename(recipes, to: "Food"))
+        XCTAssertEqual(recipes.symbol, LinkGroup.defaultSymbol)
+        XCTAssertTrue(store.rename(recipes, to: "Food", symbol: "fork.knife"))
+        XCTAssertEqual(recipes.symbol, "fork.knife")
         XCTAssertFalse(store.rename(recipes, to: "Watch Later"))
 
         let id = recipes.id
@@ -188,7 +190,7 @@ final class LinkStoreTests: XCTestCase {
 
     func testCustomListsSurviveExportAndImport() throws {
         let source = LibraryStore(directory: nil)
-        let group = try XCTUnwrap(source.addLinkGroup(named: "Reading"))
+        let group = try XCTUnwrap(source.addLinkGroup(named: "Reading", symbol: "book"))
         let link = source.addLink(url("https://example.com/essay"), group: group, currentSpace: nil).link
         let data = try LibraryArchive.encoder().encode(source.makeArchive())
 
@@ -196,6 +198,7 @@ final class LinkStoreTests: XCTestCase {
         _ = target.importArchive(try LibraryArchive.decode(data))
         target.reload()
         XCTAssertEqual(target.linkGroups.map(\.name), ["Reading"])
+        XCTAssertEqual(target.linkGroups.first?.symbol, "book")
         XCTAssertEqual(target.links(in: nil, group: group.id).map(\.id), [link.id])
         let twice = target.importArchive(try LibraryArchive.decode(data))
         XCTAssertEqual(twice.added, 0)

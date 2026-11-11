@@ -15,7 +15,8 @@ struct LinksPane: View {
     @State private var showWatched = false
     @State private var adding = false
     /// Naming a new list, or renaming the one on show.
-    @State private var naming: Naming?
+    @State private var naming: Naming? = CommandLine.arguments.contains("--preview-new-list") ? .new : nil
+    @State private var namingSymbol = LinkGroup.defaultSymbol
     /// A link just added by hand, whose name field opens next.
     @State private var renameID: UUID?
     @Environment(\.panelActions) private var actions
@@ -54,6 +55,9 @@ struct LinksPane: View {
                 InlineAddField(placeholder: "List name", symbol: "list.bullet", onSave: saveName, onClose: closeNaming,
                                initialText: naming == .rename ? selectedGroup?.name ?? "" : "")
                     .id(naming == .rename)
+                IconGrid(symbols: LibraryStore.linkGroupSymbols, selected: namingSymbol) { namingSymbol = $0 }
+                    .padding(.horizontal, Tokens.Spacing.s)
+                    .padding(.top, Tokens.Spacing.xs)
             }
             if adding {
                 InlineAddField(placeholder: "Paste or type a link", symbol: "link", onSave: addLink, onClose: { closeAdding() })
@@ -123,7 +127,7 @@ struct LinksPane: View {
     }
 
     private var shelfTitle: String { selectedGroup?.name ?? list.title }
-    private var shelfSymbol: String { groupID != nil ? "list.bullet" : list.symbol }
+    private var shelfSymbol: String { selectedGroup?.symbol ?? list.symbol }
 
     private func countLabel(_ title: String, _ count: Int) -> String { count > 0 ? "\(title)  (\(count))" : title }
 
@@ -136,7 +140,7 @@ struct LinksPane: View {
                         Label(countLabel(item.title, store.links(in: space, list: item).count), systemImage: item.symbol).tag(Shelf.list(item))
                     }
                     ForEach(store.linkGroups) { group in
-                        Label(countLabel(group.name, store.links(in: space, group: group.id).count), systemImage: "list.bullet").tag(Shelf.group(group.id))
+                        Label(countLabel(group.name, store.links(in: space, group: group.id).count), systemImage: group.symbol).tag(Shelf.group(group.id))
                     }
                 }
                 .pickerStyle(.inline)
@@ -175,7 +179,10 @@ struct LinksPane: View {
 
     private func startNaming(_ kind: Naming) {
         // After the menu has closed, so the field can take the cursor.
-        DispatchQueue.main.async { naming = kind }
+        DispatchQueue.main.async {
+            namingSymbol = kind == .rename ? selectedGroup?.symbol ?? LinkGroup.defaultSymbol : LinkGroup.defaultSymbol
+            naming = kind
+        }
     }
 
     private func closeNaming() {
@@ -186,12 +193,12 @@ struct LinksPane: View {
     /// Returns true when the name was used; a taken name leaves the field open to try again.
     private func saveName(_ text: String) -> Bool {
         if naming == .rename, let group = selectedGroup {
-            guard store.rename(group, to: text) else {
+            guard store.rename(group, to: text, symbol: namingSymbol) else {
                 actions.confirm("There's already a list with that name")
                 return false
             }
         } else {
-            guard let group = store.addLinkGroup(named: text) else {
+            guard let group = store.addLinkGroup(named: text, symbol: namingSymbol) else {
                 actions.confirm("There's already a list with that name")
                 return false
             }
