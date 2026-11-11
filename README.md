@@ -77,7 +77,7 @@ Stretch every day
 ## Install
 
 1. [Download Remi.zip](https://github.com/sharrygold/remi/releases/latest/download/Remi.zip), unzip it and move **Remi.app** to Applications.
-2. Open it. macOS says it can't check the app. Close that message.
+2. Open it. macOS says Apple could not verify Remi. Click **Done**.
 3. Open **System Settings > Privacy & Security**, scroll down and click **Open Anyway** next to Remi, then confirm.
 
 Remi is free, so it isn't notarized by Apple, which needs a paid developer account. That is why step 3 exists. You only do it once.
