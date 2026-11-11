@@ -39,6 +39,11 @@ struct LibraryArchive: Codable, Equatable {
         var deletedAt: Date?
         var actionKind: String?
         var actionTarget: String?
+        // Optional so archives from before repeating tasks still import.
+        var repeatName: String? = nil
+        var skippedSince: Date? = nil
+        var isPaused: Bool? = nil
+        var setAsideAt: Date? = nil
     }
 
     struct NoteRecord: Codable, Equatable {
@@ -110,7 +115,8 @@ extension LibraryStore {
             tasks: all(TaskItem.self).sorted { $0.createdAt < $1.createdAt }.map {
                 .init(id: $0.id, title: $0.title, notes: $0.notes, spaceID: $0.space?.id, dueDate: $0.dueDate, isImportant: $0.isImportant,
                       isCompleted: $0.isCompleted, completedAt: $0.completedAt, sortOrder: $0.sortOrder, createdAt: $0.createdAt,
-                      updatedAt: $0.updatedAt, deletedAt: $0.deletedAt, actionKind: $0.actionKind, actionTarget: $0.actionTarget)
+                      updatedAt: $0.updatedAt, deletedAt: $0.deletedAt, actionKind: $0.actionKind, actionTarget: $0.actionTarget,
+                      repeatName: $0.repeatName, skippedSince: $0.skippedSince, isPaused: $0.isPaused, setAsideAt: $0.setAsideAt)
             },
             notes: all(Note.self).sorted { $0.createdAt < $1.createdAt }.map {
                 .init(id: $0.id, body: $0.body, spaceID: $0.space?.id, isPinned: $0.isPinned, createdAt: $0.createdAt,
@@ -185,6 +191,10 @@ extension LibraryStore {
             task.deletedAt = record.deletedAt
             task.actionKind = record.actionKind
             task.actionTarget = record.actionTarget
+            task.repeatName = record.repeatName
+            task.skippedSince = record.skippedSince
+            task.isPaused = record.isPaused ?? false
+            task.setAsideAt = record.setAsideAt
         }
 
         let notesByID = Dictionary(all(Note.self).map { ($0.id, $0) }, uniquingKeysWith: { first, _ in first })

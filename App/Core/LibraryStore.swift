@@ -111,6 +111,7 @@ final class LibraryStore: ObservableObject {
         let order = (tasks.map(\.sortOrder).min() ?? 0) - 1
         let task = TaskItem(title: parsed.title, space: space, dueDate: parsed.due, isImportant: parsed.important, sortOrder: order)
         if let url = parsed.url { task.action = .url(url) }
+        task.repeatRule = parsed.repeatRule
         context.insert(task)
         commit { [context] in
             context.delete(task)
@@ -142,7 +143,7 @@ final class LibraryStore: ObservableObject {
 
     // MARK: Editing
 
-    private func change(_ task: TaskItem, _ apply: (TaskItem) -> Void, undo: @escaping (TaskItem) -> Void) {
+    func change(_ task: TaskItem, _ apply: (TaskItem) -> Void, undo: @escaping (TaskItem) -> Void) {
         apply(task)
         task.updatedAt = Date()
         commit {
@@ -152,6 +153,10 @@ final class LibraryStore: ObservableObject {
     }
 
     func toggleCompleted(_ task: TaskItem, now: Date = Date()) {
+        if !task.isCompleted, task.repeatRule != nil {
+            completeRepeating(task, now: now)
+            return
+        }
         let wasCompleted = task.isCompleted, previousDate = task.completedAt
         change(task, {
             $0.isCompleted = !wasCompleted
@@ -208,6 +213,7 @@ final class LibraryStore: ObservableObject {
 
     /// Just-ticked tasks stay listed for a moment so the tick can be seen before they fade.
     private func isOpen(_ task: TaskItem, now: Date) -> Bool {
+        guard !task.isSetAside, !task.isPaused else { return false }
         guard task.isCompleted, let completed = task.completedAt else { return !task.isCompleted }
         return now.timeIntervalSince(completed) < Self.lingerSeconds
     }
@@ -244,7 +250,7 @@ final class LibraryStore: ObservableObject {
     func todayOpenCount(now: Date = Date(), calendar: Calendar = .current) -> Int {
         tasks.filter { task in
             guard let due = task.dueDate else { return false }
-            return !task.isCompleted && calendar.isDate(due, inSameDayAs: now)
+            return !task.isCompleted && !task.isSetAside && !task.isPaused && calendar.isDate(due, inSameDayAs: now)
         }.count
     }
 }

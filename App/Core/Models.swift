@@ -41,6 +41,14 @@ final class TaskItem {
     /// The optional doorway, stored as two plain fields so the model stays sync-friendly. Use `action`.
     var actionKind: String?
     var actionTarget: String?
+    /// "daily", "weekdays", "weekly" or "monthly"; nil for a one-off task. Use `repeatRule`.
+    var repeatName: String?
+    /// The first date missed since the task was last done. Two weeks of misses pauses it.
+    var skippedSince: Date?
+    /// A repeating task left alone for two weeks: hidden until the morning review asks about it.
+    var isPaused: Bool = false
+    /// Let go in the morning review or a fresh start: out of the lists, still searchable, never deleted.
+    var setAsideAt: Date?
 
     init(title: String, space: Space?, dueDate: Date?, isImportant: Bool, sortOrder: Int) {
         self.title = title
