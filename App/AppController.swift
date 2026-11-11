@@ -101,6 +101,7 @@ final class AppController: NSObject, NSApplicationDelegate {
             exit(0)
         }
         migrateFromPerchIfNeeded()
+        if !isScratchSession { CompanionSize.keepChosenSizeAfterRescale() }
         SettingsKey.registerDefaults()
         store.rollForwardRepeating()
         if let name = options.appearance {

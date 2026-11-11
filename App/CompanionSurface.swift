@@ -31,17 +31,27 @@ enum CompanionSize: String, CaseIterable, Identifiable {
 
     var perchedScale: CGFloat {
         switch self {
-        case .small: 0.9
-        case .medium: 1.15
-        case .large: 1.4
+        case .small: 1.15
+        case .medium: 1.4
+        case .large: 1.7
         }
     }
 
     var cordScale: CGFloat {
         switch self {
-        case .small: 240.0 / 230
-        case .medium: 275.0 / 230
-        case .large: 320.0 / 230
+        case .small: 275.0 / 230
+        case .medium: 320.0 / 230
+        case .large: 375.0 / 230
+        }
+    }
+
+    /// The sizes moved up one step on 2026-11-11, so whoever chose one keeps the size they were looking at.
+    static func keepChosenSizeAfterRescale() {
+        let defaults = UserDefaults.standard
+        guard !defaults.bool(forKey: "companionSizeRescaled") else { return }
+        defaults.set(true, forKey: "companionSizeRescaled")
+        if let saved = defaults.string(forKey: CompanionKeys.size) {
+            defaults.set(saved == "large" ? "medium" : "small", forKey: CompanionKeys.size)
         }
     }
 

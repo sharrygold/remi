@@ -4,7 +4,7 @@ import CoreText
 /// Turns the recolourable SVG layers into finished bitmaps, once per colourway. Animating finished
 /// layers keeps every stitch locked in place: nothing is ever re-stroked while it moves.
 enum CompanionArt {
-    static let pixelsPerUnit: CGFloat = 3
+    static let pixelsPerUnit: CGFloat = 4
     private static var cache: [String: CGImage] = [:]
 
     static func image(_ layer: String, plumage: Plumage, canvas: CGSize) -> CGImage? {
