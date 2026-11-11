@@ -168,6 +168,7 @@ struct PanelView: View {
         .onAppear {
             captureFocused = true
             capture.submitNote = submitNote
+            capture.submit = submit
             capture.toggleLinkList = toggleLinkList
             nav.items = navItems
             nav.perform = performNav
@@ -1053,6 +1054,8 @@ final class CaptureText: ObservableObject {
     /// Mirrors the field's focus, so ⌘Return is only taken while typing a capture.
     var isFocused = false
     var submitNote: (() -> Void)?
+    /// Return in the capture bar; also used by --demo-type for recordings.
+    var submit: (() -> Void)?
     /// Tab on a pasted link; returns false when the text is not a link, so Tab behaves normally.
     var toggleLinkList: (() -> Bool)?
     @Published var linkListOverride: LinkList?

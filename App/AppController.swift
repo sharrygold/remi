@@ -140,6 +140,23 @@ final class AppController: NSObject, NSApplicationDelegate {
                 editor.setSelectedRange(NSRange(location: (editor.string as NSString).length, length: 0))
             }
         }
+        // --demo-type=TEXT types a line into the capture bar, one letter at a time, then presses Return.
+        // For recording the README loop without touching the keyboard. Pair with --demo-data --open.
+        if let text = CommandLine.arguments.first(where: { $0.hasPrefix("--demo-type=") }) {
+            let letters = Array(text.dropFirst("--demo-type=".count))
+            let start = Double(ProcessInfo.processInfo.environment["DEMO_TYPE_DELAY"] ?? "") ?? 1.5
+            for index in letters.indices {
+                DispatchQueue.main.asyncAfter(deadline: .now() + start + Double(index) * 0.075) { [self] in
+                    capture.text.append(letters[index])
+                    if let editor = panel.firstResponder as? NSTextView {
+                        editor.setSelectedRange(NSRange(location: (editor.string as NSString).length, length: 0))
+                    }
+                }
+            }
+            DispatchQueue.main.asyncAfter(deadline: .now() + start + Double(letters.count) * 0.075 + 0.7) { [self] in
+                capture.submit?()
+            }
+        }
         if let text = CommandLine.arguments.first(where: { $0.hasPrefix("--search=") }) {
             search.active = true
             search.query = String(text.dropFirst("--search=".count))
