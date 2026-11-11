@@ -134,6 +134,11 @@ final class AppController: NSObject, NSApplicationDelegate {
         Timer.scheduledTimer(withTimeInterval: 0.25, repeats: true) { [weak self] _ in self?.idleTick() }
         if let text = CommandLine.arguments.first(where: { $0.hasPrefix("--capture=") }) {
             capture.text = String(text.dropFirst("--capture=".count))
+            // For screenshots: the cursor at the end of the typed line, not the whole line selected.
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.8) { [self] in
+                guard let editor = panel.firstResponder as? NSTextView else { return }
+                editor.setSelectedRange(NSRange(location: (editor.string as NSString).length, length: 0))
+            }
         }
         if let text = CommandLine.arguments.first(where: { $0.hasPrefix("--search=") }) {
             search.active = true

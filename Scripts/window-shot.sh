@@ -1,6 +1,6 @@
 #!/bin/zsh
 # Captures one window of the app alone, with its shadow off and a transparent background.
-# Usage: Scripts/window-shot.sh OUTPUT.png [app arguments…]   (WAIT=seconds, PICK=largest|smallest)
+# Usage: Scripts/window-shot.sh OUTPUT.png [app arguments…]   (WAIT=seconds, PICK=largest|smallest, SHADOW=1)
 cd "$(dirname "$0")/.."
 NAME=$(awk '/APP_DISPLAY_NAME:/ {print $2}' project.yml)
 BIN="build/debug/Build/Products/Debug/$NAME.app/Contents/MacOS/$NAME"
@@ -13,6 +13,7 @@ PID=$!
 sleep ${WAIT:-3.5}
 LIST=$($HELPER $PID | sort -t' ' -k2 -n)
 if [[ ${PICK:-largest} == smallest ]]; then ID=$(echo "$LIST" | head -1 | cut -d' ' -f1); else ID=$(echo "$LIST" | tail -1 | cut -d' ' -f1); fi
-screencapture -x -o ${SHADOW:+} -l "$ID" "$OUT"
+# SHADOW=1 keeps the window shadow (panels); the default leaves it out (the companion).
+if [[ ${SHADOW:-0} == 1 ]]; then screencapture -x -l "$ID" "$OUT"; else screencapture -x -o -l "$ID" "$OUT"; fi
 kill $PID; wait $PID 2>/dev/null
 echo "$OUT windows=[$(echo $LIST | tr '\n' ' ')] picked=$ID"
