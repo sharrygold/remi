@@ -49,8 +49,6 @@ Remi hops when you add a task, pecks at the egg when it catches a link, and show
 
 ## Capture in one line
 
-<img src="docs/images/capture-typing-dark@2x.png" width="380" align="right" alt="The capture bar with a typed line and its Space and date tokens showing">
-
 Open Remi with **⌃Space** and type into the bar at the bottom.
 
 | Type | What happens |
@@ -72,7 +70,9 @@ Book the venue #work fri !
 Stretch every day
 ```
 
-<br clear="right">
+<p align="center">
+  <img src="docs/images/capture-typing-dark@2x.png" width="380" alt="The capture bar with a typed line and its Space and date tokens showing">
+</p>
 
 ## Install
 
