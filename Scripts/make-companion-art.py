@@ -106,7 +106,16 @@ egg = load("companion/egg.svg")
 write("perched-egg", CENTRED, paint(egg.find(Q("ellipse")), fill="egg"))
 
 head = load("companion/stitched/head.svg")
-write("perched-crest", CENTRED, enlarge((0, 0), paint(by_id(head, "crest"), fill="crest")))
+def paint_crest(crest):
+    """The crest is feathers in body colour with stitched edges and a gold quill down each one."""
+    paint(crest, fill="body", stroke="stitch")
+    for node in crest.iter():
+        if node.get("class") == "quill":
+            node.set("stroke", "{{crest}}")
+    return crest
+
+
+write("perched-crest", CENTRED, enlarge((0, 0), paint_crest(by_id(head, "crest"))))
 eye = by_id(head, "eye")
 circles = eye.findall(Q("circle"))
 paint(circles[0], fill="eye")
@@ -124,10 +133,10 @@ doze = load("companion/stitched/head-doze.svg")
 doze_defs = doze.find(Q("defs"))
 pieces = [node for node in doze if node.tag != Q("defs")]
 paint(pieces[0], stroke="body")                  # neck
-paint(pieces[1], fill="body", stroke="stitch")   # skull
-paint(pieces[3], fill="crest")
-paint(pieces[4], fill="beak")
-paint(pieces[5], stroke="eye")                   # closed eye
+paint(by_id(doze, "skull-doze"), fill="body", stroke="stitch")
+paint_crest(by_id(doze, "crest"))
+paint(by_id(doze, "beak-doze"), fill="beak")
+paint(by_id(doze, "eye-doze"), stroke="eye")     # closed eye
 pieces[0].set("stroke-width", NECK_WIDTH)
 write("perched-head-doze", CANVAS, pieces[0], enlarge((79, 42), *pieces[1:]), defs=doze_defs)
 

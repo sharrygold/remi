@@ -68,6 +68,7 @@ Drawn in a 120 x 120 space (y down), shown at about 104 x 108 pt.
 - **Egg:** `egg.svg` placed with `translate(52, 56) rotate(-14°)`. The count is live text in the same group (Bodoni Moda italic 500, size 11), so it tilts and rocks with the egg.
 - **Head:** `head.svg`. Its origin is the neck pivot at **(81, 35)**, beak along +x. It is symmetric about the beak line (eye on the line, crest trailing behind), so it turns a full circle and never flips.
 - **Head light:** `head-shade.svg` at (81, 35) never rotates. The fixed highlight makes the head read as a lit ball.
+- **Crest:** a little fan of three rounded feathers behind the head (centre one along the beak line, two at ±30°), in body colour with stitched edges and a gold quill each (crest token). It replaced the old gold V, which read as a second open beak. The beak stays the only solid gold point on the head.
 - **Crest pivot** (for the lag): (-9, 0) in head space.
 - **Neck** never rotates. The neck ruff stitches hide the join.
 - **Legs** are static. Thigh feathers cover the tops of the legs.
