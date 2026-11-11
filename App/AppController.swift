@@ -20,7 +20,7 @@ final class AppController: NSObject, NSApplicationDelegate {
     var birdLookAway: DispatchWorkItem?
 
     lazy var debug: WidgetDebug = {
-        let debug = WidgetDebug(prototype: options.widget, colour: options.colour)
+        let debug = WidgetDebug(prototype: options.widget, plumage: options.plumage)
         debug.previewHover = CommandLine.arguments.contains("--preview-hover")
         debug.previewLook = options.previewLook
         return debug
@@ -108,16 +108,12 @@ final class AppController: NSObject, NSApplicationDelegate {
             runCordSelfTest()
             exit(0)
         }
-        if options.gallery {
-            buildGallery()
-            return
-        }
         store.onLinkAdded = { [weak self] link in self?.metadata.fetch(link) }
         presentation.closeAfterOpening = { [weak self] in
             guard let self, !self.presentation.pinned else { return }
             self.hidePanel()
         }
-        if let style = options.handle { buildGalleryHandle(style) } else { buildWidget() }
+        buildWidget()
         buildPanel()
         buildStatusItem()
         registerHotKey()

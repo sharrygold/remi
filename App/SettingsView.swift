@@ -163,12 +163,12 @@ private struct GeneralSettings: View {
                 }
                 Toggle("Offer to save a link I've copied", isOn: $clipboardNudge)
             }
-            Section("Widget") {
-                Picker("Style", selection: $widget.prototype) {
+            Section("Companion") {
+                Picker("Companion", selection: $widget.prototype) {
                     ForEach(WidgetPrototype.allCases) { Text($0.title).tag($0) }
                 }
-                Picker("Colour", selection: $widget.colour) {
-                    ForEach(WidgetColour.allCases) { Text($0.title).tag($0) }
+                Picker("Plumage", selection: $widget.plumage) {
+                    ForEach(Plumage.allCases) { Text($0.title).tag($0) }
                 }
                 Toggle("Show today's task count", isOn: $showCount)
                 Toggle("Tuck into the edge when idle", isOn: $autoTuck)

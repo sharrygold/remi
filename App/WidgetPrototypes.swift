@@ -1,57 +1,22 @@
 import AppKit
 import SwiftUI
 
-/// Colours under comparison in the debug menu. `ink` stays readable on `fill`.
-enum WidgetColour: String, CaseIterable, Identifiable {
-    case stone, offWhite, charcoal, terracotta, accent
-
-    var id: String { rawValue }
-
-    var title: String {
-        switch self {
-        case .stone: "Warm stone grey"
-        case .offWhite: "Off-white"
-        case .charcoal: "Deep charcoal"
-        case .terracotta: "Muted terracotta"
-        case .accent: "System accent"
-        }
-    }
-
-    var fill: Color {
-        switch self {
-        case .stone: Color(red: 0.62, green: 0.58, blue: 0.53)
-        case .offWhite: Color(red: 0.96, green: 0.94, blue: 0.90)
-        case .charcoal: Color(red: 0.17, green: 0.17, blue: 0.18)
-        case .terracotta: Color(red: 0.72, green: 0.42, blue: 0.32)
-        case .accent: .accentColor
-        }
-    }
-
-    var ink: Color {
-        switch self {
-        case .offWhite: Color(red: 0.17, green: 0.17, blue: 0.18)
-        default: Color(red: 0.98, green: 0.97, blue: 0.95)
-        }
-    }
-}
-
 /// The widget designs under comparison, switched live from the debug menu.
 enum WidgetPrototype: String, CaseIterable, Identifiable {
-    case pebble, bird, cord
+    /// Raw values are stored in settings and placement keys, so they stay as they were.
+    case bird, cord
 
     var id: String { rawValue }
 
     var title: String {
         switch self {
-        case .pebble: "Pebble"
-        case .bird: "Sankofa bird"
-        case .cord: "Knotted cord"
+        case .bird: "Perched"
+        case .cord: "On the cord"
         }
     }
 
     var windowSize: CGSize {
         switch self {
-        case .pebble: CGSize(width: 96, height: 88)
         case .bird: CGSize(width: 104, height: 108)
         case .cord: CGSize(width: CordSimulation.width, height: 240)
         }
@@ -65,14 +30,12 @@ enum WidgetPrototype: String, CaseIterable, Identifiable {
 
 /// The widget's look and live state. Style and colour are chosen in Settings and remembered.
 final class WidgetDebug: ObservableObject {
-    private static let prototypeKey = "debug.widgetPrototype"
-    private static let colourKey = "debug.widgetColour"
 
     @Published var prototype: WidgetPrototype {
-        didSet { UserDefaults.standard.set(prototype.rawValue, forKey: Self.prototypeKey) }
+        didSet { UserDefaults.standard.set(prototype.rawValue, forKey: CompanionKeys.style) }
     }
-    @Published var colour: WidgetColour {
-        didSet { UserDefaults.standard.set(colour.rawValue, forKey: Self.colourKey) }
+    @Published var plumage: Plumage {
+        didSet { UserDefaults.standard.set(plumage.rawValue, forKey: CompanionKeys.plumage) }
     }
 
     /// Set by --preview-hover so hover states can be captured without a mouse.
@@ -90,10 +53,11 @@ final class WidgetDebug: ObservableObject {
     }
     let cord = CordSimulation()
 
-    init(prototype: WidgetPrototype?, colour: WidgetColour?) {
+    init(prototype: WidgetPrototype?, plumage: Plumage?) {
         let defaults = UserDefaults.standard
-        self.prototype = prototype ?? defaults.string(forKey: Self.prototypeKey).flatMap(WidgetPrototype.init) ?? .bird
-        self.colour = colour ?? defaults.string(forKey: Self.colourKey).flatMap(WidgetColour.init) ?? .stone
+        // Anything unrecognised, such as the retired pebble, falls back to Perched.
+        self.prototype = prototype ?? defaults.string(forKey: CompanionKeys.style).flatMap(WidgetPrototype.init) ?? .bird
+        self.plumage = plumage ?? defaults.string(forKey: CompanionKeys.plumage).flatMap(Plumage.init) ?? .ivory
     }
 }
 
@@ -118,12 +82,10 @@ struct WidgetView: View {
     var body: some View {
         Group {
             switch debug.prototype {
-            case .pebble:
-                PebbleWidget(colour: debug.colour, count: count, previewHover: debug.previewHover, resting: debug.tucked)
             case .bird:
-                BirdWidget(colour: debug.colour, count: count, target: debug.previewLook ?? debug.birdPointer, mirrored: debug.onLeftEdge)
+                BirdWidget(colour: debug.plumage, count: count, target: debug.previewLook ?? debug.birdPointer, mirrored: debug.onLeftEdge)
             case .cord:
-                CordWidget(colour: debug.colour, count: count, simulation: debug.cord)
+                CordWidget(colour: debug.plumage, count: count, simulation: debug.cord)
             }
         }
         .frame(width: debug.prototype.windowSize.width, height: debug.prototype.windowSize.height)
@@ -134,58 +96,6 @@ struct WidgetView: View {
         .accessibilityElement()
         .accessibilityLabel("\(AppInfo.displayName), \(store.todayOpenCount()) tasks today")
         .accessibilityAddTraits(.isButton)
-    }
-}
-
-/// A solid stone that breathes slowly and perks up under the pointer.
-struct PebbleWidget: View {
-    let colour: WidgetColour
-    let count: Int
-    let previewHover: Bool
-    var resting = false
-    @State private var hovering = false
-    @State private var inhaled = false
-    @Environment(\.accessibilityReduceMotion) private var reduceMotion
-
-    private var perked: Bool { hovering || previewHover }
-
-    var body: some View {
-        PebbleShape()
-            .fill(colour.fill)
-            .overlay {
-                VStack(spacing: 1) {
-                    HStack(spacing: Tokens.Spacing.m) {
-                        eye
-                        eye
-                    }
-                    Text("\(count)").font(.headline).monospacedDigit()
-                }
-                .foregroundStyle(colour.ink)
-                .offset(y: perked ? -1 : 0)
-            }
-            .frame(width: 68, height: 56)
-            .shadow(color: .black.opacity(perked ? 0.32 : 0.24), radius: perked ? 8 : 5, y: perked ? 5 : 3)
-            .scaleEffect(x: inhaled ? 1.02 : 0.99, y: inhaled ? 0.98 : 1.02, anchor: .bottom)
-            .scaleEffect(perked && !reduceMotion ? 1.08 : 1)
-            .rotationEffect(.degrees(perked && !reduceMotion ? -4 : 0))
-            .animation(reduceMotion ? nil : Tokens.Motion.quick, value: perked)
-            .onHover { hovering = $0 }
-            .onAppear { breathe(!resting) }
-            .onChange(of: resting) { _, resting in breathe(!resting) }
-    }
-
-    /// Breathing redraws the shadow every frame, so it stops while tucked away.
-    private func breathe(_ on: Bool) {
-        guard !reduceMotion else { return }
-        if on {
-            withAnimation(.easeInOut(duration: 3.2).repeatForever(autoreverses: true)) { inhaled = true }
-        } else {
-            withAnimation(.easeOut(duration: 0.6)) { inhaled = false }
-        }
-    }
-
-    private var eye: some View {
-        Capsule().frame(width: 4, height: perked ? 10 : 7)
     }
 }
 
@@ -220,7 +130,7 @@ struct BirdHeadShape: Shape {
 
 /// Sankofa-inspired: at rest it looks back at the egg on its back; on hover it looks at the pointer.
 struct BirdWidget: View {
-    let colour: WidgetColour
+    let colour: Plumage
     let count: Int
     let target: CGPoint?
     let mirrored: Bool
@@ -248,13 +158,13 @@ struct BirdWidget: View {
 
     var body: some View {
         ZStack(alignment: .topLeading) {
-            Rectangle().fill(colour.fill).frame(width: 56, height: 4).offset(x: 48, y: 92)
+            Rectangle().fill(colour.body).frame(width: 56, height: 4).offset(x: 48, y: 92)
             ForEach([42.0, 54.0], id: \.self) { x in
-                Rectangle().fill(colour.fill).frame(width: 3, height: 10).offset(x: x, y: 84)
+                Rectangle().fill(colour.body).frame(width: 3, height: 10).offset(x: x, y: 84)
             }
-            BirdBodyShape().fill(colour.fill)
-            Ellipse().fill(colour.ink).frame(width: 26, height: 32).offset(x: 59, y: 30)
-            Text("\(count)").font(.caption.bold()).monospacedDigit().foregroundStyle(colour.fill)
+            BirdBodyShape().fill(colour.body)
+            Ellipse().fill(colour.accent).frame(width: 26, height: 32).offset(x: 59, y: 30)
+            Text("\(count)").font(.caption.bold()).monospacedDigit().foregroundStyle(colour.body)
                 .scaleEffect(x: mirrored ? -1 : 1)
                 .frame(width: 26, height: 32).offset(x: 59, y: 30)
             head
@@ -274,8 +184,8 @@ struct BirdWidget: View {
 
     private var head: some View {
         ZStack {
-            BirdHeadShape().fill(colour.fill)
-            Circle().fill(colour.ink).frame(width: 5, height: 5).offset(x: 5, y: -4)
+            BirdHeadShape().fill(colour.body)
+            Circle().fill(colour.accent).frame(width: 5, height: 5).offset(x: 5, y: -4)
         }
     }
 }
@@ -486,7 +396,7 @@ final class CordSimulation: ObservableObject {
 
 /// One knot per task due today. Sways on its own and opens the panel when pulled.
 struct CordWidget: View {
-    let colour: WidgetColour
+    let colour: Plumage
     let count: Int
     @ObservedObject var simulation: CordSimulation
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
@@ -503,11 +413,11 @@ struct CordWidget: View {
                 var rope = Path()
                 rope.move(to: first)
                 points.dropFirst().forEach { rope.addLine(to: $0) }
-                canvas.stroke(rope, with: .color(colour.fill), style: StrokeStyle(lineWidth: 3.5, lineCap: .round, lineJoin: .round))
+                canvas.stroke(rope, with: .color(colour.body), style: StrokeStyle(lineWidth: 3.5, lineCap: .round, lineJoin: .round))
                 let radius = simulation.knotRadius(count: count)
                 for point in simulation.knots(count: count) {
                     canvas.fill(Path(ellipseIn: CGRect(x: point.x - radius, y: point.y - radius, width: radius * 2, height: radius * 2)),
-                                with: .color(colour.fill))
+                                with: .color(colour.body))
                 }
             }
         }

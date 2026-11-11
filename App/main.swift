@@ -10,9 +10,8 @@ struct Options {
     private static func value(_ key: String) -> String? {
         CommandLine.arguments.first { $0.hasPrefix("--\(key)=") }?.split(separator: "=").last.map(String.init)
     }
-    let handle = value("handle").flatMap(HandleStyle.init)
     let widget = value("widget").flatMap(WidgetPrototype.init)
-    let colour = value("colour").flatMap(WidgetColour.init)
+    let plumage = value("plumage").flatMap(Plumage.init)
     let previewPull = value("preview-pull").flatMap { Double($0) }.map { CGFloat($0) }
     let previewLook: CGPoint? = value("preview-look").flatMap { text in
         let parts = text.split(separator: ",").compactMap { Double($0) }
@@ -23,7 +22,6 @@ struct Options {
     let appearance = value("appearance")
     let open = CommandLine.arguments.contains("--open")
     let allowCapture = CommandLine.arguments.contains("--allow-capture")
-    let gallery = CommandLine.arguments.contains("--gallery")
 }
 
 let app = NSApplication.shared

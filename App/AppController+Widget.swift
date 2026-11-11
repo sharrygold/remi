@@ -26,7 +26,6 @@ extension AppController {
     }
 
     @objc func screensChanged() {
-        guard options.handle == nil else { return }
         handle.setFrame(widgetFrame(), display: true)
     }
 
@@ -52,7 +51,7 @@ extension AppController {
 
     func idleTick() {
         if let until = hiddenUntil, Date() >= until { showWidgetNow() }
-        guard options.handle == nil, !debug.tucked, !presentation.presented, NSEvent.pressedMouseButtons == 0,
+        guard !debug.tucked, !presentation.presented, NSEvent.pressedMouseButtons == 0,
               UserDefaults.standard.object(forKey: "autoTuck") as? Bool ?? true,
               !isPointerNearWidget(), Date().timeIntervalSince(lastActivity) >= Self.idleSecondsBeforeTuck else { return }
         debug.tucked = true
@@ -116,8 +115,6 @@ extension AppController {
             if debug.cord.isNear(point, within: 6) { debug.cord.brush(at: point, dx: event.deltaX) }
         case .bird:
             followWithBird(point)
-        case .pebble:
-            break
         }
     }
 
@@ -139,9 +136,9 @@ extension AppController {
     }
 
     /// Clicks pass through wherever the widget draws nothing: the cord by its rope's shape, the
-    /// bird and pebble by the pixel under the pointer. Never changed mid-drag.
+    /// bird by the pixel under the pointer. Never changed mid-drag.
     func updateCordHitTesting() {
-        guard NSEvent.pressedMouseButtons == 0, options.handle == nil else { return }
+        guard NSEvent.pressedMouseButtons == 0 else { return }
         let mouse = NSEvent.mouseLocation
         guard debug.prototype == .cord else {
             guard handle.frame.contains(mouse), let view = handle.contentView else { return }
@@ -165,35 +162,7 @@ extension AppController {
     }
 
     func applyPrototype() {
-        guard options.handle == nil else { return }
         handle.setFrame(widgetFrame(), display: true)
         updateCordHitTesting()
-    }
-
-    /// Reached with --handle=name: the Phase 1 gallery styles.
-    func buildGalleryHandle(_ style: HandleStyle) {
-        let screen = NSScreen.screens[0].visibleFrame
-        let size = style.size
-        let inset = style.attachesToEdge ? 0 : Tokens.Size.handleGap
-        let frame = NSRect(x: screen.maxX - size.width - inset, y: screen.maxY - screen.height / 3 - size.height / 2,
-                           width: size.width, height: size.height)
-        handle = makeHandleWindow(frame: frame)
-        let count = Sample.today.count + Sample.overdue.count
-        let hosting = HandleHostingView(rootView: HandleView(style: style, count: count, nextTitle: Sample.today[0].title))
-        hosting.onClick = { [weak self] in self?.togglePanel() }
-        handle.contentView = hosting
-        handle.orderFrontRegardless()
-    }
-
-    func buildGallery() {
-        let screen = NSScreen.screens[0].visibleFrame
-        let size = NSSize(width: 1140, height: 520)
-        let frame = NSRect(x: screen.midX - size.width / 2, y: screen.midY - size.height / 2, width: size.width, height: size.height)
-        let window = HandleWindow(contentRect: frame, styleMask: [.borderless, .nonactivatingPanel], backing: .buffered, defer: false)
-        configure(window)
-        window.hasShadow = false
-        window.contentView = FirstMouseHostingView(rootView: HandleGalleryView())
-        window.orderFrontRegardless()
-        handle = window
     }
 }
