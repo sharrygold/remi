@@ -39,6 +39,29 @@ final class CompanionSettings: ObservableObject {
     }
 }
 
+/// Runs the companion's springs while something is moving, and stops completely when nothing is.
+/// A plain timer, because the view's display link never fired for the perched bird's window.
+final class FrameClock {
+    private var timer: Timer?
+    private let tick: () -> Void
+
+    init(tick: @escaping () -> Void) { self.tick = tick }
+
+    var isRunning: Bool { timer != nil }
+
+    func start() {
+        guard timer == nil else { return }
+        let timer = Timer(timeInterval: 1.0 / 60, repeats: true) { [weak self] _ in self?.tick() }
+        RunLoop.main.add(timer, forMode: .common)
+        self.timer = timer
+    }
+
+    func stop() {
+        timer?.invalidate()
+        timer = nil
+    }
+}
+
 enum CompanionEvent {
     case taskAdded, linkCaught, taskDone, allDone
 }

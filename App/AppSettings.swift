@@ -13,6 +13,9 @@ enum SettingsKey {
     static let hotKeyCode = "hotKeyCode"
     static let hotKeyModifiers = "hotKeyModifiers"
     static let hotKeyDisplay = "hotKeyDisplay"
+    static let saveTabKeyCode = "saveTabKeyCode"
+    static let saveTabModifiers = "saveTabModifiers"
+    static let saveTabDisplay = "saveTabDisplay"
     static let clipboardNudge = ClipboardNudge.preferenceKey
     static let preferredBrowser = LinkOpener.preferenceKey
     static let welcomeSeen = "welcomeSeen"
@@ -30,6 +33,9 @@ enum SettingsKey {
             hotKeyCode: HotKeyCombo.standard.keyCode,
             hotKeyModifiers: HotKeyCombo.standard.modifiers,
             hotKeyDisplay: HotKeyCombo.standard.display,
+            saveTabKeyCode: HotKeyCombo.saveTabStandard.keyCode,
+            saveTabModifiers: HotKeyCombo.saveTabStandard.modifiers,
+            saveTabDisplay: HotKeyCombo.saveTabStandard.display,
         ])
     }
 }

@@ -63,6 +63,8 @@ final class AppController: NSObject, NSApplicationDelegate {
 
     var hotKeyRegistered = false
 
+    var saveTabHotKey: HotKey?
+
     var lastActivity = Date()
 
     var hiddenUntil: Date?
@@ -199,6 +201,7 @@ final class AppController: NSObject, NSApplicationDelegate {
                 NSApp.terminate(nil)
             }
         }
+        if CommandLine.arguments.contains("--head-selftest") { runHeadSelfTest() }
         if CommandLine.arguments.contains("--clipboard-selftest") { runClipboardChipSelfTest() }
         if CommandLine.arguments.contains("--add-selftest") { runAddSelfTest() }
     }
@@ -328,6 +331,36 @@ final class AppController: NSObject, NSApplicationDelegate {
         hotKeyRegistered = key.register(HotKeyCombo.saved)
         if !hotKeyRegistered { NSLog("Global shortcut \(HotKeyCombo.saved.display) could not be registered") }
         hotKey = key
+        let saveKey = HotKey { [weak self] in Task { @MainActor in self?.saveFrontTab() } }
+        if !saveKey.register(HotKeyCombo.savedSaveTab) { NSLog("Save-tab shortcut \(HotKeyCombo.savedSaveTab.display) could not be registered") }
+        saveTabHotKey = saveKey
+    }
+
+    /// The save-tab shortcut, from anywhere. With the panel closed, the companion is the confirmation.
+    @MainActor func saveFrontTab() {
+        guard let browser = BrowserTab.frontmost() else {
+            NSSound.beep()
+            return
+        }
+        if presentation.presented, capture.saveTab?(browser) != nil { return }
+        switch BrowserTab.read(browser) {
+        case .success(let page):
+            lastActivity = Date()
+            perched?.setTucked(false)
+            perched?.setDozing(false)
+            let saved = store.addLink(page.url, currentSpace: nil)
+            if saved.isNew {
+                store.setMetadata(for: saved.link.id, title: page.title, iconData: nil)
+            } else {
+                refreshCompanion(event: .linkCaught)
+            }
+        case .failure(.notAllowed):
+            presentation.showWelcome = false
+            showPanel()
+            presentation.message = "Allow \(browser.name) in System Settings > Privacy & Security > Automation"
+        case .failure:
+            NSSound.beep()
+        }
     }
 
     func showRightClickMenu(event: NSEvent, view: NSView) {

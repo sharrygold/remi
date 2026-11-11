@@ -66,8 +66,9 @@ extension AppController {
         }
     }
 
-    func isPointerNearWidget() -> Bool {
-        handle.frame.insetBy(dx: -48, dy: -48).contains(NSEvent.mouseLocation)
+    func isPointerNearWidget(_ point: NSPoint = NSEvent.mouseLocation) -> Bool {
+        if let perched { return perched.notices(point) || handle.frame.contains(point) }
+        return handle.frame.insetBy(dx: -48, dy: -48).contains(point)
     }
 
     func buildWidget() {
@@ -164,14 +165,14 @@ extension AppController {
         }
     }
 
-    func pointerMoved() {
+    func pointerMoved(at point: NSPoint = NSEvent.mouseLocation) {
         updateMouseCatching()
-        if isPointerNearWidget() {
+        if isPointerNearWidget(point) {
             lastActivity = Date()
             perched?.setTucked(false)
             perched?.setDozing(false)
         }
-        surface.pointerMoved(toScreen: NSEvent.mouseLocation)
+        surface.pointerMoved(toScreen: point)
     }
 
     /// Clicks pass through wherever the companion draws nothing. Never changed mid-drag.

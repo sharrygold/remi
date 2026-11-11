@@ -163,8 +163,9 @@ final class CompanionMotionTests: XCTestCase {
 
     func testCrestLagIsClamped() {
         var head = HeadFollow()
-        head.move(to: 200)
-        XCTAssertEqual(head.crest.value, -22)
+        for step in stride(from: 40.0, through: 240, by: 40) { head.move(to: step) }
+        XCTAssertEqual(head.crest.value, -22, accuracy: 1)
+        XCTAssertGreaterThanOrEqual(head.crest.value, -22)
     }
 
     private func run(_ cord: CordMotion, from start: Double, seconds: Double) -> CordFrame {

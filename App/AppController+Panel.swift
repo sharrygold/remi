@@ -70,9 +70,6 @@ extension AppController {
                 guard self.capture.isFocused, let submit = self.capture.submitNote else { return event }
                 submit()
                 return nil
-            case UInt16(kVK_ANSI_S):
-                guard !inNote, self.capture.saveBrowserTab?() == true else { return event }
-                return nil
             case UInt16(kVK_ANSI_F):
                 self.search.requests += 1
                 return nil

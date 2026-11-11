@@ -19,7 +19,7 @@ final class PerchedBirdView: NSView, CompanionSurface {
     private var reduceMotion: Bool { NSWorkspace.shared.accessibilityDisplayShouldReduceMotion }
 
     private var head = HeadFollow()
-    private var link: CADisplayLink?
+    private lazy var clock = FrameClock { [weak self] in self?.tick() }
     private var lastTick = 0.0
     private var lookAway: DispatchWorkItem?
     private var noticing = false
@@ -224,6 +224,16 @@ final class PerchedBirdView: NSView, CompanionSurface {
             DispatchQueue.main.asyncAfter(deadline: .now() + 0.5, execute: work)
         }
     }
+
+    /// True when the pointer is close enough for the bird to notice it, even if it is tucked or dozing.
+    func notices(_ point: NSPoint) -> Bool {
+        guard let window else { return false }
+        let local = toArtSpace(point, window: window)
+        return hypot(local.x - HeadFollow.pivot.x, local.y - HeadFollow.pivot.y) * Self.scale <= Self.noticeRadius
+    }
+
+    /// For the self-test.
+    var headReadout: (target: Double, angle: Double) { (head.angle.target, head.angle.value) }
 
     /// For screenshots: points the head as if the pointer were at this art-space position.
     func previewLook(at point: CGPoint) {
@@ -433,23 +443,20 @@ final class PerchedBirdView: NSView, CompanionSurface {
     // MARK: Frames
 
     private func startClock() {
-        if link == nil {
-            let link = displayLink(target: self, selector: #selector(tick(_:)))
-            link.add(to: .main, forMode: .common)
-            self.link = link
-        }
-        link?.isPaused = false
+        // Only when waking: resetting the time on every mouse event would starve the spring.
+        guard !clock.isRunning else { return }
         lastTick = CACurrentMediaTime()
+        clock.start()
     }
 
-    @objc private func tick(_ link: CADisplayLink) {
+    private func tick() {
         let now = CACurrentMediaTime()
         let dt = min(now - lastTick, 0.05)
         lastTick = now
         if reduceMotion { head.snapToTarget() } else { head.step(dt) }
         applyHead()
         // Nothing moving: the clock stops until the pointer or a mood starts it again.
-        if head.isSettled { link.isPaused = true }
+        if head.isSettled { clock.stop() }
     }
 
     private func applyHead() {

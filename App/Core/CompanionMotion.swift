@@ -77,7 +77,9 @@ struct HeadFollow {
     /// A chosen spot on the arc (rest, facing the panel). `returning` uses the slower 0.6 s settle.
     mutating func move(to next: Double, returning: Bool = false) {
         let delta = next - t
-        crest.value = min(max(-delta * 0.8, -22), 22)
+        // Eased in rather than set outright: mouse events arrive in bursts and would make it flicker.
+        let lag = min(max(-delta * 0.8, -22), 22)
+        if abs(lag) > abs(crest.value) { crest.value += (lag - crest.value) * 0.5 }
         t = next
         angle.target = 140 + next
         let jump = abs(angle.target - angle.value)

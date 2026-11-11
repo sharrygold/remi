@@ -8,6 +8,7 @@ struct HotKeyCombo: Equatable {
     var display: String
 
     static let standard = HotKeyCombo(keyCode: kVK_Space, modifiers: controlKey, display: "⌃Space")
+    static let saveTabStandard = HotKeyCombo(keyCode: kVK_ANSI_S, modifiers: controlKey | optionKey, display: "⌃⌥S")
 
     static var saved: HotKeyCombo {
         let defaults = UserDefaults.standard
@@ -16,12 +17,28 @@ struct HotKeyCombo: Equatable {
                            display: defaults.string(forKey: SettingsKey.hotKeyDisplay) ?? standard.display)
     }
 
+    static var savedSaveTab: HotKeyCombo {
+        let defaults = UserDefaults.standard
+        return HotKeyCombo(keyCode: defaults.integer(forKey: SettingsKey.saveTabKeyCode),
+                           modifiers: defaults.integer(forKey: SettingsKey.saveTabModifiers),
+                           display: defaults.string(forKey: SettingsKey.saveTabDisplay) ?? saveTabStandard.display)
+    }
+
     func save() {
         let defaults = UserDefaults.standard
         defaults.set(keyCode, forKey: SettingsKey.hotKeyCode)
         defaults.set(modifiers, forKey: SettingsKey.hotKeyModifiers)
         defaults.set(display, forKey: SettingsKey.hotKeyDisplay)
     }
+
+    func saveAsSaveTab() {
+        let defaults = UserDefaults.standard
+        defaults.set(keyCode, forKey: SettingsKey.saveTabKeyCode)
+        defaults.set(modifiers, forKey: SettingsKey.saveTabModifiers)
+        defaults.set(display, forKey: SettingsKey.saveTabDisplay)
+    }
+
+    func sameKeys(as other: HotKeyCombo) -> Bool { keyCode == other.keyCode && modifiers == other.modifiers }
 
     /// Nil unless the press includes ⌘, ⌥ or ⌃ (or is a function key), so plain typing is never taken.
     init?(event: NSEvent) {
@@ -58,17 +75,31 @@ struct HotKeyCombo: Equatable {
 
 /// A system-wide shortcut through Carbon, which needs no Accessibility permission.
 final class HotKey {
+    /// One Carbon handler serves every shortcut, and the pressed shortcut's ID says whose it is.
+    private static var live: [UInt32: HotKey] = [:]
+    private static var handler: EventHandlerRef?
+
     private var reference: EventHotKeyRef?
-    private var handler: EventHandlerRef?
+    private let id: UInt32
     private let action: () -> Void
 
     init(action: @escaping () -> Void) {
         self.action = action
+        id = UInt32(Self.live.count + 1)
+        Self.live[id] = self
+        Self.installHandlerIfNeeded()
+    }
+
+    private static func installHandlerIfNeeded() {
+        guard handler == nil else { return }
         var spec = EventTypeSpec(eventClass: OSType(kEventClassKeyboard), eventKind: UInt32(kEventHotKeyPressed))
-        InstallEventHandler(GetApplicationEventTarget(), { _, _, context in
-            Unmanaged<HotKey>.fromOpaque(context!).takeUnretainedValue().action()
+        InstallEventHandler(GetApplicationEventTarget(), { _, event, _ in
+            var pressed = EventHotKeyID()
+            let status = GetEventParameter(event, EventParamName(kEventParamDirectObject), EventParamType(typeEventHotKeyID), nil,
+                                           MemoryLayout<EventHotKeyID>.size, nil, &pressed)
+            if status == noErr { HotKey.live[pressed.id]?.action() }
             return noErr
-        }, 1, &spec, Unmanaged.passUnretained(self).toOpaque(), &handler)
+        }, 1, &spec, nil, &handler)
     }
 
     /// Returns false when macOS refuses the combination, for example if another app owns it.
@@ -76,8 +107,8 @@ final class HotKey {
     func register(_ combo: HotKeyCombo) -> Bool {
         unregister()
         guard combo.keyCode >= 0 else { return true }
-        let id = EventHotKeyID(signature: OSType(0x50524348), id: 1)
-        return RegisterEventHotKey(UInt32(combo.keyCode), UInt32(combo.modifiers), id, GetApplicationEventTarget(), 0, &reference) == noErr
+        let hotKeyID = EventHotKeyID(signature: OSType(0x50524348), id: id)
+        return RegisterEventHotKey(UInt32(combo.keyCode), UInt32(combo.modifiers), hotKeyID, GetApplicationEventTarget(), 0, &reference) == noErr
     }
 
     func unregister() {

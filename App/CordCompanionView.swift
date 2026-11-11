@@ -14,7 +14,7 @@ final class CordCompanionView: NSView, CompanionSurface {
     let motion = CordMotion()
     private var plumage = Plumage.ivory
     private var knotCount = 0
-    private var link: CADisplayLink?
+    private lazy var clock = FrameClock { [weak self] in self?.tick() }
     private var lastTick = 0.0
     private var reduceMotion: Bool { NSWorkspace.shared.accessibilityDisplayShouldReduceMotion }
     private var lastFrame = CordFrame()
@@ -321,20 +321,12 @@ final class CordCompanionView: NSView, CompanionSurface {
     // MARK: Frames
 
     func startClock() {
-        guard window != nil else { return }
-        if link == nil {
-            let link = displayLink(target: self, selector: #selector(tick(_:)))
-            link.add(to: .main, forMode: .common)
-            self.link = link
-            lastTick = CACurrentMediaTime()
-        }
-        if link?.isPaused == true {
-            link?.isPaused = false
-            lastTick = CACurrentMediaTime()
-        }
+        guard window != nil, !clock.isRunning else { return }
+        lastTick = CACurrentMediaTime()
+        clock.start()
     }
 
-    @objc private func tick(_ link: CADisplayLink) {
+    private func tick() {
         let now = CACurrentMediaTime()
         let dt = min(now - lastTick, 0.05)
         lastTick = now
@@ -344,7 +336,7 @@ final class CordCompanionView: NSView, CompanionSurface {
         apply(frame)
         lastFrame = frame
         // At rest nothing is left to draw, so no timer runs at all.
-        if motion.isAtRest { link.isPaused = true }
+        if motion.isAtRest { clock.stop() }
     }
 
     /// With Reduce Motion, tuck and lower become a 0.2 s fade instead of travelling.

@@ -12,12 +12,17 @@ final class SettingsContext: ObservableObject {
     let libraryDirectory: URL?
     /// Registers a new global shortcut; false if macOS refused it.
     let applyHotKey: (HotKeyCombo) -> Bool
+    /// The same for the shortcut that saves the current tab.
+    var applySaveTabHotKey: (HotKeyCombo) -> Bool = { _ in false }
     @Published var tab: SettingsTab = .general
     /// True while the shortcut field waits for keys. Shared so the self-test can drive it.
     @Published var recordingShortcut = false
     /// The last recording's problem, if any.
     @Published var shortcutMessage: String?
     @Published var shortcut = HotKeyCombo.saved
+    @Published var saveTabShortcut = HotKeyCombo.savedSaveTab
+    /// Which shortcut is being recorded, or last had a problem.
+    @Published var recordingKind = ShortcutKind.panel
     var showWelcome: () -> Void = {}
     private var keyMonitor: Any?
 
@@ -31,11 +36,12 @@ final class SettingsContext: ObservableObject {
 
     /// Takes the next key press from the app's event stream while recording. The current shortcut is
     /// switched off meanwhile, so it can be pressed and recorded too.
-    func startRecording() {
+    func startRecording(_ kind: ShortcutKind = .panel) {
         guard !recordingShortcut else { return }
+        recordingKind = kind
         recordingShortcut = true
         shortcutMessage = nil
-        _ = applyHotKey(HotKeyCombo(keyCode: -1, modifiers: 0, display: ""))
+        _ = apply(HotKeyCombo(keyCode: -1, modifiers: 0, display: ""))
         keyMonitor = NSEvent.addLocalMonitorForEvents(matching: .keyDown) { [weak self] event in
             guard let self else { return event }
             if event.keyCode == 53 {
@@ -54,23 +60,45 @@ final class SettingsContext: ObservableObject {
         keyMonitor = nil
         recordingShortcut = false
         guard let combo else {
-            _ = applyHotKey(shortcut)
+            _ = apply(current(recordingKind))
             return
         }
-        if applyHotKey(combo) {
-            shortcut = combo
-            combo.save()
+        let other: ShortcutKind = recordingKind == .panel ? .saveTab : .panel
+        if combo.sameKeys(as: current(other)) {
+            _ = apply(current(recordingKind))
+            shortcutMessage = "\(combo.display) is already your other \(AppInfo.displayName) shortcut. Try another."
+        } else if apply(combo) {
+            store(combo)
             shortcutMessage = nil
         } else {
-            _ = applyHotKey(shortcut)
+            _ = apply(current(recordingKind))
             shortcutMessage = "macOS or another app already uses \(combo.display). Try another."
         }
     }
 
-    func resetShortcut() {
-        stopRecording(with: .standard)
+    func current(_ kind: ShortcutKind) -> HotKeyCombo { kind == .panel ? shortcut : saveTabShortcut }
+
+    private func apply(_ combo: HotKeyCombo) -> Bool {
+        recordingKind == .panel ? applyHotKey(combo) : applySaveTabHotKey(combo)
+    }
+
+    private func store(_ combo: HotKeyCombo) {
+        if recordingKind == .panel {
+            shortcut = combo
+            combo.save()
+        } else {
+            saveTabShortcut = combo
+            combo.saveAsSaveTab()
+        }
+    }
+
+    func resetShortcut(_ kind: ShortcutKind = .panel) {
+        recordingKind = kind
+        stopRecording(with: kind == .panel ? .standard : .saveTabStandard)
     }
 }
+
+enum ShortcutKind { case panel, saveTab }
 
 enum SettingsTab: String, CaseIterable {
     case general = "General", spaces = "Spaces", reminders = "Reminders", data = "Data", deleted = "Recently Deleted"
@@ -151,7 +179,10 @@ private struct GeneralSettings: View {
                 Toggle("Open at login", isOn: Binding(get: { launchAtLogin }, set: setLaunchAtLogin)).tint(Color.brand)
                 if let loginNote { note(loginNote) }
                 LabeledContent("Shortcut to open the panel") {
-                    ShortcutField(context: context)
+                    ShortcutField(context: context, kind: .panel)
+                }
+                LabeledContent("Shortcut to save the current tab") {
+                    ShortcutField(context: context, kind: .saveTab)
                 }
                 LabeledContent("First-time tips") {
                     Button("Show Welcome Again", action: context.showWelcome)
@@ -212,22 +243,26 @@ struct Browser {
 /// Click, then press the new shortcut. Esc cancels.
 private struct ShortcutField: View {
     @ObservedObject var context: SettingsContext
+    let kind: ShortcutKind
+
+    private var recording: Bool { context.recordingShortcut && context.recordingKind == kind }
+    private var standard: HotKeyCombo { kind == .panel ? .standard : .saveTabStandard }
 
     var body: some View {
         VStack(alignment: .trailing, spacing: 4) {
             HStack(spacing: 6) {
-                Button(context.recordingShortcut ? "Press keys…" : context.shortcut.display) {
-                    context.recordingShortcut ? context.stopRecording(with: nil) : context.startRecording()
+                Button(recording ? "Press keys…" : context.current(kind).display) {
+                    recording ? context.stopRecording(with: nil) : context.startRecording(kind)
                 }
                 .monospaced()
-                .help(context.recordingShortcut ? "Press the shortcut, or Esc to cancel" : "Click, then press the shortcut you want")
-                if context.shortcut != .standard, !context.recordingShortcut {
-                    Button("Reset", action: context.resetShortcut)
+                .help(recording ? "Press the shortcut, or Esc to cancel" : "Click, then press the shortcut you want")
+                if context.current(kind) != standard, !recording {
+                    Button("Reset") { context.resetShortcut(kind) }
                 }
             }
-            if let message = context.shortcutMessage { note(message) }
+            if context.recordingKind == kind, let message = context.shortcutMessage { note(message) }
         }
-        .onDisappear { if context.recordingShortcut { context.stopRecording(with: nil) } }
+        .onDisappear { if recording { context.stopRecording(with: nil) } }
     }
 }
 

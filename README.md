@@ -41,7 +41,7 @@ A welcome card shows the shortcut, how to type a task, and lets you pick a compa
 macOS asks for two permissions, each only when it's needed:
 
 - **Notifications**, when you first add a task with a due date. If you use a Focus mode, add Remi under **System Settings > Focus > (your Focus) > Allowed Notifications > Apps**, or reminders stay silent during it.
-- **Browser control**, the first time you save the current tab with ⌘S. Only that browser's current address and title are read, and only when you ask.
+- **Browser control**, the first time you save the current tab with ⌃⌥S. Only that browser's current address and title are read, and only when you ask.
 
 ## Using it
 
@@ -58,8 +58,9 @@ The capture bar is at the bottom. The Space button at the top left picks a Space
 | Text plus a link | A task that opens that link |
 | `#space`, `today`, `tomorrow`, `fri`, `!` | Space, due date, important |
 | `every monday`, `daily`, `weekly`, `monthly` | A repeating task |
-| ⌘S (with a browser in front) | Save the current tab |
 | ⌘Z (capture bar empty) | Undo the last change |
+
+**⌃⌥S** (Control, Option, S) saves the current browser tab from anywhere, without opening the panel, and Remi reacts so you know it worked. It works with Dia, Arc, Chrome, Brave, Edge and Safari; change the key in **Settings > General**.
 
 | Anywhere in the panel | |
 |---|---|

@@ -20,6 +20,8 @@ final class PanelPresentation: ObservableObject {
     @Published var addLinkRequests = 0
     /// Opens a particular note, for example from search.
     @Published var noteToOpen: UUID?
+    /// A message for the confirmation line, from outside the panel.
+    @Published var message: String?
     /// The welcome card stands in for the lists on first launch.
     @Published var showWelcome = false
     var onWelcomeDone: () -> Void = {}
@@ -79,7 +81,12 @@ struct PanelView: View {
         CaptureParser.parse(capture.text, spaceNames: store.spaces.map(\.name))
     }
 
+    // The chain is split in three because one long expression takes the compiler too long to check.
     var body: some View {
+        answeringRequests(wired(layout))
+    }
+
+    private var layout: some View {
         // Browsing at the top, typing at the bottom: the capture bar is the main way in, like a message box.
         VStack(spacing: Tokens.Spacing.s) {
             header
@@ -124,6 +131,10 @@ struct PanelView: View {
         .scaleEffect(closing && !reduceMotion ? 0.94 : 1, anchor: presentation.anchor)
         .opacity(presentation.shown ? 1 : 0)
         .animation(Tokens.Motion.panel, value: presentation.presented)
+    }
+
+    private func wired<Content: View>(_ content: Content) -> some View {
+        content
         .environment(\.panelActions, PanelActions(open: openItem, confirm: { show(confirmation: $0) },
                                                    focusCapture: { captureFocused = true }, editRequest: editRequest))
         .environment(\.keyboardSelection, nav.selectedID)
@@ -152,11 +163,7 @@ struct PanelView: View {
                 let current = ids.firstIndex { $0 == selectedSpaceID } ?? 0
                 selectedSpaceID = ids[(current + step + ids.count) % ids.count]
             }
-            capture.saveBrowserTab = {
-                guard let tabOffer, clipboardOffer == nil, capture.text.isEmpty else { return false }
-                saveTab(from: tabOffer)
-                return true
-            }
+            capture.saveTab = { saveTab(from: $0) }
             capture.dismissClipboardOffer = {
                 if reviewing {
                     closeReview()
@@ -182,9 +189,18 @@ struct PanelView: View {
                 clipboardOffer = nil
             }
         }
+    }
+
+    private func answeringRequests<Content: View>(_ content: Content) -> some View {
+        content
         // A pinned panel stays open while you move between apps.
         .onReceive(NSWorkspace.shared.notificationCenter.publisher(for: NSWorkspace.didActivateApplicationNotification)) { _ in
             if presentation.presented { refreshFrontBrowser() }
+        }
+        .onChange(of: presentation.message) { _, text in
+            guard let text else { return }
+            show(confirmation: text)
+            presentation.message = nil
         }
         .onChange(of: presentation.addRequests) { _, _ in
             closeSearch()
@@ -414,7 +430,7 @@ struct PanelView: View {
                 Image(systemName: "safari").foregroundStyle(.secondary).accessibilityHidden(true)
                 Text("Save this tab from \(browser.name)").lineLimit(1)
                 Spacer(minLength: Tokens.Spacing.xs)
-                Text("⌘S").fontWeight(.semibold).foregroundStyle(Color.brand)
+                Text(HotKeyCombo.savedSaveTab.display).fontWeight(.semibold).foregroundStyle(Color.brand)
             }
             .padding(.horizontal, Tokens.Spacing.s + Tokens.Spacing.xs)
             .frame(height: Tokens.Spacing.l + Tokens.Spacing.xs)
@@ -423,7 +439,7 @@ struct PanelView: View {
         .buttonStyle(.plain)
         .font(Tokens.TextRole.detail)
         .background(Color.brand.opacity(0.1), in: Capsule())
-        .help("Save the tab you're looking at to Links (⌘S)")
+        .help("Save the tab you're looking at to Links (\(HotKeyCombo.savedSaveTab.display))")
         .transition(.opacity)
     }
 
@@ -977,6 +993,6 @@ final class CaptureText: ObservableObject {
     @Published var linkListOverride: LinkList?
     /// Esc first dismisses the clipboard chip; returns false when there is none, so Esc closes the panel.
     var dismissClipboardOffer: (() -> Bool)?
-    /// ⌘S on the "Save this tab" chip; returns false when the chip isn't offered.
-    var saveBrowserTab: (() -> Bool)?
+    /// The save-tab shortcut while the panel is open, so the chip and the confirmation line stay right.
+    var saveTab: ((BrowserTab.Browser) -> Void)?
 }

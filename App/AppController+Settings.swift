@@ -30,6 +30,7 @@ extension AppController {
             self?.hotKey?.register(combo) ?? false
         }
         context.showWelcome = { [weak self] in self?.showWelcome() }
+        context.applySaveTabHotKey = { [weak self] combo in self?.saveTabHotKey?.register(combo) ?? false }
         let window = SettingsPanel(contentRect: NSRect(x: 0, y: 0, width: 700, height: 520),
                                    styleMask: [.titled, .closable, .nonactivatingPanel], backing: .buffered, defer: false)
         window.contentViewController = NSHostingController(rootView: SettingsView(context: context))

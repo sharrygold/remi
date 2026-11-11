@@ -3,7 +3,7 @@ import AppKit
 /// Reads the address and title of the tab you are looking at, by asking the browser with AppleScript.
 ///
 /// The panel never takes over as the active app, so the browser stays frontmost while it is open.
-/// Nothing is read until you ask (⌘S or a click). macOS asks once for permission per browser.
+/// Nothing is read until you ask (the shortcut or a click). macOS asks once for permission per browser.
 enum BrowserTab {
     struct Browser: Equatable {
         let bundleID: String

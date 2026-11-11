@@ -7,6 +7,42 @@ import SwiftUI
 /// Demo data and the in-app self-tests (`--m2-selftest` and friends). They run on in-memory data and
 /// press real keys in the panel, so leave the keyboard alone while one runs.
 extension AppController {
+    /// Feeds the bird made-up pointer positions at mouse speed. Never touches the real mouse or keyboard.
+    func runHeadSelfTest() {
+        guard let perched else { return }
+        let window = handle.frame
+        let edgeSign: CGFloat = onLeftEdge ? 1 : -1
+        let neck = NSPoint(x: onLeftEdge ? window.minX + 87 : window.maxX - 87, y: window.maxY - 45)
+        perched.setMood(.tucked)
+        func point(degrees: Double, radius: CGFloat) -> NSPoint {
+            NSPoint(x: neck.x + edgeSign * radius * cos(degrees * .pi / 180), y: neck.y - radius * sin(degrees * .pi / 180))
+        }
+        DispatchQueue.main.asyncAfter(deadline: .now() + 1) { [self] in
+            print("tucked: mood=\(perched.mood)")
+            pointerMoved(at: point(degrees: -60, radius: 110))
+            print("pointer 110 pt away: mood=\(perched.mood) head target=\(perched.headReadout.target)")
+            var degrees = -60.0, lags: [Double] = [], steps = 0
+            Timer.scheduledTimer(withTimeInterval: 1.0 / 120, repeats: true) { [self] timer in
+                steps += 1
+                degrees += 0.4
+                pointerMoved(at: point(degrees: degrees, radius: 100))
+                let (target, angle) = perched.headReadout
+                if steps > 60 { lags.append(abs(target - angle)) }
+                guard steps == 180 else { return }
+                timer.invalidate()
+                print("sweep at mouse speed: average lag=\(lags.reduce(0, +) / Double(lags.count))° worst=\(lags.max() ?? 0)°")
+                DispatchQueue.main.asyncAfter(deadline: .now() + 0.6) { [self] in
+                    let (target, angle) = perched.headReadout
+                    print("after stopping: lag=\(abs(target - angle))°")
+                    lastActivity = Date().addingTimeInterval(-10)
+                    idleTick()
+                    print("idle while pointer within range (real pointer used by idleTick): mood=\(perched.mood)")
+                    NSApp.terminate(nil)
+                }
+            }
+        }
+    }
+
     func seedDemo(_ store: LibraryStore) {
         let names = store.spaces.map(\.name)
         for line in ["Book dentist appointment #personal today", "Prepare sprint review notes #work today",
@@ -28,7 +64,7 @@ extension AppController {
             if pinned { store.setPinned(note, true) }
         }
         let links = [
-            ("https://www.example.com/team/~01example", "Team handbook", "Clients", true),
+            ("https://www.example.com/team/~01example", "My profile", "Clients", true),
             ("https://docs.google.com/spreadsheets/d/invoice-tracker", "Invoice tracker", "Clients", false),
             ("https://linear.app/team/dashboard", "Team dashboard", "Work", false),
             ("https://www.youtube.com/watch?v=invoices101", "How to write invoices that win", "Clients", false),
