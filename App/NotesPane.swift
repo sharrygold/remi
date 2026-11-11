@@ -169,7 +169,7 @@ struct NotesPane: View {
             .padding(.horizontal, Tokens.Spacing.m)
             .padding(.top, Tokens.Spacing.s + Tokens.Spacing.xs)
 
-            NoteEditor(note: note, store: store, onEscape: close, onOpenLink: { actions.open(.url($0)) })
+            NoteEditor(note: note, store: store, onEscape: close, onOpenLink: { actions.open(.url($0)) }, onConfirm: onConfirm)
                 .id(note.id)
         }
     }

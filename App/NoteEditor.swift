@@ -7,6 +7,7 @@ struct NoteEditor: NSViewRepresentable {
     let store: LibraryStore
     var onEscape: () -> Void
     var onOpenLink: (URL) -> Void
+    var onConfirm: (String) -> Void
 
     func makeCoordinator() -> NoteEditorController {
         NoteEditorController(note: note, store: store)
@@ -15,12 +16,14 @@ struct NoteEditor: NSViewRepresentable {
     func makeNSView(context: Context) -> NSScrollView {
         context.coordinator.onEscape = onEscape
         context.coordinator.onOpenLink = onOpenLink
+        context.coordinator.onConfirm = onConfirm
         return context.coordinator.scrollView
     }
 
     func updateNSView(_ view: NSScrollView, context: Context) {
         context.coordinator.onEscape = onEscape
         context.coordinator.onOpenLink = onOpenLink
+        context.coordinator.onConfirm = onConfirm
     }
 
     static func dismantleNSView(_ view: NSScrollView, coordinator: NoteEditorController) {
@@ -94,6 +97,7 @@ final class NoteTextView: NSTextView {
     var onEscape: (() -> Void)?
     var onToggleCheckbox: ((Int) -> Void)?
     var onCommand: ((String, NSEvent.ModifierFlags) -> Bool)?
+    var onMakeTask: ((String) -> Void)?
     var focusOnAppear = true
     let placeholder = "Start typing. The first line becomes the title."
 
@@ -116,6 +120,26 @@ final class NoteTextView: NSTextView {
         let flags = event.modifierFlags.intersection([.command, .shift, .option, .control])
         if onCommand?(key, flags) == true { return true }
         return super.performKeyEquivalent(with: event)
+    }
+
+    /// Right-clicking a checkbox line offers to copy it to Tasks.
+    override func menu(for event: NSEvent) -> NSMenu? {
+        let menu = super.menu(for: event) ?? NSMenu()
+        let index = characterIndexForInsertion(at: convert(event.locationInWindow, from: nil))
+        let text = string as NSString
+        guard index <= text.length else { return menu }
+        let line = text.substring(with: text.lineRange(for: NSRange(location: index, length: 0))).trimmingCharacters(in: .newlines)
+        guard let title = NoteText.checkboxText(ofEditorLine: line) else { return menu }
+        let item = NSMenuItem(title: "Make Task", action: #selector(makeTask(_:)), keyEquivalent: "")
+        item.target = self
+        item.representedObject = title
+        menu.insertItem(item, at: 0)
+        menu.insertItem(.separator(), at: 1)
+        return menu
+    }
+
+    @objc private func makeTask(_ sender: NSMenuItem) {
+        if let title = sender.representedObject as? String { onMakeTask?(title) }
     }
 
     override func mouseDown(with event: NSEvent) {
@@ -161,6 +185,7 @@ final class NoteEditorController: NSObject, NSTextViewDelegate {
     let textView: NoteTextView
     var onEscape: (() -> Void)?
     var onOpenLink: ((URL) -> Void)?
+    var onConfirm: ((String) -> Void)?
     private let note: Note
     private let store: LibraryStore
     /// True while this controller makes its own edits, so the shortcut rules don't run on them.
@@ -197,6 +222,7 @@ final class NoteEditorController: NSObject, NSTextViewDelegate {
         textView.onEscape = { [weak self] in self?.onEscape?() }
         textView.onToggleCheckbox = { [weak self] index in self?.toggleCheckbox(at: index) }
         textView.onCommand = { [weak self] key, flags in self?.command(key, flags) ?? false }
+        textView.onMakeTask = { [weak self] title in self?.makeTask(title) }
 
         scrollView.documentView = textView
         scrollView.hasVerticalScroller = true
@@ -238,6 +264,12 @@ final class NoteEditorController: NSObject, NSTextViewDelegate {
             if let box = value as? CheckboxAttachment { checkboxes.append(box.isChecked) }
         }
         return NoteText.markdown(fromEditor: storage.string, checkboxes: checkboxes)
+    }
+
+    /// The line stays in the note as it was; the task is a new thing in the note's Space.
+    private func makeTask(_ title: String) {
+        guard let task = store.add(ParsedCapture(title: title), currentSpace: note.space) else { return }
+        onConfirm?("Added to \(task.space?.name ?? "Tasks")")
     }
 
     func flush() {

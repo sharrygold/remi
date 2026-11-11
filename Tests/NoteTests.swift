@@ -2,6 +2,13 @@ import XCTest
 import SwiftData
 
 final class NoteTextTests: XCTestCase {
+    func testCheckboxLineGivesTaskTitle() {
+        let box = String(NoteText.checkboxCharacter)
+        XCTAssertEqual(NoteText.checkboxText(ofEditorLine: "  \(box) Call **Dana** back"), "Call Dana back")
+        XCTAssertNil(NoteText.checkboxText(ofEditorLine: "\(box) "))
+        XCTAssertNil(NoteText.checkboxText(ofEditorLine: "Just a line"))
+    }
+
     func testTitleAndPreviewSkipMarkdown() {
         let body = "\n## Q4 **priorities**\n\n- [x] Reporting\n- Onboarding [flow](https://example.com)\nVendor review"
         XCTAssertEqual(NoteText.title(of: body), "Q4 priorities")

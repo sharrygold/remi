@@ -105,6 +105,13 @@ enum NoteText {
         return .plain
     }
 
+    /// A checkbox line's words, for turning it into a task. Nil for any other line or an empty box.
+    static func checkboxText(ofEditorLine line: String) -> String? {
+        guard case .checkbox = kind(ofEditorLine: line) else { return nil }
+        let text = stripped(String(splitIndent(line).rest.dropFirst()))
+        return text.isEmpty ? nil : text
+    }
+
     /// The marker typed at the start of a line that should turn into a bullet or checkbox, if any.
     /// Returns the length of the typed marker (before the trailing space) and what it becomes.
     static func shortcut(beforeSpace typed: String) -> (length: Int, kind: LineKind)? {
