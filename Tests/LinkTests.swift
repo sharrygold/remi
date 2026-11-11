@@ -62,10 +62,10 @@ final class LinkStoreTests: XCTestCase {
         XCTAssertEqual(added.count, 1)
         let forced = store.addLink(url("https://example.com/article"), list: .watchLater, spaceMatch: .new("Reading"), currentSpace: nil)
         XCTAssertEqual(forced.link.list, .watchLater)
-        XCTAssertEqual(store.spaces.count, 6)
+        XCTAssertEqual(store.spaces.count, 4)
         store.undo()
         XCTAssertEqual(store.links.count, 1)
-        XCTAssertEqual(store.spaces.count, 5)
+        XCTAssertEqual(store.spaces.count, 3)
     }
 
     func testWatchedPinnedAndLists() {

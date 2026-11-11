@@ -14,7 +14,7 @@ final class LibraryStoreTests: XCTestCase {
 
     func testSeedsFiveSpacesOnce() {
         let store = LibraryStore(directory: nil)
-        XCTAssertEqual(store.spaces.map(\.name), ["Clients", "Work", "Personal", "Learning", "Home Reno"])
+        XCTAssertEqual(store.spaces.map(\.name), ["Work", "Personal", "Learning"])
     }
 
     func testDataSurvivesReopening() throws {
@@ -28,7 +28,7 @@ final class LibraryStoreTests: XCTestCase {
         XCTAssertFalse(reopened.isTemporary)
         XCTAssertEqual(reopened.tasks.map(\.title), ["Keep me"])
         XCTAssertEqual(reopened.tasks.first?.space?.name, "Garden")
-        XCTAssertEqual(reopened.spaces.count, 6)
+        XCTAssertEqual(reopened.spaces.count, 4)
     }
 
     func testSpaceRules() {
@@ -36,16 +36,16 @@ final class LibraryStoreTests: XCTestCase {
         let work = store.spaces.first { $0.name == "Work" }
         XCTAssertEqual(store.add(parsed("Current"), currentSpace: work)?.space?.name, "Work")
         XCTAssertEqual(store.add(parsed("Fallback"), currentSpace: nil)?.space?.name, "Personal")
-        XCTAssertEqual(store.add(parsed("Tagged", space: .existing("Clients")), currentSpace: work)?.space?.name, "Clients")
+        XCTAssertEqual(store.add(parsed("Tagged", space: .existing("Learning")), currentSpace: work)?.space?.name, "Learning")
     }
 
     func testUndoCaptureAlsoRemovesNewSpace() {
         let store = LibraryStore(directory: nil)
         store.add(parsed("Temp", space: .new("Garden")), currentSpace: nil)
-        XCTAssertEqual(store.spaces.count, 6)
+        XCTAssertEqual(store.spaces.count, 4)
         store.undo()
         XCTAssertTrue(store.tasks.isEmpty)
-        XCTAssertEqual(store.spaces.count, 5)
+        XCTAssertEqual(store.spaces.count, 3)
         XCTAssertFalse(store.canUndo)
     }
 

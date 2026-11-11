@@ -51,9 +51,9 @@ final class NoteTextTests: XCTestCase {
 final class NoteStoreTests: XCTestCase {
     func testCaptureKeepsDateWordsAndUsesSpace() throws {
         let store = LibraryStore(directory: nil)
-        let note = try XCTUnwrap(store.addNote(fromCapture: "Call notes for today #clients !", currentSpace: nil))
+        let note = try XCTUnwrap(store.addNote(fromCapture: "Call notes for today #work !", currentSpace: nil))
         XCTAssertEqual(note.body, "Call notes for today !")
-        XCTAssertEqual(note.space?.name, "Clients")
+        XCTAssertEqual(note.space?.name, "Work")
         XCTAssertTrue(store.tasks.isEmpty)
         XCTAssertNil(store.addNote(fromCapture: "#work", currentSpace: nil))
     }
@@ -61,10 +61,10 @@ final class NoteStoreTests: XCTestCase {
     func testCaptureUndoRemovesNoteAndNewSpace() {
         let store = LibraryStore(directory: nil)
         store.addNote(fromCapture: "Seeds to buy #garden", currentSpace: nil)
-        XCTAssertEqual(store.spaces.count, 6)
+        XCTAssertEqual(store.spaces.count, 4)
         store.undo()
         XCTAssertTrue(store.notes.isEmpty)
-        XCTAssertEqual(store.spaces.count, 5)
+        XCTAssertEqual(store.spaces.count, 3)
     }
 
     func testPinnedFirstThenRecent() throws {

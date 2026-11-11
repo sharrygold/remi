@@ -512,7 +512,8 @@ final class PerchedBirdView: NSView, CompanionSurface {
         let reach = 4
         for dy in stride(from: -reach, through: reach, by: 2) {
             for dx in stride(from: -reach, through: reach, by: 2) {
-                let px = Int(x) + dx, py = mask.width - 1 - (Int(y) + dy)
+                // The bitmap's first row is the top of the art, the same way up as y here.
+                let px = Int(x) + dx, py = Int(y) + dy
                 guard px >= 0, py >= 0, px < mask.width, py < mask.width else { continue }
                 if mask.data[py * mask.width + px] > 40 { return true }
             }

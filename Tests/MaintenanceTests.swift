@@ -39,7 +39,7 @@ final class SearchTests: XCTestCase {
     func testFindsAcrossTypesIgnoringCaseAndAccents() throws {
         let store = LibraryStore(directory: nil)
         let names = store.spaces.map(\.name)
-        store.add(CaptureParser.parse("Send café invoice #clients", spaceNames: names), currentSpace: nil)
+        store.add(CaptureParser.parse("Send café invoice #work", spaceNames: names), currentSpace: nil)
         store.add(CaptureParser.parse("Invoice review notes", spaceNames: names), currentSpace: nil)
         store.addNote(fromCapture: "Ideas\nThe invoice should open with their problem", currentSpace: nil)
         store.addLink(URL(string: "https://example.com/invoice-guide")!, currentSpace: nil)
@@ -50,7 +50,7 @@ final class SearchTests: XCTestCase {
         XCTAssertEqual(results.links.count, 1)
         XCTAssertEqual(store.search("cafe").tasks.map(\.title), ["Send café invoice"])
         // Every word must match, and a Space name counts.
-        XCTAssertEqual(store.search("invoice #clients").tasks.count, 1)
+        XCTAssertEqual(store.search("invoice #work").tasks.count, 1)
         XCTAssertTrue(store.search("invoice banana").isEmpty)
         XCTAssertTrue(store.search("   ").isEmpty)
     }
@@ -97,12 +97,12 @@ final class ArchiveTests: XCTestCase {
         let source = try populated()
         let data = try LibraryArchive.encoder().encode(source.makeArchive())
         let archive = try LibraryArchive.decode(data)
-        XCTAssertEqual(archive.spaces.count, 6)
+        XCTAssertEqual(archive.spaces.count, 4)
         XCTAssertEqual(archive.tasks.count, 2, "deleted items are kept")
 
         let target = LibraryStore(directory: nil)
         let summary = target.importArchive(archive)
-        XCTAssertEqual(target.spaces.count, 6, "starter Spaces are matched by name, not duplicated")
+        XCTAssertEqual(target.spaces.count, 4, "starter Spaces are matched by name, not duplicated")
         XCTAssertEqual(target.tasks.map(\.title), ["Update profile"])
         let task = try XCTUnwrap(target.tasks.first)
         XCTAssertTrue(task.isCompleted)

@@ -46,16 +46,16 @@ extension AppController {
     func seedDemo(_ store: LibraryStore) {
         let names = store.spaces.map(\.name)
         for line in ["Book dentist appointment #personal today", "Prepare sprint review notes #work today",
-                     "Send design dashboard invoice #clients today", "Record Loom intro for invoice #clients today !",
-                     "Tidy the shared drive #clients fri", "Finish SwiftUI layout module #learning tomorrow"] {
+                     "Send design dashboard invoice #work today", "Record Loom intro for invoice #work today !",
+                     "Tidy the shared drive #work fri", "Finish SwiftUI layout module #learning tomorrow"] {
             store.add(CaptureParser.parse(line, spaceNames: names), currentSpace: nil)
         }
         let yesterday = Calendar.current.date(byAdding: .day, value: -1, to: Calendar.current.startOfDay(for: Date()))
         store.add(ParsedCapture(title: "Reply to Dana about the project timeline", space: .existing("Work"), due: yesterday), currentSpace: nil)
         let notes = [
-            ("Clients", true, "Invoice opening lines\nStart with their problem, then **one** proof point.\n- Mirror their words\n- Keep it under 120 words"),
+            ("Work", true, "Invoice opening lines\nStart with their problem, then **one** proof point.\n- Mirror their words\n- Keep it under 120 words"),
             ("Work", false, "Q4 priorities\n## This month\n- [x] Reporting cleanup\n- [ ] Onboarding flow\n- [ ] Vendor review"),
-            ("Clients", false, "Loom checklist\n- [ ] Close tabs\n- [ ] Check mic\n- [ ] Keep it under two minutes"),
+            ("Work", false, "Loom checklist\n- [ ] Close tabs\n- [ ] Check mic\n- [ ] Keep it under two minutes"),
             ("Personal", false, "Trip ideas\nLisbon in December, ask about flights. https://www.visitlisboa.com"),
         ]
         for (index, (spaceName, pinned, body)) in notes.enumerated() {
@@ -64,10 +64,10 @@ extension AppController {
             if pinned { store.setPinned(note, true) }
         }
         let links = [
-            ("https://www.example.com/team/~01example", "My profile", "Clients", true),
-            ("https://docs.google.com/spreadsheets/d/invoice-tracker", "Invoice tracker", "Clients", false),
+            ("https://www.example.com/team/~01example", "My profile", "Work", true),
+            ("https://docs.google.com/spreadsheets/d/invoice-tracker", "Invoice tracker", "Work", false),
             ("https://linear.app/team/dashboard", "Team dashboard", "Work", false),
-            ("https://www.youtube.com/watch?v=invoices101", "How to write invoices that win", "Clients", false),
+            ("https://www.youtube.com/watch?v=invoices101", "How to write invoices that win", "Work", false),
             ("https://www.youtube.com/watch?v=swiftuilayout", "SwiftUI layout, explained", "Learning", false),
         ]
         for (address, title, spaceName, pinned) in links {
@@ -134,7 +134,7 @@ extension AppController {
         after(1) { [self] in
             showPanel()
             after(0.5) { [self] in
-                (panel.firstResponder as? NSTextView)?.insertText("Ideas for today's call #clients", replacementRange: NSRange(location: NSNotFound, length: 0))
+                (panel.firstResponder as? NSTextView)?.insertText("Ideas for today's call #work", replacementRange: NSRange(location: NSNotFound, length: 0))
                 after(0.2) { [self] in
                     postKey("\r", code: 36, flags: .command)
                     after(0.4) { [self] in

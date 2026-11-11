@@ -21,6 +21,7 @@ struct TaskRowView: View {
     let density: Density
     @State private var editing = false
     @State private var draft = ""
+    @State private var hovering = CommandLine.arguments.contains("--preview-row-hover")
     @FocusState private var fieldFocused: Bool
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @Environment(\.panelActions) private var actions
@@ -48,10 +49,16 @@ struct TaskRowView: View {
                     .help(rule.label(for: task.dueDate))
                     .accessibilityLabel("Repeats \(rule.label(for: task.dueDate).lowercased())")
             }
-            if let due = task.dueDate {
-                Text(DueLabel.text(for: due)).font(Tokens.TextRole.detail).foregroundStyle(.secondary)
+            // On hover the date gives way to a delete button, so the row doesn't shift.
+            ZStack(alignment: .trailing) {
+                if let due = task.dueDate {
+                    Text(DueLabel.text(for: due)).font(Tokens.TextRole.detail).foregroundStyle(.secondary)
+                        .opacity(hovering ? 0 : 1)
+                }
+                deleteButton.opacity(hovering ? 1 : 0)
             }
         }
+        .onHover { hovering = $0 }
         .padding(.vertical, density.rowPadding)
         .contentShape(Rectangle())
         .keyboardHighlight(task.id)
@@ -89,6 +96,22 @@ struct TaskRowView: View {
                 .accessibilityAddTraits(.isButton)
                 .accessibilityHint("Edit title")
         }
+    }
+
+    private var deleteButton: some View {
+        Button {
+            store.delete(task)
+            actions.confirm("Task deleted  ·  ⌘Z to undo")
+        } label: {
+            Image(systemName: "trash")
+                .font(Tokens.TextRole.detail)
+                .foregroundStyle(.secondary)
+                .frame(width: 22, height: 22)
+                .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .help("Delete (⌘Z undoes it)")
+        .accessibilityLabel("Delete \(task.title)")
     }
 
     /// The task's doorway: one click opens the link, app or folder.

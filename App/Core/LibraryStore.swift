@@ -60,8 +60,7 @@ final class LibraryStore: ObservableObject {
 
     private func seedSpacesIfNeeded() {
         guard ((try? context.fetchCount(FetchDescriptor<Space>())) ?? 0) == 0 else { return }
-        let starters = [("Clients", "briefcase", "clients"), ("Work", "building.2", "work"), ("Personal", "house", "personal"),
-                        ("Learning", "book", "learning"), ("Home Reno", "magnifyingglass", "homeReno")]
+        let starters = [("Work", "building.2", "work"), ("Personal", "house", "personal"), ("Learning", "book", "learning")]
         for (index, starter) in starters.enumerated() {
             context.insert(Space(name: starter.0, symbol: starter.1, tintName: starter.2, sortOrder: index))
         }

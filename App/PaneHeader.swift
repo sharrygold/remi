@@ -32,11 +32,11 @@ struct AddButton: View {
         Button(action: action) {
             Label(title, systemImage: "plus")
                 .labelStyle(AddLabelStyle())
-                .font(Tokens.TextRole.detail.weight(.semibold))
-                .foregroundStyle(Color.brand)
-                .padding(.horizontal, Tokens.Spacing.s + 2)
-                .padding(.vertical, Tokens.Spacing.xs + 1)
-                .background(Color.brand.opacity(hovering ? 0.18 : 0.11), in: Capsule())
+                .font(Tokens.TextRole.meta.weight(.semibold))
+                .foregroundStyle(Color.onBrand)
+                .padding(.horizontal, Tokens.Spacing.m - 3)
+                .padding(.vertical, Tokens.Spacing.xs + 2)
+                .background(Color.brand.opacity(hovering ? 0.85 : 1), in: Capsule())
                 .contentShape(Capsule())
         }
         .buttonStyle(.plain)
