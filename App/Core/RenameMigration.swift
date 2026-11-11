@@ -46,4 +46,5 @@ enum RenameMigration {
 enum CompanionKeys {
     static let style = "companionStyle"
     static let plumage = "plumage"
+    static let size = "companionSize"
 }

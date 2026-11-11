@@ -3,12 +3,12 @@ import AppKit
 /// Remi perched on a gold peg at the side edge. Built from finished bitmap layers: loops run on the
 /// render server, and the frame clock only runs while the head is actually moving.
 final class PerchedBirdView: NSView, CompanionSurface {
-    static let windowSize = CGSize(width: 108, height: 108)
-    private static let scale: CGFloat = 0.9
+    static var windowSize: CGSize { CGSize(width: 120 * scale, height: 120 * scale) }
+    private static var scale: CGFloat { CompanionSize.current.perchedScale }
     private static let canvas = CGSize(width: 120, height: 120)
     /// Matches HEAD_SCALE in Scripts/make-companion-art.py.
     private static let headScale: CGFloat = 1.15
-    private static let tuckPoints = windowSize.width * 0.43
+    private static var tuckPoints: CGFloat { windowSize.width * 0.43 }
     private static let noticeRadius: CGFloat = 130
 
     enum Mood { case rest, working, dozing, tucked, carried }
@@ -234,6 +234,15 @@ final class PerchedBirdView: NSView, CompanionSurface {
         return hypot(local.x - HeadFollow.pivot.x, local.y - HeadFollow.pivot.y) * Self.scale <= Self.noticeRadius
     }
 
+    /// For the self-test: what is on screen right now, as opposed to what was asked for.
+    var motionReadout: (breath: CGFloat, egg: CGFloat, eye: CGFloat, tail: CGFloat) {
+        func read(_ layer: CALayer, _ path: String) -> CGFloat {
+            ((layer.presentation() ?? layer).value(forKeyPath: path) as? NSNumber).map { CGFloat(truncating: $0) } ?? 0
+        }
+        return (read(breath, "transform.scale.y"), read(eggRock, "transform.rotation.z") * 180 / .pi,
+                read(eye, "transform.scale.y"), read(tail, "transform.rotation.z") * 180 / .pi)
+    }
+
     /// For the self-test.
     var headReadout: (target: Double, angle: Double) { (head.angle.target, head.angle.value) }
 
@@ -311,9 +320,9 @@ final class PerchedBirdView: NSView, CompanionSurface {
             bob.repeatCount = .infinity
             bob.timingFunction = CAMediaTimingFunction(name: .easeInEaseOut)
             headBob.add(bob, forKey: "loop")
-        case .dozing:
+        case .dozing, .tucked:
             breathe(period: 7)
-        case .tucked, .carried:
+        case .carried:
             break
         }
     }

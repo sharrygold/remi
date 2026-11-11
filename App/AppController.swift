@@ -71,7 +71,7 @@ final class AppController: NSObject, NSApplicationDelegate {
 
     let showNowItem = NSMenuItem(title: "Show Widget Now", action: #selector(showWidgetNow), keyEquivalent: "")
 
-    static let idleSecondsBeforeTuck: TimeInterval = 4
+    static let idleSecondsBeforeTuck: TimeInterval = 30
 
     static let idleSecondsBeforeDoze: TimeInterval = 45
 
@@ -121,6 +121,9 @@ final class AppController: NSObject, NSApplicationDelegate {
         applyWindowSettings()
         NotificationCenter.default.addObserver(self, selector: #selector(settingsChanged), name: UserDefaults.didChangeNotification, object: nil)
         watchers.append(companion.$style.dropFirst().removeDuplicates().sink { [weak self] _ in
+            DispatchQueue.main.async { self?.applyStyle() }
+        })
+        watchers.append(companion.$size.dropFirst().removeDuplicates().sink { [weak self] _ in
             DispatchQueue.main.async { self?.applyStyle() }
         })
         presentation.openSettings = { [weak self] in self?.openSettings() }
@@ -202,6 +205,7 @@ final class AppController: NSObject, NSApplicationDelegate {
             }
         }
         if CommandLine.arguments.contains("--head-selftest") { runHeadSelfTest() }
+        if CommandLine.arguments.contains("--motion-selftest") { runMotionSelfTest() }
         if CommandLine.arguments.contains("--clipboard-selftest") { runClipboardChipSelfTest() }
         if CommandLine.arguments.contains("--add-selftest") { runAddSelfTest() }
     }

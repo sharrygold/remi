@@ -200,6 +200,9 @@ private struct GeneralSettings: View {
                 Picker("Companion", selection: $widget.style) {
                     ForEach(CompanionStyle.allCases) { Text($0.title).tag($0) }
                 }
+                Picker("Size", selection: $widget.size) {
+                    ForEach(CompanionSize.allCases) { Text($0.title).tag($0) }
+                }
                 Picker("Plumage", selection: $widget.plumage) {
                     ForEach(Plumage.allCases) { Text($0.title).tag($0) }
                 }

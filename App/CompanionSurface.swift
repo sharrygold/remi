@@ -22,6 +22,36 @@ enum CompanionStyle: String, CaseIterable, Identifiable {
     }
 }
 
+/// How large the companion is drawn. Both companions read this when they are built.
+enum CompanionSize: String, CaseIterable, Identifiable {
+    case small, medium, large
+
+    var id: String { rawValue }
+    var title: String { rawValue.capitalized }
+
+    var perchedScale: CGFloat {
+        switch self {
+        case .small: 0.9
+        case .medium: 1.15
+        case .large: 1.4
+        }
+    }
+
+    var cordScale: CGFloat {
+        switch self {
+        case .small: 240.0 / 230
+        case .medium: 275.0 / 230
+        case .large: 320.0 / 230
+        }
+    }
+
+    static var current: CompanionSize {
+        if let text = CommandLine.arguments.first(where: { $0.hasPrefix("--size=") })?.dropFirst("--size=".count),
+           let size = CompanionSize(rawValue: String(text)) { return size }
+        return UserDefaults.standard.string(forKey: CompanionKeys.size).flatMap(CompanionSize.init) ?? .medium
+    }
+}
+
 /// The companion's look, chosen in Settings and remembered.
 final class CompanionSettings: ObservableObject {
     @Published var style: CompanionStyle {
@@ -29,6 +59,10 @@ final class CompanionSettings: ObservableObject {
     }
     @Published var plumage: Plumage {
         didSet { UserDefaults.standard.set(plumage.rawValue, forKey: CompanionKeys.plumage) }
+    }
+
+    @Published var size = CompanionSize.current {
+        didSet { UserDefaults.standard.set(size.rawValue, forKey: CompanionKeys.size) }
     }
 
     init(style: CompanionStyle?, plumage: Plumage?) {

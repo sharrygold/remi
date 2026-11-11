@@ -3,9 +3,9 @@ import AppKit
 /// Remi on a swing at the end of the knotted cord, hanging from the top edge. `CordMotion` decides
 /// what each frame looks like; this view only applies it, and stops its clock when nothing moves.
 final class CordCompanionView: NSView, CompanionSurface {
-    private static let scale: CGFloat = 240.0 / 230
+    private static var scale: CGFloat { CompanionSize.current.cordScale }
     private static let stageHeight: CGFloat = 297
-    static let windowSize = CGSize(width: 200, height: stageHeight * scale)
+    static var windowSize: CGSize { CGSize(width: 200, height: stageHeight * scale) }
     private static let art = CGSize(width: 120, height: 230)
     private static let braidArt = CGSize(width: 120, height: 160)
     private static let knotArt = CGSize(width: 12, height: 10)

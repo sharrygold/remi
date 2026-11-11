@@ -7,12 +7,30 @@ import SwiftUI
 /// Demo data and the in-app self-tests (`--m2-selftest` and friends). They run on in-memory data and
 /// press real keys in the panel, so leave the keyboard alone while one runs.
 extension AppController {
+    /// Samples what the render server is actually showing, to prove the ambient loops are running.
+    func runMotionSelfTest() {
+        guard let perched else { return }
+        var samples: [(breath: CGFloat, egg: CGFloat, eye: CGFloat, tail: CGFloat)] = [], count = 0
+        Timer.scheduledTimer(withTimeInterval: 1.0 / 30, repeats: true) { timer in
+            samples.append(perched.motionReadout)
+            count += 1
+            guard count == 330 else { return }
+            timer.invalidate()
+            print("mood=\(perched.mood) reduceMotion=\(NSWorkspace.shared.accessibilityDisplayShouldReduceMotion) over 11 s:")
+            print("breath y \(samples.map(\.breath).min()!)…\(samples.map(\.breath).max()!) (spec 1…1.04)")
+            print("egg rock \(samples.map(\.egg).min()!)°…\(samples.map(\.egg).max()!)° (spec ±3)")
+            print("eye scale min \(samples.map(\.eye).min()!) (blink closes to 0.1)")
+            print("tail \(samples.map(\.tail).min()!)°…\(samples.map(\.tail).max()!)° (flick every 9 s)")
+            NSApp.terminate(nil)
+        }
+    }
+
     /// Feeds the bird made-up pointer positions at mouse speed. Never touches the real mouse or keyboard.
     func runHeadSelfTest() {
         guard let perched else { return }
         let window = handle.frame
         let edgeSign: CGFloat = onLeftEdge ? 1 : -1
-        let neck = NSPoint(x: onLeftEdge ? window.minX + 87 : window.maxX - 87, y: window.maxY - 45)
+        let neck = NSPoint(x: onLeftEdge ? window.minX + window.width * 81 / 120 : window.maxX - window.width * 81 / 120, y: window.maxY - window.height * 35 / 120)
         perched.setMood(.tucked)
         func point(degrees: Double, radius: CGFloat) -> NSPoint {
             NSPoint(x: neck.x + edgeSign * radius * cos(degrees * .pi / 180), y: neck.y - radius * sin(degrees * .pi / 180))
