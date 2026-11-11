@@ -14,6 +14,8 @@
 <p align="center">
   <a href="https://github.com/sharrygold/remi/releases/latest/download/Remi.zip"><strong>Download for Mac</strong></a>
   &nbsp;·&nbsp;
+  <a href="https://remi-app.netlify.app">Website</a>
+  &nbsp;·&nbsp;
   <a href="#build-from-source">Build from source</a>
 </p>
 

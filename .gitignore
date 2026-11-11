@@ -31,3 +31,6 @@ _presentation-pack/
 
 # Local working notes for Claude Code (the full notes live in the private remi-notes repo)
 CLAUDE.md
+
+# Netlify CLI link (local)
+.netlify/
