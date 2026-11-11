@@ -64,8 +64,6 @@ struct InlineAddField: View {
     /// Returns true when the text was saved, so the field clears for the next item.
     let onSave: (String) -> Bool
     let onClose: () -> Void
-    /// Starts the field with text in it, for renaming.
-    var initialText = ""
     @State private var text = ""
     @FocusState private var focused: Bool
 
@@ -91,10 +89,7 @@ struct InlineAddField: View {
                     if !text.trimmingCharacters(in: .whitespaces).isEmpty, onSave(text) { text = "" }
                     onClose()
                 }
-                .onAppear {
-                    text = initialText
-                    DispatchQueue.main.async { focused = true }
-                }
+                .onAppear { DispatchQueue.main.async { focused = true } }
                 .accessibilityLabel(placeholder)
         }
         .padding(.horizontal, Tokens.Spacing.m)

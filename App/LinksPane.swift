@@ -15,7 +15,7 @@ struct LinksPane: View {
     @State private var showWatched = false
     @State private var adding = false
     /// Naming a new list, or renaming the one on show.
-    @State private var naming: Naming? = CommandLine.arguments.contains("--preview-new-list") ? .new : nil
+    @State private var naming: Naming?
     @State private var namingSymbol = LinkGroup.defaultSymbol
     /// A link just added by hand, whose name field opens next.
     @State private var renameID: UUID?
@@ -52,12 +52,9 @@ struct LinksPane: View {
         VStack(spacing: 0) {
             picker
             if let naming {
-                InlineAddField(placeholder: "List name", symbol: "list.bullet", onSave: saveName, onClose: closeNaming,
-                               initialText: naming == .rename ? selectedGroup?.name ?? "" : "")
+                ListNamingCard(isRenaming: naming == .rename, name: naming == .rename ? selectedGroup?.name ?? "" : "",
+                               symbol: $namingSymbol, onSave: saveName, onCancel: closeNaming)
                     .id(naming == .rename)
-                IconGrid(symbols: LibraryStore.linkGroupSymbols, selected: namingSymbol) { namingSymbol = $0 }
-                    .padding(.horizontal, Tokens.Spacing.s)
-                    .padding(.top, Tokens.Spacing.xs)
             }
             if adding {
                 InlineAddField(placeholder: "Paste or type a link", symbol: "link", onSave: addLink, onClose: { closeAdding() })
@@ -84,6 +81,12 @@ struct LinksPane: View {
         }
         .environment(\.panelActions, renameActions)
         .onChange(of: addRequests) { _, _ in adding = true }
+        .onAppear {
+            // For screenshots, after any list chosen at launch has settled.
+            if CommandLine.arguments.contains("--preview-new-list") {
+                DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) { naming = .new }
+            }
+        }
         .onChange(of: list) { _, _ in adding = false }
         .onChange(of: groupID) { _, _ in
             adding = false
@@ -256,6 +259,79 @@ struct LinksPane: View {
                 }
             }
         }
+    }
+}
+
+/// Naming a list: its own card, so it can't be mistaken for part of the list behind it.
+private struct ListNamingCard: View {
+    let isRenaming: Bool
+    @State var name: String
+    @Binding var symbol: String
+    /// Returns true when the name was used.
+    let onSave: (String) -> Bool
+    let onCancel: () -> Void
+    @FocusState private var focused: Bool
+
+    private var canSave: Bool { !name.trimmingCharacters(in: .whitespaces).isEmpty }
+
+    private func save() {
+        guard canSave else { return }
+        _ = onSave(name)
+    }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: Tokens.Spacing.s) {
+            Text(isRenaming ? "Rename list" : "New list")
+                .font(Tokens.TextRole.detail.weight(.semibold))
+                .foregroundStyle(.secondary)
+            HStack(spacing: Tokens.Spacing.s) {
+                Image(systemName: symbol)
+                    .foregroundStyle(Color.brand)
+                    .frame(width: 22)
+                    .contentTransition(.symbolEffect(.replace))
+                    .accessibilityHidden(true)
+                TextField("List name", text: $name)
+                    .brandTextInput()
+                    .textFieldStyle(.plain)
+                    .font(Tokens.TextRole.row)
+                    .focused($focused)
+                    .onSubmit(save)
+                    .onExitCommand(perform: onCancel)
+                    .onAppear { DispatchQueue.main.async { focused = true } }
+                    .accessibilityLabel("List name")
+            }
+            .padding(.horizontal, Tokens.Spacing.s)
+            .padding(.vertical, Tokens.Spacing.xs + 2)
+            .background(.quaternary.opacity(0.6), in: RoundedRectangle(cornerRadius: Tokens.Radius.small, style: .continuous))
+            IconGrid(symbols: LibraryStore.linkGroupSymbols, selected: symbol) { symbol = $0 }
+            HStack(spacing: Tokens.Spacing.m) {
+                Spacer()
+                Button("Cancel", action: onCancel)
+                    .buttonStyle(.plain)
+                    .font(Tokens.TextRole.detail)
+                    .foregroundStyle(.secondary)
+                Button(action: save) {
+                    Text(isRenaming ? "Save" : "Create List")
+                        .font(Tokens.TextRole.detail.weight(.semibold))
+                        .foregroundStyle(Color.onBrand)
+                        .padding(.horizontal, Tokens.Spacing.m - 3)
+                        .padding(.vertical, Tokens.Spacing.xs + 2)
+                        .background(Color.brand, in: Capsule())
+                        .contentShape(Capsule())
+                }
+                .buttonStyle(.plain)
+                .disabled(!canSave)
+                .opacity(canSave ? 1 : 0.45)
+            }
+        }
+        .padding(Tokens.Spacing.s + 4)
+        .background(Color(nsColor: .controlBackgroundColor).opacity(0.9), in: RoundedRectangle(cornerRadius: Tokens.Radius.medium, style: .continuous))
+        .overlay {
+            RoundedRectangle(cornerRadius: Tokens.Radius.medium, style: .continuous).strokeBorder(Color.brand.opacity(0.45), lineWidth: 1)
+        }
+        .padding(.horizontal, Tokens.Spacing.s)
+        .padding(.top, Tokens.Spacing.s)
+        .transition(.opacity)
     }
 }
 

@@ -71,7 +71,7 @@ final class AppController: NSObject, NSApplicationDelegate {
 
     let showNowItem = NSMenuItem(title: "Show Widget Now", action: #selector(showWidgetNow), keyEquivalent: "")
 
-    static let idleSecondsBeforeTuck: TimeInterval = 10
+    static let idleSecondsBeforeTuck: TimeInterval = 7
 
     static let idleSecondsBeforeDoze: TimeInterval = 45
 
