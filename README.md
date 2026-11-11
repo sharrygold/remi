@@ -1,36 +1,51 @@
-# Perch
+# Remi for Mac
 
-A floating command centre for macOS: tasks, notes and links, one click or one shortcut away. Everything stays on your Mac.
+**A little bird that remembers for you.**
 
-"Perch" is a working name. The name shown in the app comes from `APP_DISPLAY_NAME` in `project.yml`; change it there and reinstall to rename. Your data and settings are kept, because they follow the bundle ID (`com.example.oldapp`), not the name.
+Remi lives on the edge of your screen and holds what you meant to do: tasks, notes and links, one click or one shortcut away. It is a native macOS app, and everything stays on your Mac.
+
+<p>
+  <img src="docs/images/panel-today.png" width="320" alt="The Remi panel showing today's tasks">
+  <img src="docs/images/perched.png" width="108" alt="Remi perched on the screen edge">
+  <img src="docs/images/cord.png" width="150" alt="Remi on the knotted cord">
+</p>
+
+Remi is inspired by Sankofa, the Adinkra symbol of a bird looking back at the egg on its back: it is not wrong to go back for what you have forgotten. Choose **Perched** (on a gold peg at the side of the screen) or **On the cord** (on a swing at the end of a knotted cord, one knot per task due today), in one of four plumages.
 
 ## Install
 
-You need Xcode and XcodeGen (`brew install xcodegen`). Then, in Terminal:
+Remi needs macOS 26 or later. It is not notarized, because that needs a paid Apple Developer account.
+
+### From source
+
+You need Xcode and [XcodeGen](https://github.com/yonaskolb/XcodeGen) (`brew install xcodegen`). No Apple account is needed.
 
 ```
-cd ~/projects/Perch
+git clone https://github.com/sharrygold/remi.git
+cd remi
 Scripts/install.sh
 ```
 
-The script builds a Release copy, closes any running one, puts it in `/Applications` and opens it. Run it again whenever you want the latest version. Afterwards, turn on **Settings > General > Open at login**.
+The script builds a Release copy, closes any running one, puts it in `/Applications` and opens it. Run it again to update.
 
-The first time, macOS asks whether the app may send notifications; choose **Allow**. If you use a Focus mode, add the app under **System Settings > Focus > (your Focus) > Allowed Notifications > Apps**, or reminders stay silent during that Focus.
+### From a release zip
 
-## Build and run without installing
+1. Download the zip from the Releases page, unzip it and move **Remi.app** to Applications.
+2. Open it. macOS will say it can't check the app and block it.
+3. Open **System Settings > Privacy & Security**, scroll down and click **Open Anyway** next to Remi, then confirm. (Control-click > Open no longer gets past this on macOS 15 and later.)
 
-```
-xcodegen generate
-xcodebuild -project Perch.xcodeproj -scheme Perch -derivedDataPath build build
-open build/Build/Products/Debug/Perch.app
-xcodebuild -project Perch.xcodeproj -scheme Perch -derivedDataPath build test   # unit tests
-```
+## First run
 
-The `.xcodeproj` is generated from `project.yml`; don't edit it by hand.
+A welcome card shows the shortcut, how to type a task, and lets you pick a companion and turn on **Open at login**. You can see it again from **Settings > General**.
+
+macOS asks for two permissions, each only when it's needed:
+
+- **Notifications**, when you first add a task with a due date. If you use a Focus mode, add Remi under **System Settings > Focus > (your Focus) > Allowed Notifications > Apps**, or reminders stay silent during it.
+- **Browser control**, the first time you save the current tab with ⌘S. Only that browser's current address and title are read, and only when you ask.
 
 ## Using it
 
-Open the panel by clicking the widget, pulling the cord, or pressing **⌃Space** (change it in Settings).
+Open the panel by clicking Remi, pulling the cord, or pressing **⌃Space** (change it in Settings).
 
 The capture bar is at the bottom. The Space button at the top left picks a Space or starts a new one; search, pin and Settings sit at the top right. Each list has its own **+** (New task, New note, Add link) for adding by hand: Return saves and keeps the field open for the next one, Esc closes it. A link added this way asks for a name straight after.
 
@@ -42,6 +57,8 @@ The capture bar is at the bottom. The Space button at the top left picks a Space
 | Tab (on a link) | Switch between Saved links and Watch later |
 | Text plus a link | A task that opens that link |
 | `#space`, `today`, `tomorrow`, `fri`, `!` | Space, due date, important |
+| `every monday`, `daily`, `weekly`, `monthly` | A repeating task |
+| ⌘S (with a browser in front) | Save the current tab |
 | ⌘Z (capture bar empty) | Undo the last change |
 
 | Anywhere in the panel | |
@@ -65,17 +82,29 @@ In a note: `# ` heading, `- ` bullet, `[] ` checkbox, `**bold**` (or ⌘B), ⇧�
 
 ## Where things are kept
 
-- Library: `~/Library/Application Support/com.example.oldapp/Library.store`
+- Library: `~/Library/Application Support/io.github.sharrygold.remi/Library.store`
 - Daily backups (last 14): the `Backups` folder next to it, also reachable from **Settings > Data > Show in Finder**
 - Export writes JSON (which Import reads back) and a Markdown copy.
 
 Nothing is sent anywhere except the page fetch that gets a saved link's title and icon.
 
-## Project layout
+## Develop
 
-- `App/Core`: models, store, parser, search, export, backups. No UI; this is what the unit tests compile, and what a future iPhone app could reuse.
-- `App`: the app around the core. `AppController.swift` starts everything (menus, settings, daily jobs), with extensions for the panel (`+Panel`), the widget (`+Widget`), the Settings window (`+Settings`) and the self-tests and demo data (`+SelfTests`). `main.swift` is just the entry point and launch options; `Windows.swift` holds the window classes. The SwiftUI views are in `PanelView`, `NotesPane`, `LinksPane`, `SearchPane`, `SettingsView` and `WidgetPrototypes`. `DesignTokens.swift` holds the whole look.
-- `Tests`: unit tests. `Scripts`: install and screenshot scripts.
-- `SPEC.md` is the product spec, `DECISIONS.md` records what changed and why, `PROGRESS.md` tracks milestones, `QA.md` is the acceptance checklist.
+```
+xcodegen generate
+xcodebuild -project Remi.xcodeproj -scheme Remi -derivedDataPath build/debug build
+open build/debug/Build/Products/Debug/Remi.app
+xcodebuild -project Remi.xcodeproj -scheme Remi -derivedDataPath build/debug test
+```
 
-The app also has in-app self-tests used during development (`--m2-selftest` to `--m6-selftest`, `--clipboard-selftest`, `--cord-selftest`). They run on in-memory data and press real keys in the panel, so don't type while one runs.
+The `.xcodeproj` is generated from `project.yml`; don't edit it by hand. The app's name lives in `APP_DISPLAY_NAME` there. Builds are ad hoc signed by default. To sign with your own team, so macOS keeps permissions across rebuilds, see `Config/Signing.xcconfig`. Debug builds use their own data folder.
+
+- `App/Core`: models, store, parser, search, export, backups and the companion's motion. No UI; this is what the unit tests compile.
+- `App`: the app around the core. `CompanionSurface`, `PerchedBirdView` and `CordCompanionView` are the companion; `Resources/Companion` holds its layers, generated from `docs/brand/final` by `Scripts/make-companion-art.py`.
+- `docs/brand`: the brand kit. `QA.md` is the acceptance checklist.
+
+The app has in-app self-tests (`--m2-selftest` to `--m6-selftest`, `--clipboard-selftest`, `--add-selftest`). They run on in-memory data and press real keys in the panel, so don't type while one runs.
+
+## Licence
+
+MIT, see `LICENSE`. The egg's numerals use Bodoni Moda, under the SIL Open Font License (`App/Resources/BodoniModa-OFL.txt`).
