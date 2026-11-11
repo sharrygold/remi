@@ -167,6 +167,10 @@ final class AppController: NSObject, NSApplicationDelegate {
             DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) { self.nav.switchSpace(step) }
         }
         // For screenshots: show the keyboard selection on the first row.
+        // For checking motion: switch tab 2 s after opening, so frames can be captured mid-glide.
+        if CommandLine.arguments.contains("--preview-tab-switch") {
+            DispatchQueue.main.asyncAfter(deadline: .now() + 2) { self.nav.switchTab(3) }
+        }
         if CommandLine.arguments.contains("--select-first") {
             DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) { self.nav.move(1) }
         }

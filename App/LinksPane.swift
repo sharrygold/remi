@@ -75,15 +75,16 @@ struct LinksPane: View {
                 }
                 .padding(Tokens.Spacing.m)
                 .frame(maxWidth: .infinity, alignment: .leading)
+                // Switching lists swaps the content and eases the new list in.
+                .paneEnter("\(list.rawValue)|\(groupID?.uuidString ?? "")")
             }
             .modifier(FollowSelection(proxy: proxy))
             }
         }
         .environment(\.panelActions, renameActions)
-        .animation(Tokens.Motion.page, value: groupID)
-        .animation(Tokens.Motion.page, value: list)
-        .animation(Tokens.Motion.quick, value: naming)
-        .animation(Tokens.Motion.quick, value: adding)
+        .animation(Motion.modal, value: naming)
+        .animation(Motion.modal, value: adding)
+        .animation(Motion.collapse, value: visibleLinks.map(\.id))
         .onChange(of: addRequests) { _, _ in adding = true }
         .onAppear {
             // For screenshots, after any list chosen at launch has settled.
@@ -252,16 +253,23 @@ struct LinksPane: View {
         let watched = store.links(in: space, list: .watchLater, watched: true)
         if !watched.isEmpty {
             VStack(alignment: .leading, spacing: 0) {
-                Button { withAnimation(Tokens.Motion.quick) { showWatched.toggle() } } label: {
-                    Label("Watched (\(watched.count))", systemImage: showWatched ? "chevron.down" : "chevron.right")
-                        .font(Tokens.TextRole.sectionTitle)
-                        .foregroundStyle(.secondary)
+                Button { withAnimation(Motion.open) { showWatched.toggle() } } label: {
+                    HStack(spacing: 6) {
+                        DisclosureChevron(open: showWatched)
+                        Text("Watched (\(watched.count))")
+                    }
+                    .font(Tokens.TextRole.sectionTitle)
+                    .foregroundStyle(.secondary)
                 }
-                .buttonStyle(.plain)
+                .buttonStyle(PressScale(scale: 0.98))
                 if showWatched {
-                    ForEach(watched) { LinkRowView(store: store, link: $0, density: density, showsSpace: showsSpace) }
+                    VStack(alignment: .leading, spacing: 0) {
+                        ForEach(watched) { LinkRowView(store: store, link: $0, density: density, showsSpace: showsSpace) }
+                    }
+                    .transition(Motion.accordion(reduce: NSWorkspace.shared.accessibilityDisplayShouldReduceMotion))
                 }
             }
+            .clipped()
         }
     }
 }
@@ -311,7 +319,7 @@ private struct ListNamingCard: View {
             HStack(spacing: Tokens.Spacing.m) {
                 Spacer()
                 Button("Cancel", action: onCancel)
-                    .buttonStyle(.plain)
+                    .buttonStyle(PressScale(scale: 0.96))
                     .font(Tokens.TextRole.detail)
                     .foregroundStyle(.secondary)
                 Button(action: save) {
@@ -323,7 +331,7 @@ private struct ListNamingCard: View {
                         .background(Color.brand, in: Capsule())
                         .contentShape(Capsule())
                 }
-                .buttonStyle(.plain)
+                .buttonStyle(PressScale(scale: 0.96))
                 .disabled(!canSave)
                 .opacity(canSave ? 1 : 0.45)
             }
@@ -335,7 +343,7 @@ private struct ListNamingCard: View {
         }
         .padding(.horizontal, Tokens.Spacing.s)
         .padding(.top, Tokens.Spacing.s)
-        .transition(.opacity)
+        .transition(Motion.modalIn(reduce: NSWorkspace.shared.accessibilityDisplayShouldReduceMotion))
     }
 }
 
@@ -383,6 +391,8 @@ struct LinkRowView: View {
         .keyboardHighlight(link.id)
         .id(link.id)
         .onHover { hovering = $0 }
+        .animation(Motion.hover, value: hovering)
+        .transition(Motion.row(reduce: NSWorkspace.shared.accessibilityDisplayShouldReduceMotion))
         .contextMenu { menu }
         .onChange(of: actions.editRequest) { _, id in
             if id == link.id { startEditing() }
@@ -502,6 +512,8 @@ struct LinkIcon: View {
             }
         }
         .frame(width: 20, height: 20)
+        // Icons fetched later fade in rather than popping.
+        .animation(Motion.ease(0.6), value: data)
         .accessibilityHidden(true)
     }
 }

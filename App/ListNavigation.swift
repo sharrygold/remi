@@ -141,7 +141,7 @@ struct FollowSelection: ViewModifier {
     func body(content: Content) -> some View {
         content.onChange(of: selection) { _, id in
             guard let id else { return }
-            withAnimation(Tokens.Motion.quick) { proxy.scrollTo(id) }
+            withAnimation(Motion.easeOut(0.3)) { proxy.scrollTo(id) }
         }
     }
 }

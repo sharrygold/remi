@@ -116,7 +116,6 @@ enum SettingsTab: String, CaseIterable {
 
 struct SettingsView: View {
     @ObservedObject var context: SettingsContext
-    @Namespace private var sidebarHighlight
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     /// Read so the accent redraws when Plumage changes.
     @AppStorage(CompanionKeys.plumage) private var plumageName = Plumage.ivory.rawValue
@@ -132,30 +131,28 @@ struct SettingsView: View {
                             .padding(.horizontal, 10)
                             .padding(.vertical, 6)
                             .foregroundStyle(context.tab == item ? Color.onBrand : Color.primary)
-                            .background {
-                                if context.tab == item {
-                                    RoundedRectangle(cornerRadius: 6).fill(Color.brand)
-                                        .matchedGeometryEffect(id: "tab", in: sidebarHighlight)
-                                }
-                            }
+                            .animation(Motion.ease(0.2), value: context.tab)
                             .contentShape(Rectangle())
+                            .gliderItem(item)
                     }
-                    .buttonStyle(.plain)
+                    .buttonStyle(PressScale(scale: 0.98))
                     .accessibilityAddTraits(context.tab == item ? .isSelected : [])
                 }
                 Spacer()
+            }
+            .glider(selection: context.tab, reduce: reduceMotion) {
+                RoundedRectangle(cornerRadius: 8, style: .continuous).fill(Color.brand)
             }
             .padding(10)
             .frame(width: 190)
             .background(.background.secondary)
             Divider()
+            // Only the section on the right animates; the sidebar stays put.
             page(context.tab)
-                .id(context.tab)
-                .transition(Tokens.Motion.pageTransition(reduce: reduceMotion))
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
+                .paneEnter(context.tab)
         }
         .frame(width: 700, height: 520)
-        .animation(Tokens.Motion.adaptive(Tokens.Motion.select, reduce: reduceMotion), value: context.tab)
     }
 
     @ViewBuilder private func page(_ tab: SettingsTab) -> some View {
@@ -308,6 +305,7 @@ private struct SpacesSettings: View {
             if creating {
                 NewSpaceForm(store: store) { creating = false }
                     .padding()
+                    .transition(Motion.modalIn(reduce: NSWorkspace.shared.accessibilityDisplayShouldReduceMotion))
             } else {
                 HStack {
                     Button("New Space…", systemImage: "plus") { creating = true }
@@ -404,8 +402,9 @@ private struct SpaceRow: View {
                     .disabled(store.spaces.count < 2)
                     .accessibilityLabel("Delete \(space.name)")
             }
-            if isDeleting { deleteRow }
+            if isDeleting { deleteRow.transition(Motion.accordion(reduce: NSWorkspace.shared.accessibilityDisplayShouldReduceMotion)) }
         }
+        .animation(Motion.open, value: isDeleting)
         .padding(.vertical, 2)
     }
 

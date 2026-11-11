@@ -70,7 +70,6 @@ struct PanelView: View {
     @FocusState private var captureFocused: Bool
     @Environment(\.accessibilityReduceTransparency) private var reduceTransparency
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
-    @Namespace private var tabHighlight
     /// Read so the accent redraws when Plumage changes.
     @AppStorage(CompanionKeys.plumage) private var plumageName = Plumage.ivory.rawValue
 
@@ -97,12 +96,13 @@ struct PanelView: View {
             if store.isTemporary { storageWarning }
             if presentation.showWelcome, let widget = presentation.widget {
                 WelcomeCard(widget: widget, shortcut: HotKeyCombo.saved.display, onDone: presentation.onWelcomeDone)
+                    .transition(Motion.paneSwap(reduce: reduceMotion))
                     .frame(maxHeight: .infinity)
                     .background(Color(nsColor: .textBackgroundColor).opacity(reduceTransparency ? 1 : Tokens.Surface.contentOpacity),
                                 in: RoundedRectangle(cornerRadius: Tokens.Radius.large, style: .continuous))
             } else if search.active {
                 SearchPane(store: store, search: search, density: density, onOpen: openSearchHit, onClose: closeSearch)
-                    .transition(Tokens.Motion.pageTransition(reduce: reduceMotion))
+                    .transition(Motion.paneSwap(reduce: reduceMotion))
                     .frame(maxHeight: .infinity)
                     .background(Color(nsColor: .textBackgroundColor).opacity(reduceTransparency ? 1 : Tokens.Surface.contentOpacity),
                                 in: RoundedRectangle(cornerRadius: Tokens.Radius.large, style: .continuous))
@@ -111,7 +111,7 @@ struct PanelView: View {
                     tabs
                     content
                 }
-                .transition(Tokens.Motion.pageTransition(reduce: reduceMotion))
+                .transition(Motion.paneSwap(reduce: reduceMotion))
             }
             if showsTokens {
                 tokenRow
@@ -122,11 +122,11 @@ struct PanelView: View {
             }
             captureBar
         }
-        .animation(Tokens.Motion.adaptive(Tokens.Motion.page, reduce: reduceMotion), value: search.active)
-        .animation(Tokens.Motion.adaptive(Tokens.Motion.page, reduce: reduceMotion), value: presentation.showWelcome)
-        .animation(Tokens.Motion.adaptive(Tokens.Motion.quick, reduce: reduceMotion), value: showsTokens)
-        .animation(Tokens.Motion.adaptive(Tokens.Motion.quick, reduce: reduceMotion), value: clipboardOffer)
-        .animation(Tokens.Motion.adaptive(Tokens.Motion.quick, reduce: reduceMotion), value: tabOffer)
+        .animation(Motion.adaptive(Motion.pane, reduce: reduceMotion), value: search.active)
+        .animation(Motion.adaptive(Motion.pane, reduce: reduceMotion), value: presentation.showWelcome)
+        .animation(Motion.adaptive(Motion.toast, reduce: reduceMotion), value: showsTokens)
+        .animation(Motion.adaptive(Motion.toast, reduce: reduceMotion), value: clipboardOffer)
+        .animation(Motion.adaptive(Motion.toast, reduce: reduceMotion), value: tabOffer)
         .padding(Tokens.Spacing.s)
         // Fills the window, which can be resized from its edges and remembers its size.
         .frame(maxWidth: .infinity, maxHeight: .infinity)
@@ -291,6 +291,7 @@ struct PanelView: View {
             }
         }
         .frame(height: Tokens.Spacing.l)
+        .transition(Motion.toast(reduce: reduceMotion))
     }
 
     @ViewBuilder private var spaceToken: some View {
@@ -416,7 +417,7 @@ struct PanelView: View {
         .padding(.trailing, Tokens.Spacing.xs)
         .frame(height: Tokens.Spacing.l + Tokens.Spacing.xs)
         .background(Color.brand.opacity(0.1), in: Capsule())
-        .transition(.opacity)
+        .transition(Motion.toast(reduce: reduceMotion))
     }
 
     private func saveClipboard(_ offer: ClipboardOffer) {
@@ -432,7 +433,7 @@ struct PanelView: View {
 
     private func dismissClipboard(_ offer: ClipboardOffer) {
         ClipboardNudge.markHandled(offer)
-        withAnimation(Tokens.Motion.quick) { clipboardOffer = nil }
+        withAnimation(Motion.ease(0.25)) { clipboardOffer = nil }
     }
 
     // MARK: Browser tab
@@ -460,7 +461,7 @@ struct PanelView: View {
         .font(Tokens.TextRole.detail)
         .background(Color.brand.opacity(0.1), in: Capsule())
         .help("Save the tab you're looking at to Links (\(HotKeyCombo.savedSaveTab.display))")
-        .transition(.opacity)
+        .transition(Motion.toast(reduce: reduceMotion))
     }
 
     private func saveTab(from browser: BrowserTab.Browser) {
@@ -534,9 +535,9 @@ struct PanelView: View {
         case (.action, .task(let task)):
             if let action = task.action { openItem(action) } else { show(confirmation: "This task has no action") }
         case (.toggle, .task(let task)):
-            withAnimation(reduceMotion ? nil : Tokens.Motion.quick) { store.toggleCompleted(task) }
+            store.toggleCompleted(task)
             DispatchQueue.main.asyncAfter(deadline: .now() + LibraryStore.lingerSeconds + 0.05) {
-                withAnimation(reduceMotion ? nil : Tokens.Motion.quick) { store.reload() }
+                withAnimation(Motion.adaptive(Motion.collapse, reduce: reduceMotion)) { store.reload() }
             }
         case (.toggle, .link(let link)) where link.list == .watchLater:
             store.setWatched(link, !link.isWatched)
@@ -609,7 +610,7 @@ struct PanelView: View {
             tab = .tasks
             DispatchQueue.main.async { highlightedTaskID = task.id }
             DispatchQueue.main.asyncAfter(deadline: .now() + 1.6) {
-                if highlightedTaskID == task.id { withAnimation(Tokens.Motion.quick) { highlightedTaskID = nil } }
+                if highlightedTaskID == task.id { withAnimation(Motion.ease(0.6)) { highlightedTaskID = nil } }
             }
         case .note(let note):
             presentation.noteToOpen = note.id
@@ -642,27 +643,26 @@ struct PanelView: View {
                     Text(item.rawValue)
                         .font(Tokens.TextRole.meta.weight(tab == item ? .semibold : .regular))
                         .foregroundStyle(tab == item ? .primary : .secondary)
+                        .animation(Motion.ease(0.2), value: tab)
                         .frame(maxWidth: .infinity, minHeight: 32)
-                        .background {
-                            if tab == item {
-                                RoundedRectangle(cornerRadius: Tokens.Radius.small, style: .continuous)
-                                    .fill(.quaternary)
-                                    .matchedGeometryEffect(id: "tab", in: tabHighlight)
-                            }
-                        }
                         .contentShape(Rectangle())
+                        .gliderItem(item)
                 }
-                .buttonStyle(.plain)
+                .buttonStyle(PressScale(scale: 0.96))
                 .help("\(item.rawValue) (⌘\((PanelTab.allCases.firstIndex(of: item) ?? 0) + 1))")
                 .accessibilityAddTraits(tab == item ? .isSelected : [])
             }
         }
-        .animation(Tokens.Motion.adaptive(Tokens.Motion.select, reduce: reduceMotion), value: tab)
+        .glider(selection: tab, reduce: reduceMotion) {
+            RoundedRectangle(cornerRadius: Tokens.Radius.small, style: .continuous)
+                .fill(.quaternary)
+                .shadow(color: .black.opacity(0.08), radius: 1, y: 1)
+        }
     }
 
     /// Changes when what the list area shows changes, so the old page fades out as the new one comes in.
     private var pageKey: String {
-        "\(tab.rawValue)|\(selectedSpaceID?.uuidString ?? "all")|\(reviewing)"
+        "\(tab.rawValue)|\(selectedSpaceID?.uuidString ?? "all")|\(reviewing)|\(openNoteID?.uuidString ?? "")"
     }
 
     // MARK: Content
@@ -699,16 +699,14 @@ struct PanelView: View {
                 }
             }
         }
-        .id(pageKey)
-        .transition(Tokens.Motion.pageTransition(reduce: reduceMotion))
-        .animation(Tokens.Motion.adaptive(Tokens.Motion.page, reduce: reduceMotion), value: pageKey)
-        // Rows, notes opening and inline fields ease in and out instead of appearing.
-        .animation(Tokens.Motion.adaptive(Tokens.Motion.quick, reduce: reduceMotion), value: store.tasks.count)
-        .animation(Tokens.Motion.adaptive(Tokens.Motion.page, reduce: reduceMotion), value: openNoteID)
-        .animation(Tokens.Motion.adaptive(Tokens.Motion.quick, reduce: reduceMotion), value: addingTask)
-        .animation(Tokens.Motion.adaptive(Tokens.Motion.quick, reduce: reduceMotion), value: confirmingFreshStart)
-        .animation(Tokens.Motion.adaptive(Tokens.Motion.quick, reduce: reduceMotion), value: showSetAside)
-        .animation(Tokens.Motion.adaptive(Tokens.Motion.quick, reduce: reduceMotion), value: showDone)
+        // Only the list pane changes: the old page is swapped out and the new one eases in.
+        .paneEnter(pageKey)
+        // Rows soft-rise in and fade out with the rest closing up; inline cards arrive like a modal.
+        .animation(Motion.adaptive(Motion.collapse, reduce: reduceMotion), value: store.tasks.count)
+        .animation(Motion.adaptive(Motion.modal, reduce: reduceMotion), value: addingTask)
+        .animation(Motion.adaptive(Motion.modal, reduce: reduceMotion), value: confirmingFreshStart)
+        .animation(Motion.adaptive(Motion.open, reduce: reduceMotion), value: showSetAside)
+        .animation(Motion.adaptive(Motion.open, reduce: reduceMotion), value: showDone)
         .frame(maxHeight: .infinity)
         .background(Color(nsColor: .textBackgroundColor).opacity(reduceTransparency ? 1 : Tokens.Surface.contentOpacity),
                     in: RoundedRectangle(cornerRadius: Tokens.Radius.large, style: .continuous))
@@ -801,7 +799,7 @@ struct PanelView: View {
 
     private var tasksMenu: some View {
         Menu {
-            Button("Fresh start…") { withAnimation(Tokens.Motion.quick) { confirmingFreshStart = true } }
+            Button("Fresh start…") { confirmingFreshStart = true }
                 .disabled(store.open(in: selectedSpace).isEmpty)
         } label: {
             Image(systemName: "ellipsis.circle").font(Tokens.TextRole.detail).foregroundStyle(.secondary)
@@ -820,7 +818,7 @@ struct PanelView: View {
         return HStack(spacing: Tokens.Spacing.s) {
             Text(count == 1 ? "Let go of 1 open task?" : "Let go of \(count) open tasks?").lineLimit(1)
             Spacer(minLength: Tokens.Spacing.xs)
-            Button("Cancel") { withAnimation(Tokens.Motion.quick) { confirmingFreshStart = false } }
+            Button("Cancel") { confirmingFreshStart = false }
                 .buttonStyle(.plain)
                 .foregroundStyle(.secondary)
             Button("Let Go") {
@@ -838,7 +836,7 @@ struct PanelView: View {
         .background(.quaternary.opacity(0.5), in: RoundedRectangle(cornerRadius: Tokens.Radius.small, style: .continuous))
         .padding(.horizontal, Tokens.Spacing.s)
         .padding(.top, Tokens.Spacing.xs)
-        .transition(.opacity)
+        .transition(Motion.toast(reduce: reduceMotion))
     }
 
     // MARK: Morning review
@@ -859,7 +857,7 @@ struct PanelView: View {
     }
 
     private func closeReview() {
-        withAnimation(reduceMotion ? nil : Tokens.Motion.quick) { reviewing = false }
+        reviewing = false
         captureFocused = true
     }
 
@@ -895,33 +893,41 @@ struct PanelView: View {
                     store.reorder(ordered)
                 }
                 if !done.isEmpty {
-                    Button { withAnimation(Tokens.Motion.quick) { showDone.toggle() } } label: {
-                        Label("Done (\(done.count))", systemImage: showDone ? "chevron.down" : "chevron.right")
-                            .font(Tokens.TextRole.sectionTitle)
-                            .foregroundStyle(.secondary)
+                    Button { showDone.toggle() } label: {
+                        HStack(spacing: 6) {
+                            DisclosureChevron(open: showDone)
+                            Text("Done (\(done.count))")
+                        }
+                        .font(Tokens.TextRole.sectionTitle)
+                        .foregroundStyle(.secondary)
                     }
-                    .buttonStyle(.plain)
+                    .buttonStyle(PressScale(scale: 0.98))
                     .listRowBackground(Color.clear)
                     .listRowSeparator(.hidden)
                     if showDone {
                         ForEach(done) { task in
                             taskRow(task).listRowBackground(highlight(task)).listRowSeparator(.hidden).id(task.id)
+                                .transition(Motion.accordion(reduce: reduceMotion))
                         }
                     }
                 }
                 if !setAside.isEmpty {
-                    Button { withAnimation(Tokens.Motion.quick) { showSetAside.toggle() } } label: {
-                        Label("Set aside (\(setAside.count))", systemImage: showSetAside ? "chevron.down" : "chevron.right")
-                            .font(Tokens.TextRole.sectionTitle)
-                            .foregroundStyle(.secondary)
+                    Button { showSetAside.toggle() } label: {
+                        HStack(spacing: 6) {
+                            DisclosureChevron(open: showSetAside)
+                            Text("Set aside (\(setAside.count))")
+                        }
+                        .font(Tokens.TextRole.sectionTitle)
+                        .foregroundStyle(.secondary)
                     }
-                    .buttonStyle(.plain)
+                    .buttonStyle(PressScale(scale: 0.98))
                     .help("Tasks you let go. Right-click one to bring it back.")
                     .listRowBackground(Color.clear)
                     .listRowSeparator(.hidden)
                     if showSetAside {
                         ForEach(setAside) { task in
                             taskRow(task).listRowBackground(Color.clear).listRowSeparator(.hidden).id(task.id)
+                                .transition(Motion.accordion(reduce: reduceMotion))
                         }
                     }
                 }
@@ -931,7 +937,7 @@ struct PanelView: View {
             .modifier(FollowSelection(proxy: proxy))
             .onChange(of: highlightedTaskID) { _, id in
                 guard let id else { return }
-                withAnimation(Tokens.Motion.quick) { proxy.scrollTo(id, anchor: .center) }
+                withAnimation(Motion.modal) { proxy.scrollTo(id, anchor: .center) }
             }
             }
         }
@@ -1024,10 +1030,11 @@ struct PanelView: View {
             Image(systemName: symbol)
                 .font(Tokens.TextRole.detail)
                 .foregroundStyle(.secondary)
+                .contentTransition(.symbolEffect(.replace))
                 .frame(width: 24, height: 24)
                 .contentShape(Rectangle())
         }
-        .buttonStyle(.plain)
+        .buttonStyle(PressScale(scale: 0.96))
         .help(help)
         .accessibilityLabel(label)
     }

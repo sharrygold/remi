@@ -29,11 +29,19 @@ struct TaskRowView: View {
     var body: some View {
         HStack(spacing: Tokens.Spacing.s) {
             Button(action: toggle) {
-                Image(systemName: task.isCompleted ? "checkmark.circle.fill" : "circle")
-                    .foregroundStyle(task.isCompleted ? AnyShapeStyle(task.space?.tint ?? .brand) : AnyShapeStyle(.tertiary))
-                    .contentTransition(.symbolEffect(.replace))
+                // The completion pop: the check lands from 0.6 with a small overshoot, the only bounce in the app.
+                ZStack {
+                    Image(systemName: "circle")
+                        .foregroundStyle(.tertiary)
+                        .opacity(task.isCompleted ? 0 : 1)
+                    Image(systemName: "checkmark.circle.fill")
+                        .foregroundStyle(task.space?.tint ?? .brand)
+                        .scaleEffect(task.isCompleted || reduceMotion ? 1 : 0.6)
+                        .opacity(task.isCompleted ? 1 : 0)
+                }
+                .animation(reduceMotion ? Motion.reduced : Motion.pop, value: task.isCompleted)
             }
-            .buttonStyle(.plain)
+            .buttonStyle(PressScale(scale: 0.96))
             .accessibilityLabel(task.isCompleted ? "Mark \(task.title) as not done" : "Mark \(task.title) as done")
 
             title
@@ -59,7 +67,8 @@ struct TaskRowView: View {
             }
         }
         .onHover { hovering = $0 }
-        .animation(.easeOut(duration: 0.15), value: hovering)
+        .animation(Motion.hover, value: hovering)
+        .transition(Motion.row(reduce: reduceMotion))
         .padding(.vertical, density.rowPadding)
         .contentShape(Rectangle())
         .keyboardHighlight(task.id)
@@ -110,7 +119,7 @@ struct TaskRowView: View {
                 .frame(width: 22, height: 22)
                 .contentShape(Rectangle())
         }
-        .buttonStyle(.plain)
+        .buttonStyle(PressScale(scale: 0.96))
         .help("Delete (⌘Z undoes it)")
         .accessibilityLabel("Delete \(task.title)")
     }
@@ -212,10 +221,10 @@ struct TaskRowView: View {
     }
 
     private func toggle() {
-        withAnimation(reduceMotion ? nil : Tokens.Motion.quick) { store.toggleCompleted(task) }
-        // Lets the tick be seen, then fades the row into Done.
+        store.toggleCompleted(task)
+        // Lets the pop be seen, then eases the row out while the rows below close up.
         DispatchQueue.main.asyncAfter(deadline: .now() + LibraryStore.lingerSeconds + 0.05) {
-            withAnimation(reduceMotion ? nil : Tokens.Motion.quick) { store.reload() }
+            withAnimation(Motion.adaptive(Motion.collapse, reduce: reduceMotion)) { store.reload() }
         }
     }
 

@@ -40,6 +40,8 @@ struct SearchPane: View {
 
     private var results: SearchResults { store.search(search.query) }
 
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+
     var body: some View {
         let results = results
         let hits = SearchHit.flatten(results)
@@ -56,7 +58,7 @@ struct SearchPane: View {
                     }
                     .accessibilityLabel("Search")
                 Button(action: onClose) { Image(systemName: "xmark.circle.fill").foregroundStyle(.tertiary) }
-                    .buttonStyle(.plain)
+                    .buttonStyle(PressScale(scale: 0.96))
                     .help("Close search (Esc)")
                     .accessibilityLabel("Close search")
             }
@@ -76,12 +78,17 @@ struct SearchPane: View {
                             group("Links", hits: hits, results.links.count, offset: results.tasks.count + results.notes.count)
                         }
                     }
+                    // One highlight that travels between results as you press ↑ and ↓.
+                    .glider(selection: search.selection, reduce: reduceMotion) {
+                        RoundedRectangle(cornerRadius: Tokens.Radius.small, style: .continuous).fill(Color.brand.opacity(0.14))
+                    }
                     .padding(Tokens.Spacing.m)
                     .frame(maxWidth: .infinity, alignment: .leading)
+                    .paneEnter(search.query.isEmpty, y: 6, duration: 0.35)
                 }
                 .onChange(of: search.selection) { _, index in
                     guard hits.indices.contains(index) else { return }
-                    withAnimation(Tokens.Motion.quick) { proxy.scrollTo(hits[index].id) }
+                    withAnimation(Motion.easeOut(0.3)) { proxy.scrollTo(hits[index].id) }
                 }
             }
         }
@@ -107,6 +114,7 @@ struct SearchPane: View {
                 Text(title).font(Tokens.TextRole.sectionTitle).foregroundStyle(.secondary).padding(.bottom, Tokens.Spacing.xs)
                 ForEach(offset..<(offset + count), id: \.self) { index in
                     row(hits[index], selected: index == search.selection)
+                        .gliderItem(index)
                         .id(hits[index].id)
                         .onTapGesture { onOpen(hits[index]) }
                 }
@@ -134,7 +142,6 @@ struct SearchPane: View {
         }
         .padding(.horizontal, Tokens.Spacing.s)
         .padding(.vertical, density.rowPadding)
-        .background(selected ? Color.brand.opacity(0.14) : .clear, in: RoundedRectangle(cornerRadius: Tokens.Radius.small, style: .continuous))
         .contentShape(Rectangle())
         .accessibilityElement(children: .combine)
         .accessibilityAddTraits(selected ? [.isButton, .isSelected] : .isButton)

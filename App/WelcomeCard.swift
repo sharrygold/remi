@@ -50,13 +50,9 @@ struct WelcomeCard: View {
             }
             .padding(Tokens.Spacing.m)
             .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
-            .id(page)
-            .transition(reduceMotion ? .opacity : .asymmetric(insertion: .opacity.combined(with: .offset(x: 24)),
-                                                              removal: .opacity.combined(with: .offset(x: -24))))
+            .paneEnter(page)
             footer
         }
-        .clipped()
-        .animation(Tokens.Motion.adaptive(Tokens.Motion.page, reduce: reduceMotion), value: page)
     }
 
     private var openPage: some View {
@@ -134,13 +130,14 @@ struct WelcomeCard: View {
             HStack(spacing: 5) {
                 ForEach(0...Self.lastPage, id: \.self) { index in
                     Circle().fill(index == page ? AnyShapeStyle(Color.brand) : AnyShapeStyle(.quaternary)).frame(width: 6, height: 6)
+                        .animation(Motion.ease(0.22), value: page)
                 }
             }
             .accessibilityLabel("Page \(page + 1) of \(Self.lastPage + 1)")
             Spacer()
             if page > 0 {
                 Button("Back") { page -= 1 }
-                    .buttonStyle(.plain)
+                    .buttonStyle(PressScale(scale: 0.96))
                     .font(Tokens.TextRole.detail)
                     .foregroundStyle(.secondary)
             }
@@ -154,8 +151,10 @@ struct WelcomeCard: View {
                     .padding(.vertical, Tokens.Spacing.xs + 2)
                     .background(Color.brand, in: Capsule())
                     .contentShape(Capsule())
+                    .contentTransition(.opacity)
+                    .animation(Motion.ease(0.2), value: page)
             }
-            .buttonStyle(.plain)
+            .buttonStyle(PressScale(scale: 0.96))
         }
         .padding(Tokens.Spacing.m)
     }

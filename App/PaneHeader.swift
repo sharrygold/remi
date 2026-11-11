@@ -39,10 +39,10 @@ struct AddButton: View {
                 .background(Color.brand.opacity(hovering ? 0.85 : 1), in: Capsule())
                 .contentShape(Capsule())
         }
-        .buttonStyle(.plain)
+        .buttonStyle(PressScale(scale: 0.96))
         .fixedSize()
         .onHover { hovering = $0 }
-        .animation(Tokens.Motion.quick, value: hovering)
+        .animation(Motion.hover, value: hovering)
         .help(help ?? title)
     }
 }
@@ -98,7 +98,7 @@ struct InlineAddField: View {
         .background(.quaternary.opacity(0.5), in: RoundedRectangle(cornerRadius: Tokens.Radius.small, style: .continuous))
         .padding(.horizontal, Tokens.Spacing.s)
         .padding(.top, Tokens.Spacing.xs)
-        .transition(.opacity)
+        .transition(Motion.modalIn(reduce: NSWorkspace.shared.accessibilityDisplayShouldReduceMotion))
     }
 }
 

@@ -52,12 +52,12 @@ struct MorningReviewCard: View {
 
             HStack {
                 Button("Fresh start: let them all go") { onFreshStart(left + paused) }
-                    .buttonStyle(.plain)
+                    .buttonStyle(PressScale(scale: 0.96))
                     .foregroundStyle(.secondary)
                     .help("Set every task above aside. ⌘Z brings them back.")
                 Spacer()
                 Button("Done", action: onDone)
-                    .buttonStyle(.plain)
+                    .buttonStyle(PressScale(scale: 0.96))
                     .fontWeight(.semibold)
                     .foregroundStyle(Color.brand)
                     .help("Close the review (Esc)")
@@ -93,12 +93,12 @@ struct MorningReviewCard: View {
         .padding(Tokens.Spacing.s + 2)
         .frame(maxWidth: .infinity, alignment: .leading)
         .background(.quaternary.opacity(0.45), in: RoundedRectangle(cornerRadius: Tokens.Radius.medium, style: .continuous))
-        .transition(.opacity)
+        .transition(Motion.row(reduce: reduceMotion))
     }
 
     private func answer(_ title: String, action: @escaping () -> Void) -> some View {
         Button {
-            withAnimation(reduceMotion ? nil : Tokens.Motion.quick, action)
+            withAnimation(Motion.adaptive(Motion.collapse, reduce: reduceMotion), action)
         } label: {
             Text(title)
                 .font(Tokens.TextRole.detail.weight(.medium))
@@ -107,6 +107,6 @@ struct MorningReviewCard: View {
                 .background(.quaternary, in: Capsule())
                 .contentShape(Capsule())
         }
-        .buttonStyle(.plain)
+        .buttonStyle(PressScale(scale: 0.96))
     }
 }

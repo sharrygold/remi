@@ -27,7 +27,7 @@ struct ResizeGrip: View {
                 .help("Drag to resize")
         }
         .frame(width: 48, height: 48)
-        .animation(Tokens.Motion.quick, value: hovering)
+        .animation(Motion.hover, value: hovering)
         .accessibilityHidden(true)
     }
 }
