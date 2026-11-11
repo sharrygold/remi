@@ -31,7 +31,7 @@ targets:
         ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
         INFOPLIST_KEY_CFBundleDisplayName: $(APP_DISPLAY_NAME)
         INFOPLIST_KEY_NSAppleEventsUsageDescription: $(APP_DISPLAY_NAME) reads the address and title of the current tab when you ask it to save the tab.
-        MARKETING_VERSION: "0.1"
+        MARKETING_VERSION: "1.0"
         CURRENT_PROJECT_VERSION: "1"
         SWIFT_VERSION: "5.0"
         # Values come from Config/Signing.xcconfig: ad hoc unless a local override names a team.
