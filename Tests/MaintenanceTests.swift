@@ -3,39 +3,6 @@ import SwiftData
 
 @MainActor
 final class SearchTests: XCTestCase {
-    func testRenameMigrationCopiesLibraryAndLeavesOldCopy() throws {
-        let fm = FileManager.default
-        let support = fm.temporaryDirectory.appendingPathComponent(UUID().uuidString, isDirectory: true)
-        defer { try? fm.removeItem(at: support) }
-        let old = support.appendingPathComponent("old.id/Backups", isDirectory: true)
-        try fm.createDirectory(at: old, withIntermediateDirectories: true)
-        let store = support.appendingPathComponent("old.id/Library.store")
-        try Data([7]).write(to: store)
-        try Data([9]).write(to: old.appendingPathComponent("b.json"))
-
-        XCTAssertTrue(try RenameMigration.copyLibrary(support: support, fromID: "old.id", toID: "new.id", fileManager: fm))
-        XCTAssertEqual(try Data(contentsOf: support.appendingPathComponent("new.id/Library.store")), Data([7]))
-        XCTAssertEqual(try Data(contentsOf: support.appendingPathComponent("new.id/Backups/b.json")), Data([9]))
-        XCTAssertEqual(try Data(contentsOf: store), Data([7]))
-
-        // A library already at the new location is never overwritten.
-        try Data([1]).write(to: support.appendingPathComponent("new.id/Library.store"))
-        XCTAssertFalse(try RenameMigration.copyLibrary(support: support, fromID: "old.id", toID: "new.id", fileManager: fm))
-        XCTAssertEqual(try Data(contentsOf: support.appendingPathComponent("new.id/Library.store")), Data([1]))
-    }
-
-    func testRenameMigrationMapsSettings() {
-        let bird = RenameMigration.migratedDefaults(from: ["debug.widgetPrototype": "pebble", "debug.widgetColour": "charcoal",
-                                                           "panelSize": "{370, 475}", "NSOSPLastRootDirectory": "x",
-                                                           RenameMigration.loginItemKey: true])
-        XCTAssertEqual(bird[CompanionKeys.style] as? String, "bird")
-        XCTAssertEqual(bird["panelSize"] as? String, "{370, 475}")
-        XCTAssertNil(bird["debug.widgetColour"])
-        XCTAssertNil(bird["NSOSPLastRootDirectory"])
-        XCTAssertNil(bird[RenameMigration.loginItemKey])
-        XCTAssertEqual(RenameMigration.migratedDefaults(from: ["debug.widgetPrototype": "cord"])[CompanionKeys.style] as? String, "cord")
-    }
-
     func testFindsAcrossTypesIgnoringCaseAndAccents() throws {
         let store = LibraryStore(directory: nil)
         let names = store.spaces.map(\.name)

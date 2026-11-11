@@ -81,17 +81,6 @@ final class AppController: NSObject, NSApplicationDelegate {
     static let panelSizeKey = "panelSize"
 
     func applicationDidFinishLaunching(_ notification: Notification) {
-        // A login item can only be removed by the app that added it, so the last build under the
-        // old identity does this once and leaves a note for the rename's migration.
-        if CommandLine.arguments.contains("--retire-login-item") {
-            let service = SMAppService.mainApp
-            let wasEnabled = service.status == .enabled
-            UserDefaults.standard.set(wasEnabled, forKey: "loginItemWasEnabled")
-            UserDefaults.standard.synchronize()
-            do { try service.unregister() } catch { print("unregister: \(error.localizedDescription)") }
-            print("login item was enabled=\(wasEnabled), now status=\(service.status.rawValue)")
-            exit(0)
-        }
         // --export-json=PATH writes the same JSON as Settings > Data > Export. Use with --data-dir=.
         if let path = CommandLine.arguments.first(where: { $0.hasPrefix("--export-json=") })?.dropFirst("--export-json=".count) {
             do {
@@ -103,7 +92,6 @@ final class AppController: NSObject, NSApplicationDelegate {
             }
             exit(0)
         }
-        migrateFromPerchIfNeeded()
         if !isScratchSession { CompanionSize.keepChosenSizeAfterRescale() }
         SettingsKey.registerDefaults()
         store.rollForwardRepeating()
@@ -342,27 +330,6 @@ final class AppController: NSObject, NSApplicationDelegate {
         edit.addItem(withTitle: "Select All", action: #selector(NSText.selectAll(_:)), keyEquivalent: "a")
         editItem.submenu = edit
         NSApp.mainMenu = main
-    }
-
-    /// Runs once, from the installed app only, before the library is opened.
-    func migrateFromPerchIfNeeded() {
-        let path = Bundle.main.bundlePath
-        let defaults = UserDefaults.standard
-        guard path.hasPrefix("/Applications/") || path.hasPrefix(NSHomeDirectory() + "/Applications/"),
-              !defaults.bool(forKey: RenameMigration.doneKey), let bundleID = Bundle.main.bundleIdentifier else { return }
-        let old = defaults.persistentDomain(forName: RenameMigration.oldBundleID) ?? [:]
-        do {
-            let support = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0]
-            let copied = try RenameMigration.copyLibrary(support: support, fromID: RenameMigration.oldBundleID, toID: bundleID)
-            NSLog("Rename migration: library copied=\(copied)")
-        } catch {
-            // Left unmarked, so it is tried again next launch; the old data is untouched either way.
-            NSLog("Rename migration failed: \(error.localizedDescription)")
-            return
-        }
-        for (key, value) in RenameMigration.migratedDefaults(from: old) { defaults.set(value, forKey: key) }
-        if old[RenameMigration.loginItemKey] as? Bool == true, let problem = LoginItem.set(true) { NSLog("Rename migration: \(problem)") }
-        defaults.set(true, forKey: RenameMigration.doneKey)
     }
 
     /// First launch only. Someone who already has things saved has no need of it.
