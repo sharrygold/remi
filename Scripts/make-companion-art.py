@@ -52,6 +52,28 @@ OUT.mkdir(parents=True, exist_ok=True)
 for old in OUT.glob("*.svg"):
     old.unlink()
 
+# The head is drawn this much larger than the kit's, with a slightly wider neck so the two still read
+# as one bird. Its stitches are compensated, so they match the body's size and spacing.
+HEAD_SCALE = 1.15
+NECK_WIDTH = "13.6"
+
+
+def enlarge(about, *elements):
+    """Wraps elements in the head scale about a point, keeping stitch width and spacing unchanged."""
+    x, y = about
+    group = ET.Element(Q("g"), {"transform": f"translate({x} {y}) scale({HEAD_SCALE}) translate({-x} {-y})"})
+    for element in elements:
+        for node in element.iter():
+            for attribute in ("stroke-width",):
+                if node.get("stroke-dasharray") and node.get(attribute):
+                    node.set(attribute, f"{float(node.get(attribute)) / HEAD_SCALE:.3f}")
+            if node.get("stroke-dasharray"):
+                gaps = [float(v) / HEAD_SCALE for v in node.get("stroke-dasharray").split()]
+                node.set("stroke-dasharray", " ".join(f"{v:.3f}" for v in gaps))
+        group.append(element)
+    return group
+
+
 CANVAS = "0 0 120 120"
 CENTRED = "-60 -60 120 120"  # the layer's centre is its pivot
 
@@ -76,25 +98,27 @@ write("perched-body", CANVAS,
       defs=defs)
 write("perched-wing", CANVAS, by_id(body, "wing"), defs=defs)
 write("perched-cradle", CANVAS, paint(by_id(body, "cradle-feather"), fill="stitch"))
-write("perched-neck", CANVAS, paint(by_id(body, "neck"), stroke="body"), paint(by_id(body, "neck-ruff"), stroke="stitch"))
+neck = paint(by_id(body, "neck"), stroke="body")
+neck.set("stroke-width", NECK_WIDTH)
+write("perched-neck", CANVAS, neck, paint(by_id(body, "neck-ruff"), stroke="stitch"))
 
 egg = load("companion/egg.svg")
 write("perched-egg", CENTRED, paint(egg.find(Q("ellipse")), fill="egg"))
 
 head = load("companion/stitched/head.svg")
-write("perched-crest", CENTRED, paint(by_id(head, "crest"), fill="crest"))
+write("perched-crest", CENTRED, enlarge((0, 0), paint(by_id(head, "crest"), fill="crest")))
 eye = by_id(head, "eye")
 circles = eye.findall(Q("circle"))
 paint(circles[0], fill="eye")
 paint(circles[1], fill="body")
-write("perched-eye", CENTRED, eye)
-write("perched-head", CENTRED,
+write("perched-eye", CENTRED, enlarge((0, 0), eye))
+write("perched-head", CENTRED, enlarge((0, 0),
       paint(by_id(head, "skull"), fill="body", stroke="stitch"),
       paint(by_id(head, "beak"), fill="beak"),
-      by_id(head, "mouth"))
+      by_id(head, "mouth")))
 
 shade = load("companion/head-shade.svg")
-write("perched-head-shade", CANVAS, by_id(shade, "head-shade"), defs=shade.find(Q("defs")))
+write("perched-head-shade", CANVAS, enlarge((81, 35), by_id(shade, "head-shade")), defs=shade.find(Q("defs")))
 
 doze = load("companion/stitched/head-doze.svg")
 doze_defs = doze.find(Q("defs"))
@@ -104,7 +128,8 @@ paint(pieces[1], fill="body", stroke="stitch")   # skull
 paint(pieces[3], fill="crest")
 paint(pieces[4], fill="beak")
 paint(pieces[5], stroke="eye")                   # closed eye
-write("perched-head-doze", CANVAS, *pieces, defs=doze_defs)
+pieces[0].set("stroke-width", NECK_WIDTH)
+write("perched-head-doze", CANVAS, pieces[0], enlarge((79, 42), *pieces[1:]), defs=doze_defs)
 
 # Cord.
 FULL = "0 0 120 230"

@@ -6,6 +6,8 @@ final class PerchedBirdView: NSView, CompanionSurface {
     static let windowSize = CGSize(width: 108, height: 108)
     private static let scale: CGFloat = 0.9
     private static let canvas = CGSize(width: 120, height: 120)
+    /// Matches HEAD_SCALE in Scripts/make-companion-art.py.
+    private static let headScale: CGFloat = 1.15
     private static let tuckPoints = windowSize.width * 0.43
     private static let noticeRadius: CGFloat = 130
 
@@ -42,9 +44,9 @@ final class PerchedBirdView: NSView, CompanionSurface {
     private let ring = CAShapeLayer()
     private let headBob = CALayer.centred(at: CGPoint(x: 81, y: 35), canvas: canvas)
     private let headSpin = CALayer.pivot(at: CGPoint(x: 60, y: 60), canvas: canvas)
-    private let crest = CALayer.pivot(at: CGPoint(x: 51, y: 60), canvas: canvas)
+    private let crest = CALayer.pivot(at: CGPoint(x: 60 - 9 * headScale, y: 60), canvas: canvas)
     private let skull = CALayer()
-    private let eye = CALayer.pivot(at: CGPoint(x: 63, y: 60), canvas: canvas)
+    private let eye = CALayer.pivot(at: CGPoint(x: 60 + 3 * headScale, y: 60), canvas: canvas)
     private let headShade = CALayer(), headDoze = CALayer()
 
     private var artLayers: [(CALayer, String)] {
@@ -507,7 +509,7 @@ final class PerchedBirdView: NSView, CompanionSurface {
         if mirrored { x = 120 - x }
         if mood == .tucked { x += Self.tuckPoints / Self.scale }
         // The head and egg move, so they count as generous circles around where they turn.
-        if hypot(x - 81, y - 35) <= 24 || hypot(x - 52, y - 56) <= 14 { return true }
+        if hypot(x - 81, y - 35) <= 27 || hypot(x - 52, y - 56) <= 14 { return true }
         guard let mask = hitMask else { return true }
         let reach = 4
         for dy in stride(from: -reach, through: reach, by: 2) {

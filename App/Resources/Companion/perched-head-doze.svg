@@ -3,10 +3,10 @@
 <radialGradient id="shadeBody" cx="42%" cy="22%" r="85%"><stop offset="0" stop-color="#FFFFFF" stop-opacity="0.45" /><stop offset="0.55" stop-color="#F2ECE0" stop-opacity="0" /><stop offset="1" stop-color="#7A6A50" stop-opacity="0.32" /></radialGradient>
 <radialGradient id="shadeHead" cx="38%" cy="28%" r="78%"><stop offset="0" stop-color="#FFFFFF" stop-opacity="0.55" /><stop offset="0.5" stop-color="#F2ECE0" stop-opacity="0" /><stop offset="1" stop-color="#7A6A50" stop-opacity="0.4" /></radialGradient>
 </defs>
-<path id="neck-doze" d="M88 70 Q93 55 80 43" fill="none" stroke="{{body}}" stroke-width="12" stroke-linecap="round" />
-<circle cx="79" cy="42" r="11" fill="{{body}}" stroke="{{stitch}}" stroke-width="0.8" stroke-dasharray="1.8 1.3" />
+<path id="neck-doze" d="M88 70 Q93 55 80 43" fill="none" stroke="{{body}}" stroke-width="13.6" stroke-linecap="round" />
+<g transform="translate(79 42) scale(1.15) translate(-79 -42)"><circle cx="79" cy="42" r="11" fill="{{body}}" stroke="{{stitch}}" stroke-width="0.696" stroke-dasharray="1.565 1.130" />
 <circle cx="79" cy="42" r="11" fill="url(#shadeHead)" />
 <path d="M86 35.5 C91 31.5 95.5 29.5 99 30.5 C96 33.5 92 36.5 88 38.5 Z M88 39 C93.5 37 98 36.5 101 38 C97.5 40 93 41.5 89 41.5 Z" fill="{{crest}}" />
 <path d="M70 43 L60 49 L71 50 Z" fill="{{beak}}" />
 <path d="M75 41 Q78 43.5 81 41" fill="none" stroke="{{eye}}" stroke-width="1.6" stroke-linecap="round" />
-</svg>
+</g></svg>

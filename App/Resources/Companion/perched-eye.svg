@@ -1,2 +1,2 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="-60 -60 120 120"><g id="eye"><circle cx="3" cy="0" r="2.4" fill="{{eye}}" /><circle cx="3.8" cy="-0.8" r="0.7" fill="{{body}}" /></g>
-</svg>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="-60 -60 120 120"><g transform="translate(0 0) scale(1.15) translate(0 0)"><g id="eye"><circle cx="3" cy="0" r="2.4" fill="{{eye}}" /><circle cx="3.8" cy="-0.8" r="0.7" fill="{{body}}" /></g>
+</g></svg>
