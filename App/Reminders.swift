@@ -51,7 +51,7 @@ final class Reminders: NSObject, UNUserNotificationCenterDelegate {
     /// When each open task's reminder fires: the due day at the chosen time, if that is still ahead.
     static func fireDates(for tasks: [TaskItem], minutes: Int, now: Date = Date(), calendar: Calendar = .current) -> [(TaskItem, Date)] {
         tasks.compactMap { task -> (TaskItem, Date)? in
-            guard !task.isCompleted, task.deletedAt == nil, let due = task.dueDate else { return nil }
+            guard !task.isCompleted, !task.isSetAside, !task.isPaused, task.deletedAt == nil, let due = task.dueDate else { return nil }
             let day = calendar.startOfDay(for: due)
             guard let fire = calendar.date(byAdding: .minute, value: minutes, to: day), fire > now else { return nil }
             return (task, fire)

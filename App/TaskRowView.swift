@@ -145,7 +145,21 @@ struct TaskRowView: View {
         }
     }
 
+    private var repeatMenu: some View {
+        Picker(selection: Binding(get: { task.repeatRule }, set: { store.setRepeat(task, $0) })) {
+            Text("Never").tag(RepeatRule?.none)
+            ForEach(RepeatRule.allCases) { Text($0.menuTitle).tag(Optional($0)) }
+        } label: {
+            Text("Repeat")
+        }
+        .pickerStyle(.menu)
+    }
+
     @ViewBuilder private var menu: some View {
+        if task.isSetAside {
+            Button("Bring Back") { store.bringBack(task) }
+            Divider()
+        }
         Button("Rename…") {
             DispatchQueue.main.async {
                 draft = task.title
@@ -167,6 +181,7 @@ struct TaskRowView: View {
             store.setDue(task, Calendar.current.date(byAdding: .day, value: 1, to: today))
         }
         Button("No Due Date") { store.setDue(task, nil) }.disabled(task.dueDate == nil)
+        if !task.isCompleted { repeatMenu }
         Divider()
         Button("Delete", role: .destructive) { store.delete(task) }
     }

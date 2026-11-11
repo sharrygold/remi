@@ -23,6 +23,9 @@ final class PanelPresentation: ObservableObject {
     /// Closes the panel after something opens elsewhere, unless it is pinned. Set by the app.
     var closeAfterOpening: () -> Void = {}
     var openSettings: () -> Void = {}
+    /// Whether the morning review may appear: real sessions once a day, screenshots on demand.
+    enum ReviewPolicy { case daily, always, never }
+    var reviewPolicy = ReviewPolicy.daily
 }
 
 struct PanelView: View {
@@ -38,6 +41,10 @@ struct PanelView: View {
     @State private var highlightedTaskID: UUID?
     @State private var selectedSpaceID: UUID?
     @State private var showDone = false
+    @State private var showSetAside = false
+    /// The morning review stands in for Today until it is answered or closed.
+    @State private var reviewing = false
+    @State private var confirmingFreshStart = false
     @State private var confirmation: String?
     @State private var openNoteID: UUID?
     @State private var linkList: LinkList = .saved
@@ -138,12 +145,17 @@ struct PanelView: View {
                 return true
             }
             capture.dismissClipboardOffer = {
+                if reviewing {
+                    closeReview()
+                    return true
+                }
                 guard let offer = clipboardOffer, capture.text.isEmpty else { return false }
                 dismissClipboard(offer)
                 return true
             }
         }
         .onChange(of: capture.text) { _, _ in capture.linkListOverride = nil }
+        .onChange(of: reviewCount) { _, count in if count == 0, reviewing { closeReview() } }
         .onChange(of: captureFocused) { _, focused in capture.isFocused = focused }
         .onChange(of: presentation.presented) { _, presented in
             if presented {
@@ -151,6 +163,7 @@ struct PanelView: View {
                 store.reload()
                 checkClipboard()
                 refreshFrontBrowser()
+                startMorningReviewIfDue()
             } else {
                 clipboardCheck += 1
                 clipboardOffer = nil
@@ -434,6 +447,7 @@ struct PanelView: View {
 
     /// The current list in the order it is drawn.
     private func navItems() -> [NavItem] {
+        if reviewing, tab == .today { return [] }
         switch tab {
         case .today:
             let today = store.dueToday(in: selectedSpace)
@@ -597,6 +611,8 @@ struct PanelView: View {
             } else if tab == .links {
                 LinksPane(store: store, density: density, space: selectedSpace, showsSpace: selectedSpaceID == nil, list: $linkList,
                           addRequests: presentation.addLinkRequests)
+            } else if reviewing {
+                MorningReviewCard(store: store, onFreshStart: letGoOfReview, onDone: closeReview)
             } else {
                 VStack(spacing: 0) {
                     taskHeader
@@ -635,7 +651,9 @@ struct PanelView: View {
             .font(Tokens.TextRole.detail.weight(.medium))
             .foregroundStyle(.secondary)
             .lineLimit(1)
+            if tab == .tasks { tasksMenu }
         }
+        if confirmingFreshStart, tab == .tasks { freshStartConfirmation }
         if addingTask {
             InlineAddField(placeholder: tab == .today ? "New task for today" : "New task", symbol: "circle",
                            onSave: addTask, onClose: closeAddTask)
@@ -700,10 +718,80 @@ struct PanelView: View {
         TaskRowView(store: store, task: task, density: density)
     }
 
+    private var tasksMenu: some View {
+        Menu {
+            Button("Fresh start…") { withAnimation(Tokens.Motion.quick) { confirmingFreshStart = true } }
+                .disabled(store.open(in: selectedSpace).isEmpty)
+        } label: {
+            Image(systemName: "ellipsis.circle").font(Tokens.TextRole.detail).foregroundStyle(.secondary)
+        }
+        .menuStyle(.button)
+        .buttonStyle(.plain)
+        .menuIndicator(.hidden)
+        .fixedSize()
+        .help("More")
+        .accessibilityLabel("More task actions")
+    }
+
+    /// Asked in the list rather than in a dialog, which would pull focus from the app you're in.
+    private var freshStartConfirmation: some View {
+        let count = store.open(in: selectedSpace).count
+        return HStack(spacing: Tokens.Spacing.s) {
+            Text(count == 1 ? "Let go of 1 open task?" : "Let go of \(count) open tasks?").lineLimit(1)
+            Spacer(minLength: Tokens.Spacing.xs)
+            Button("Cancel") { withAnimation(Tokens.Motion.quick) { confirmingFreshStart = false } }
+                .buttonStyle(.plain)
+                .foregroundStyle(.secondary)
+            Button("Let Go") {
+                let total = store.freshStart(in: selectedSpace)
+                confirmingFreshStart = false
+                show(confirmation: "\(total) set aside  ·  ⌘Z to undo")
+            }
+            .buttonStyle(.plain)
+            .fontWeight(.semibold)
+            .foregroundStyle(Color.accentColor)
+        }
+        .font(Tokens.TextRole.detail)
+        .padding(.horizontal, Tokens.Spacing.m)
+        .padding(.vertical, Tokens.Spacing.s)
+        .background(.quaternary.opacity(0.5), in: RoundedRectangle(cornerRadius: Tokens.Radius.small, style: .continuous))
+        .padding(.horizontal, Tokens.Spacing.s)
+        .padding(.top, Tokens.Spacing.xs)
+        .transition(.opacity)
+    }
+
+    // MARK: Morning review
+
+    private var reviewCount: Int { store.leftFromBefore().count + store.pausedRepeating().count }
+
+    private func startMorningReviewIfDue() {
+        switch presentation.reviewPolicy {
+        case .never: return
+        case .always: break
+        case .daily: guard MorningReviewSchedule.claimToday() else { return }
+        }
+        guard reviewCount > 0 else { return }
+        closeSearch()
+        tab = .today
+        reviewing = true
+    }
+
+    private func closeReview() {
+        withAnimation(reduceMotion ? nil : Tokens.Motion.quick) { reviewing = false }
+        captureFocused = true
+    }
+
+    private func letGoOfReview(_ shown: [TaskItem]) {
+        store.setAside(shown)
+        closeReview()
+        show(confirmation: "\(shown.count) set aside  ·  ⌘Z to undo")
+    }
+
     @ViewBuilder private var tasksList: some View {
         let open = store.open(in: selectedSpace)
         let done = store.done(in: selectedSpace)
-        if open.isEmpty && done.isEmpty {
+        let setAside = store.setAsideTasks(in: selectedSpace)
+        if open.isEmpty && done.isEmpty && setAside.isEmpty {
             VStack {
                 emptyState(symbol: "checklist", title: "No tasks here yet", detail: "Add one, or type below and press Return.")
             }
@@ -736,6 +824,22 @@ struct PanelView: View {
                     if showDone {
                         ForEach(done) { task in
                             taskRow(task).listRowBackground(highlight(task)).listRowSeparator(.hidden).id(task.id)
+                        }
+                    }
+                }
+                if !setAside.isEmpty {
+                    Button { withAnimation(Tokens.Motion.quick) { showSetAside.toggle() } } label: {
+                        Label("Set aside (\(setAside.count))", systemImage: showSetAside ? "chevron.down" : "chevron.right")
+                            .font(Tokens.TextRole.sectionTitle)
+                            .foregroundStyle(.secondary)
+                    }
+                    .buttonStyle(.plain)
+                    .help("Tasks you let go. Right-click one to bring it back.")
+                    .listRowBackground(Color.clear)
+                    .listRowSeparator(.hidden)
+                    if showSetAside {
+                        ForEach(setAside) { task in
+                            taskRow(task).listRowBackground(Color.clear).listRowSeparator(.hidden).id(task.id)
                         }
                     }
                 }

@@ -104,6 +104,7 @@ final class AppController: NSObject, NSApplicationDelegate {
             DispatchQueue.main.async { self?.applyPrototype() }
         })
         presentation.openSettings = { [weak self] in self?.openSettings() }
+        presentation.reviewPolicy = CommandLine.arguments.contains("--preview-review") ? .always : isScratchSession ? .never : .daily
         reminders.onOpen = { [weak self] in self?.showPanel() }
         if !isScratchSession {
             reminders.start()
