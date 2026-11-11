@@ -62,6 +62,8 @@ The capture bar is at the bottom. The Space button at the top left picks a Space
 
 **⌃⌥S** (Control, Option, S) saves the current browser tab from anywhere, without opening the panel, and Remi reacts so you know it worked. It works with Dia, Arc, Chrome, Brave, Edge and Safari; change the key in **Settings > General**.
 
+Links has **Saved links** and **Watch later**, and you can make your own lists from the menu at the top of the Links tab. Right-click a link to move it. The companion's size and plumage are in **Settings > General**.
+
 | Anywhere in the panel | |
 |---|---|
 | ↓ then ↑ ↓ | Move through the list |
