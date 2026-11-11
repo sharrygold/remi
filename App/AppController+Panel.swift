@@ -168,6 +168,8 @@ extension AppController {
 
     func showPanel() {
         metadata.fetchMissing()
+        // Missed repeating tasks move to their next date rather than piling up as overdue.
+        store.rollForwardRepeating()
         debug.tucked = false
         lastActivity = Date()
         let visible = (handle.screen ?? NSScreen.screens[0]).visibleFrame

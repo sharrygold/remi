@@ -77,6 +77,7 @@ final class AppController: NSObject, NSApplicationDelegate {
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         SettingsKey.registerDefaults()
+        store.rollForwardRepeating()
         if let name = options.appearance {
             NSApp.appearance = NSAppearance(named: name == "dark" ? .darkAqua : .aqua)
         }
@@ -247,6 +248,7 @@ final class AppController: NSObject, NSApplicationDelegate {
     @objc func dayChanged() {
         DispatchQueue.main.async {
             self.store.reload()
+            self.store.rollForwardRepeating()
             if !self.isScratchSession { self.runDailyMaintenance() }
         }
     }

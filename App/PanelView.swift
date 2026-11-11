@@ -191,7 +191,11 @@ struct PanelView: View {
                 token(captureLinkList.title, symbol: captureLinkList.symbol, tint: .accentColor)
             } else {
                 spaceToken
-                if let due = parsed.due { token(DueLabel.text(for: due), symbol: "calendar", tint: .secondary) }
+                if let rule = parsed.repeatRule {
+                    token(rule.label(for: parsed.due), symbol: "repeat", tint: .secondary)
+                } else if let due = parsed.due {
+                    token(DueLabel.text(for: due), symbol: "calendar", tint: .secondary)
+                }
                 if parsed.important { token("Important", symbol: "exclamationmark", tint: .secondary) }
                 if let url = parsed.url { token(LinkClassifier.displayHost(url), symbol: "arrow.up.right", tint: .secondary)
                     .accessibilityLabel("Opens \(LinkClassifier.displayHost(url))") }

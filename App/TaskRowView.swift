@@ -43,6 +43,11 @@ struct TaskRowView: View {
             }
             Spacer(minLength: Tokens.Spacing.s)
             if let action = task.action { actionButton(action) }
+            if let rule = task.repeatRule {
+                Image(systemName: "repeat").font(.caption2).foregroundStyle(.tertiary)
+                    .help(rule.label(for: task.dueDate))
+                    .accessibilityLabel("Repeats \(rule.label(for: task.dueDate).lowercased())")
+            }
             if let due = task.dueDate {
                 Text(DueLabel.text(for: due)).font(Tokens.TextRole.detail).foregroundStyle(.secondary)
             }
