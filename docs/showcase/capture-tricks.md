@@ -26,7 +26,7 @@ Outside the capture bar: ⌃Space opens Remi from anywhere, and ⌃⌥S saves th
 
 Each one shows a different trick, and the tokens above the bar fill in as you type.
 
-1. `Send invoice #work fri !`: Space, date and importance in one breath.
+1. `Book the venue #work fri !`: Space, date and importance in one breath.
 2. `Stretch every day`: a repeating task, shown with a small ↻.
 3. `Call the accountant #taxes tomorrow`: a Space created on the spot.
 4. Paste a YouTube link: it lands in Watch later with its real title.

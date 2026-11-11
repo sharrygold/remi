@@ -83,16 +83,16 @@ extension AppController {
     func seedDemo(_ store: LibraryStore) {
         let names = store.spaces.map(\.name)
         for line in ["Book dentist appointment #personal today", "Prepare sprint review notes #work today",
-                     "Send design dashboard invoice #work today", "Record Loom intro for invoice #work today !",
+                     "Send the launch notes to Dana #work today", "Rehearse the launch demo #work today !",
                      "Tidy the shared drive #work fri", "Finish SwiftUI layout module #learning tomorrow"] {
             store.add(CaptureParser.parse(line, spaceNames: names), currentSpace: nil)
         }
         let yesterday = Calendar.current.date(byAdding: .day, value: -1, to: Calendar.current.startOfDay(for: Date()))
         store.add(ParsedCapture(title: "Reply to Dana about the project timeline", space: .existing("Work"), due: yesterday), currentSpace: nil)
         let notes = [
-            ("Work", true, "Invoice opening lines\nStart with their problem, then **one** proof point.\n- Mirror their words\n- Keep it under 120 words"),
+            ("Work", true, "Launch meeting notes\nStart with the **one** decision we need today.\n- Agree the launch date\n- Pick an owner for the FAQ"),
             ("Work", false, "Q4 priorities\n## This month\n- [x] Reporting cleanup\n- [ ] Onboarding flow\n- [ ] Vendor review"),
-            ("Work", false, "Loom checklist\n- [ ] Close tabs\n- [ ] Check mic\n- [ ] Keep it under two minutes"),
+            ("Work", false, "Demo checklist\n- [ ] Close tabs\n- [ ] Check mic\n- [ ] Keep it under two minutes"),
             ("Personal", false, "Trip ideas\nLisbon in December, ask about flights. https://www.visitlisboa.com"),
         ]
         for (index, (spaceName, pinned, body)) in notes.enumerated() {
@@ -101,10 +101,10 @@ extension AppController {
             if pinned { store.setPinned(note, true) }
         }
         let links = [
-            ("https://www.example.com/team/~01example", "My profile", "Work", true),
-            ("https://docs.google.com/spreadsheets/d/invoice-tracker", "Invoice tracker", "Work", false),
+            ("https://example.com/handbook", "Team handbook", "Work", true),
+            ("https://docs.google.com/spreadsheets/d/launch-tracker", "Launch tracker", "Work", false),
             ("https://linear.app/team/dashboard", "Team dashboard", "Work", false),
-            ("https://www.youtube.com/watch?v=invoices101", "How to write invoices that win", "Work", false),
+            ("https://www.youtube.com/watch?v=launchday101", "How to plan a calm launch day", "Work", false),
             ("https://www.youtube.com/watch?v=swiftuilayout", "SwiftUI layout, explained", "Learning", false),
         ]
         if let inspiration = store.addLinkGroup(named: "Inspiration", symbol: "lightbulb"), let url = URL(string: "https://www.awwwards.com/websites/portfolio") {
@@ -118,11 +118,11 @@ extension AppController {
             store.setMetadata(for: link.id, title: title, iconData: nil)
             if pinned { store.setPinned(link, true) }
         }
-        if let task = store.tasks.first(where: { $0.title.hasPrefix("Record Loom") }),
-           let loom = NSWorkspace.shared.urlForApplication(withBundleIdentifier: "com.loom.desktop") ?? URL(string: "https://www.loom.com") {
-            store.setAction(task, loom.isFileURL ? .app(loom) : .url(loom))
+        if let task = store.tasks.first(where: { $0.title.hasPrefix("Rehearse the launch") }),
+           let keynote = NSWorkspace.shared.urlForApplication(withBundleIdentifier: "com.apple.Keynote") ?? URL(string: "https://example.com/demo") {
+            store.setAction(task, keynote.isFileURL ? .app(keynote) : .url(keynote))
         }
-        if let task = store.tasks.first(where: { $0.title.hasPrefix("Send design") }), let url = URL(string: "https://www.example.com/nx/invoices") {
+        if let task = store.tasks.first(where: { $0.title.hasPrefix("Send the launch") }), let url = URL(string: "https://docs.google.com/document/d/launch-notes") {
             store.setAction(task, .url(url))
         }
         store.save()
@@ -146,7 +146,7 @@ extension AppController {
             DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) { [self] in
                 let editor = panel.firstResponder as? NSTextView
                 print("field focused=\(editor != nil) widgetCount=\(store.todayOpenCount())")
-                editor?.insertText("Send invoice today #newclient !", replacementRange: NSRange(location: NSNotFound, length: 0))
+                editor?.insertText("Send the invoice today #newclient !", replacementRange: NSRange(location: NSNotFound, length: 0))
                 DispatchQueue.main.asyncAfter(deadline: .now() + 0.2) { [self] in
                     print("typed binding=\(capture.text)")
                     postKey("\r", code: 36)
@@ -272,7 +272,7 @@ extension AppController {
                             postKey("\r", code: 36)
                             after(0.3) { [self] in
                                 print("apple doc saved: \(describe(store.links.first))")
-                                type("Update profile https://www.example.com/team/ today")
+                                type("Update profile https://example.com/profile today")
                                 postKey("\r", code: 36)
                                 after(0.3) { [self] in
                                     let task = store.tasks.first
@@ -356,7 +356,7 @@ extension AppController {
     func checkClipboardNudge(then done: @escaping () -> Void) {
         let board = NSPasteboard(name: NSPasteboard.Name("remi-selftest"))
         board.clearContents()
-        board.setString("https://www.notion.so/invoice-template", forType: .string)
+        board.setString("https://www.notion.so/launch-template", forType: .string)
         Task { @MainActor in
             let offer = await ClipboardNudge.check(board) { [store] in store.isSaved($0) }
             print("clipboard behavior=\(board.accessBehavior.rawValue) offer url=\(offer?.url?.absoluteString ?? "nil") offered=\(offer != nil)")
@@ -389,9 +389,9 @@ extension AppController {
                 postKey("f", code: 3, flags: .command)
                 after(0.4) { [self] in
                     print("cmd-f active=\(search.active) searchFocused=\(search.isFocused)")
-                    type("invoice")
+                    type("launch")
                     after(0.3) { [self] in
-                        let found = store.search("invoice")
+                        let found = store.search("launch")
                         print("results tasks=\(found.tasks.count) notes=\(found.notes.count) links=\(found.links.count) counted=\(search.resultCount)")
                         postKey("", code: 125)
                         postKey("", code: 125)

@@ -6,7 +6,7 @@ import SwiftData
 final class LibraryStore: ObservableObject {
     static let lingerSeconds: TimeInterval = 1.2
     private static let symbols = ["folder", "star", "leaf", "flag", "bolt", "heart"]
-    private static let tints = ["work", "clients", "personal", "learning", "homeReno"]
+    private static let tints = ["work", "green", "personal", "learning", "teal"]
 
     @Published private(set) var spaces: [Space] = []
     @Published private(set) var tasks: [TaskItem] = []

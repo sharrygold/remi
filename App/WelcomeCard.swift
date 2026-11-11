@@ -69,7 +69,7 @@ struct WelcomeCard: View {
     private var typePage: some View {
         VStack(alignment: .leading, spacing: Tokens.Spacing.s + 2) {
             Text("Say it all in one line").font(.title3.weight(.semibold))
-            Text("Send invoice #work fri !").font(.footnote.monospaced())
+            Text("Book the venue #work fri !").font(.footnote.monospaced())
                 .padding(.horizontal, Tokens.Spacing.s)
                 .padding(.vertical, Tokens.Spacing.xs)
                 .background(.quaternary.opacity(0.6), in: RoundedRectangle(cornerRadius: 6, style: .continuous))

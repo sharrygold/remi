@@ -109,7 +109,7 @@ final class LinkStoreTests: XCTestCase {
         store.rename(link, to: " SwiftUI app job \n")
         XCTAssertEqual(link.title, "SwiftUI app job")
         // A fetch that finishes after the rename keeps your name but still fills the icon.
-        store.setMetadata(for: link.id, title: "Clients", iconData: Data([1]))
+        store.setMetadata(for: link.id, title: "Example", iconData: Data([1]))
         XCTAssertEqual(link.title, "SwiftUI app job")
         XCTAssertEqual(link.iconData, Data([1]))
 
@@ -131,7 +131,7 @@ final class LinkStoreTests: XCTestCase {
         store.setAction(task, .app(app))
         XCTAssertEqual(task.action, .app(app))
         XCTAssertEqual(task.action?.label, "Loom")
-        store.setAction(task, .file(URL(fileURLWithPath: "/Users/Shared/Documents")))
+        store.setAction(task, .file(URL(fileURLWithPath: "/Users/Shared")))
         store.undo()
         XCTAssertEqual(task.action, .app(app))
         store.setAction(task, nil)

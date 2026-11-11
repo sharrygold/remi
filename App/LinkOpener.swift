@@ -3,7 +3,7 @@ import SwiftUI
 
 /// Opens links in the preferred browser and runs task actions.
 enum LinkOpener {
-    /// Dia first, then Arc, Both bundle IDs were verified on a real Mac.
+    /// Dia first, then Arc. Both bundle IDs were verified on a real Mac.
     static let browserOrder = ["company.thebrowser.dia", "company.thebrowser.Browser"]
     /// A bundle ID, or "system" for the default browser. Chosen in Settings from M5.
     static let preferenceKey = "preferredBrowser"

@@ -25,3 +25,6 @@ docs/m6/
 
 # Personal signing team
 Config/Signing.local.xcconfig
+
+# Presentation pack (working files, removed when done)
+_presentation-pack/

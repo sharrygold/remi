@@ -104,7 +104,7 @@ extension LibraryStore {
     static let spaceSymbols = ["briefcase", "building.2", "house", "book", "magnifyingglass", "folder", "star", "leaf", "flag", "bolt",
                                "heart", "graduationcap", "dumbbell", "cart", "airplane", "paintbrush", "music.note", "camera",
                                "laptopcomputer", "chart.bar", "person.2", "sparkles", "lightbulb", "globe"]
-    static let spaceTints = ["work", "clients", "personal", "learning", "homeReno"]
+    static let spaceTints = ["work", "green", "personal", "learning", "teal"]
 
     @discardableResult
     func addSpace(named name: String, symbol: String? = nil, tint: String? = nil) -> Space? {
