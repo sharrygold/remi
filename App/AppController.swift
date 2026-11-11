@@ -234,7 +234,10 @@ final class AppController: NSObject, NSApplicationDelegate {
     }
 
     @objc func settingsChanged() {
-        DispatchQueue.main.async { self.applyWindowSettings() }
+        DispatchQueue.main.async {
+            self.applyWindowSettings()
+            self.refreshCompanion(event: nil)
+        }
     }
 
     /// Clears Recently deleted items older than 30 days and writes today's backup, once per day.
