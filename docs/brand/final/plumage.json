@@ -1,0 +1,110 @@
+{
+  "_about": "Plumage: the companion colour setting. Each colourway recolours the perched bird, the cord and the bird on the cord together. Token names match the layers in companion/ and cord/. Default: ivory.",
+  "default": "ivory",
+  "colourways": {
+    "ivory": {
+      "name": "Ivory",
+      "note": "Default, best on dark wallpapers",
+      "cord": {
+        "body": "#F2ECE0",
+        "egg": "#C9A25A",
+        "beak": "#C9A25A",
+        "metal": "#C9A25A",
+        "braidA": "#C9A25A",
+        "braidB": "#F2ECE0",
+        "knot": "#C9A25A"
+      },
+      "perched": {
+        "body": "#F2ECE0",
+        "feather": "#F2ECE0",
+        "stitch": "#C9A25A",
+        "wingSatin": "#C9A25A",
+        "egg": "#C9A25A",
+        "eggText": "#121110",
+        "beak": "#C9A25A",
+        "crest": "#C9A25A",
+        "eye": "#121110",
+        "metal": "#C9A25A",
+        "halo": "#121110"
+      }
+    },
+    "jet": {
+      "name": "Jet",
+      "note": "Best on light wallpapers",
+      "cord": {
+        "body": "#24211E",
+        "egg": "#C9A25A",
+        "beak": "#C9A25A",
+        "metal": "#C9A25A",
+        "braidA": "#C9A25A",
+        "braidB": "#3A3632",
+        "knot": "#C9A25A"
+      },
+      "perched": {
+        "body": "#24211E",
+        "feather": "#2E2A26",
+        "stitch": "#C9A25A",
+        "wingSatin": "#C9A25A",
+        "egg": "#C9A25A",
+        "eggText": "#121110",
+        "beak": "#C9A25A",
+        "crest": "#C9A25A",
+        "eye": "#F2ECE0",
+        "metal": "#C9A25A",
+        "halo": "#F2ECE0"
+      }
+    },
+    "oxblood": {
+      "name": "Oxblood",
+      "note": "Warm and rich",
+      "cord": {
+        "body": "#7A2A2E",
+        "egg": "#D8B56A",
+        "beak": "#D8B56A",
+        "metal": "#D8B56A",
+        "braidA": "#D8B56A",
+        "braidB": "#7A2A2E",
+        "knot": "#D8B56A"
+      },
+      "perched": {
+        "body": "#7A2A2E",
+        "feather": "#84353A",
+        "stitch": "#D8B56A",
+        "wingSatin": "#D8B56A",
+        "egg": "#D8B56A",
+        "eggText": "#2A0E10",
+        "beak": "#D8B56A",
+        "crest": "#D8B56A",
+        "eye": "#F2ECE0",
+        "metal": "#D8B56A",
+        "halo": "#121110"
+      }
+    },
+    "brass": {
+      "name": "Brass",
+      "note": "A goldweight bird",
+      "cord": {
+        "body": "#C9A25A",
+        "egg": "#F2ECE0",
+        "beak": "#121110",
+        "metal": "#121110",
+        "braidA": "#121110",
+        "braidB": "#C9A25A",
+        "knot": "#121110"
+      },
+      "perched": {
+        "body": "#C9A25A",
+        "feather": "#D2AE6C",
+        "stitch": "#121110",
+        "wingSatin": "#121110",
+        "egg": "#F2ECE0",
+        "eggText": "#121110",
+        "beak": "#121110",
+        "crest": "#121110",
+        "eye": "#121110",
+        "metal": "#121110",
+        "halo": "#121110"
+      }
+    }
+  }
+}

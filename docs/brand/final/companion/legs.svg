@@ -1,0 +1,11 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 120 120">
+<!-- Legs and toes, 120 space. Static: they do not breathe. -->
+<g id="legs" fill="none" stroke="#C9A25A" stroke-linecap="round">
+<path d="M55.5 100.5 C56 103.5 55.4 106.5 54.4 109.6" stroke-width="2.2"/>
+<path d="M67.5 100.5 C68 103.5 67.6 106.5 66.8 109.6" stroke-width="2.2"/>
+<circle cx="55.6" cy="104.8" r="1.05" fill="#C9A25A" stroke="none"/>
+<circle cx="67.7" cy="104.8" r="1.05" fill="#C9A25A" stroke="none"/>
+<path d="M54.4 109.6 Q57.6 109.3 59.8 111.8 M54.4 109.6 Q56.2 110.9 57 113.2 M54.4 109.6 Q52 109.8 50.6 111.6" stroke-width="1.3"/>
+<path d="M66.8 109.6 Q70 109.3 72.2 111.8 M66.8 109.6 Q68.6 110.9 69.4 113.2 M66.8 109.6 Q64.4 109.8 63 111.6" stroke-width="1.3"/>
+</g>
+</svg>

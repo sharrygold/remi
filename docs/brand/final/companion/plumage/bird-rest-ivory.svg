@@ -1,0 +1,53 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 120 120">
+<!-- Full bird at rest, stitched, Ivory plumage, for reference only. Head angle 146 deg = looking back at the egg. -->
+<defs>
+<pattern id="satin" width="2.4" height="2.4" patternUnits="userSpaceOnUse" patternTransform="rotate(32)"><rect width="1.1" height="2.4" fill="#C9A25A"/></pattern>
+<radialGradient id="shadeBody" cx="42%" cy="22%" r="85%"><stop offset="0" stop-color="#FFFFFF" stop-opacity="0.45"/><stop offset="0.55" stop-color="#F2ECE0" stop-opacity="0"/><stop offset="1" stop-color="#7A6A50" stop-opacity="0.32"/></radialGradient>
+<radialGradient id="shadeHead" cx="38%" cy="28%" r="78%"><stop offset="0" stop-color="#FFFFFF" stop-opacity="0.55"/><stop offset="0.5" stop-color="#F2ECE0" stop-opacity="0"/><stop offset="1" stop-color="#7A6A50" stop-opacity="0.4"/></radialGradient>
+</defs>
+<path id="peg" d="M-2 112.4 H80" stroke="#C9A25A" stroke-width="2.6" stroke-linecap="round"/>
+<path d="M-2 113.5 H79" stroke="#C9A25A" stroke-width="0.7" stroke-linecap="round"/>
+<g id="legs" fill="none" stroke="#C9A25A" stroke-linecap="round">
+<path d="M55.5 100.5 C56 103.5 55.4 106.5 54.4 109.6" stroke-width="2.2"/>
+<path d="M67.5 100.5 C68 103.5 67.6 106.5 66.8 109.6" stroke-width="2.2"/>
+<circle cx="55.6" cy="104.8" r="1.05" fill="#C9A25A" stroke="none"/>
+<circle cx="67.7" cy="104.8" r="1.05" fill="#C9A25A" stroke="none"/>
+<path d="M54.4 109.6 Q57.6 109.3 59.8 111.8 M54.4 109.6 Q56.2 110.9 57 113.2 M54.4 109.6 Q52 109.8 50.6 111.6" stroke-width="1.3"/>
+<path d="M66.8 109.6 Q70 109.3 72.2 111.8 M66.8 109.6 Q68.6 110.9 69.4 113.2 M66.8 109.6 Q64.4 109.8 63 111.6" stroke-width="1.3"/>
+</g>
+<g id="tail" fill="#F2ECE0" stroke="#C9A25A" stroke-width="0.7" stroke-dasharray="1.4 1.1">
+<path d="M34 80 C24 77 15 71 9 63 C18 65 27 69 35 74 Z"/>
+<path d="M32 85 C21 86 11 83 4 77 C13 77 23 79 33 80 Z"/>
+<path d="M34 90 C24 95 14 96 7 92 C15 89 25 87 33 85 Z"/>
+</g>
+<path id="body" d="M28 82 C30 67 45 58 62 58 C80 58 95 66 96 80 C97 95 82 103 63 103 C45 103 27 97 28 82 Z" fill="#F2ECE0" stroke="#C9A25A" stroke-width="0.8" stroke-dasharray="1.8 1.3"/>
+<path id="body-shade" d="M28 82 C30 67 45 58 62 58 C80 58 95 66 96 80 C97 95 82 103 63 103 C45 103 27 97 28 82 Z" fill="url(#shadeBody)"/>
+<path id="chest" d="M85 79 C87 81 89 81 91 79 M83 85 C85 87 87 87 89 85 M86 91 C88 93 90 93 92 91" fill="none" stroke="#C9A25A" stroke-width="0.8" stroke-linecap="round"/>
+<path id="belly-stitch" d="M76 97 C82 95 88 91 92 86" fill="none" stroke="#C9A25A" stroke-width="0.6" stroke-dasharray="1.4 1.2" stroke-linecap="round"/>
+<g id="thighs" fill="#F2ECE0" stroke="#C9A25A" stroke-width="0.7" stroke-dasharray="1.4 1.1">
+<path d="M50.5 96.5 C51.5 102.5 57.5 104.5 60.5 99 C57.5 97.5 54 96.8 50.5 96.5 Z"/>
+<path d="M62.5 98 C63.5 104 69.5 105 72.5 99.5 C69.5 98.3 66 97.8 62.5 98 Z"/>
+</g>
+<g id="egg" transform="translate(52 56) rotate(-14)">
+<ellipse rx="8.5" ry="10.5" fill="#C9A25A"/>
+<text y="3.7" text-anchor="middle" font-size="11" font-style="italic" font-weight="500" fill="#121110" font-family="Bodoni Moda, serif">3</text>
+</g>
+<g id="wing">
+<path d="M38 70 C46 60 62 60 76 66 C84 70 84 78 76 84 C66 91 50 91 42 85 C36 81 35 75 38 70 Z" fill="url(#satin)"/>
+<path d="M48 87 C50 80 54 76 60 75 M58 89 C60 82 64 78 70 77 M68 87 C70 81 74 77 79 75" fill="none" stroke="#121110" stroke-width="0.9" stroke-linecap="round" opacity="0.55"/>
+</g>
+<path id="cradle-feather" d="M58 64 C62 58 64 54 63 50 C66 54 66 60 62 66 Z" fill="#C9A25A"/>
+<path id="neck" d="M88 70 Q94 50 81 35" fill="none" stroke="#F2ECE0" stroke-width="12" stroke-linecap="round"/>
+<path id="neck-ruff" d="M82.5 64.5 Q84.5 66.5 86.5 64.5 M88 62.5 Q90 64.5 92 62.5 M91.5 57 Q93.3 58.6 94.6 56.4" fill="none" stroke="#C9A25A" stroke-width="0.8" stroke-linecap="round"/>
+<g transform="translate(81 35) rotate(146)">
+<g id="crest" fill="#C9A25A">
+<path d="M-9 -3 C-15 -6.5 -19.5 -9.5 -23 -8.5 C-19.5 -5.5 -15 -2.5 -10 -0.8 Z"/>
+<path d="M-9 3 C-15 6.5 -19.5 9.5 -23 8.5 C-19.5 5.5 -15 2.5 -10 0.8 Z"/>
+</g>
+<circle id="skull" r="11" fill="#F2ECE0" stroke="#C9A25A" stroke-width="0.8" stroke-dasharray="1.8 1.3"/>
+<path id="beak" d="M9.5 -4.2 L22.5 0 L9.5 4.2 Z" fill="#C9A25A"/>
+<path id="mouth" d="M10.5 0 L18.5 0" stroke="#121110" stroke-width="0.5" stroke-linecap="round" opacity="0.5"/>
+<g id="eye"><circle cx="3" cy="0" r="2.4" fill="#121110"/><circle cx="3.8" cy="-0.8" r="0.7" fill="#F2ECE0"/></g>
+</g>
+<circle id="head-shade" cx="81" cy="35" r="11" fill="url(#shadeHead)"/>
+</svg>

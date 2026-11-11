@@ -1,0 +1,5 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 120 120">
+<!-- The perch: a gold peg out of the screen edge at x=0. Hidden while carried. -->
+<path id="peg" d="M-2 112.4 H80" stroke="#C9A25A" stroke-width="2.6" stroke-linecap="round"/>
+<path d="M-2 113.5 H79" stroke="#7E6436" stroke-width="0.7" stroke-linecap="round"/>
+</svg>

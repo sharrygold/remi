@@ -1,0 +1,5 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="-12 -14 24 28">
+<!-- Egg in local coords. Place with translate(52 56) rotate(-14) in the 120 space. The count is live text in the same group, so it tilts and rocks with the egg. -->
+<ellipse rx="8.5" ry="10.5" fill="#C9A25A"/>
+<text y="3.7" text-anchor="middle" font-size="11" font-style="italic" font-weight="500" fill="#121110" font-family="Bodoni Moda, serif">3</text>
+</svg>
