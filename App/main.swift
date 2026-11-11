@@ -3,6 +3,13 @@ import AppKit
 enum AppInfo {
     /// The single source for the name shown in UI; set by APP_DISPLAY_NAME in project.yml.
     static let displayName = Bundle.main.object(forInfoDictionaryKey: "CFBundleDisplayName") as? String ?? "App"
+    static let version = Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? ""
+    /// Opened in the browser by Check for Updates. The app itself never asks the network about versions.
+    static let releasesURL = URL(string: "https://github.com/sharrygold/remi/releases/latest")!
+
+    static func checkForUpdates() {
+        NSWorkspace.shared.open(releasesURL)
+    }
 }
 
 /// Phase 1 review switches, e.g. --handle=tile --density=compact --tab=notes --open --appearance=dark

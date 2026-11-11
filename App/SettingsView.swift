@@ -200,6 +200,9 @@ private struct GeneralSettings: View {
                 LabeledContent("First-time tips") {
                     Button("Show Welcome Again", action: context.showWelcome)
                 }
+                LabeledContent("\(AppInfo.displayName) \(AppInfo.version)") {
+                    Button("Check for Updates…", action: AppInfo.checkForUpdates)
+                }
             }
             Section("Links") {
                 Picker("Open links in", selection: $browser) {
