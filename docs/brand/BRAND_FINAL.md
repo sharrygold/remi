@@ -51,7 +51,7 @@ final/
               lockup-remi-on-dark.svg, lockup-remi-on-light.svg, lockup-remi-tagline-on-dark.svg
   icon/       background.svg, foreground-bird.svg, foreground-egg-beak.svg (1024 canvas, Icon Composer layers)
   menubar/    menubar-template.svg (black on transparent, 19 x 18 pt, template image)
-  companion/  stitched/ (chosen), piped/, clean/  each: body.svg, head.svg, head-doze.svg, bird-rest-reference.svg
+  companion/  stitched/  body.svg, head.svg, head-doze.svg, bird-rest-reference.svg
               egg.svg, head-shade.svg, legs.svg, feet-tucked.svg, peg.svg
               plumage/bird-rest-<colourway>.svg (the perched bird in each plumage, for reference)
   cord/       braid.svg, knot.svg, mount.svg, swing.svg, remi-on-swing.svg, reference-<colourway>.svg

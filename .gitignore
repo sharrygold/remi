@@ -28,3 +28,6 @@ Config/Signing.local.xcconfig
 
 # Presentation pack (working files, removed when done)
 _presentation-pack/
+
+# Local working notes for Claude Code (the full notes live in the private remi-notes repo)
+CLAUDE.md
