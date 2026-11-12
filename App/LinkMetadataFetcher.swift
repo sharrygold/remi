@@ -40,10 +40,12 @@ final class LinkMetadataFetcher {
         let provider = LPMetadataProvider()
         provider.timeout = 15
         let metadata = try? await provider.startFetchingMetadata(for: url)
-        var title = metadata?.title?.trimmingCharacters(in: .whitespacesAndNewlines)
+        // Video sites answer oEmbed with the video's own title. LinkPresentation can return the channel
+        // name instead (seen with youtu.be short links), so oEmbed goes first where it exists.
+        var title = await oEmbedTitle(for: url)
+        if title?.isEmpty ?? true { title = metadata?.title?.trimmingCharacters(in: .whitespacesAndNewlines) }
         var icon: Data?
         if let iconProvider = metadata?.iconProvider { icon = await image(from: iconProvider) }
-        if title?.isEmpty ?? true { title = await oEmbedTitle(for: url) }
         if icon == nil { icon = await favicon(for: url) }
         return (title?.isEmpty == false ? title : nil, icon)
     }
