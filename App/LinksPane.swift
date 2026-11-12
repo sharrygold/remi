@@ -310,6 +310,8 @@ private struct ListNamingCard: View {
                     .onSubmit(save)
                     .onExitCommand(perform: onCancel)
                     .onAppear { DispatchQueue.main.async { focused = true } }
+                    // Picking an icon takes the click; the name keeps the keyboard so Return still saves.
+                    .onChange(of: symbol) { _, _ in focused = true }
                     .accessibilityLabel("List name")
             }
             .padding(.horizontal, Tokens.Spacing.s)
@@ -353,7 +355,7 @@ struct LinkRowView: View {
     let density: Density
     let showsSpace: Bool
     @Environment(\.panelActions) private var actions
-    @State private var hovering = false
+    @State private var hovering = CommandLine.arguments.contains("--preview-row-hover")
     @State private var editing = false
     @State private var draft = ""
     @FocusState private var fieldFocused: Bool
@@ -386,6 +388,10 @@ struct LinkRowView: View {
                 .help(link.isWatched ? "Back to Watch later" : "Mark as watched")
                 .accessibilityLabel(link.isWatched ? "Mark \(link.title) as not watched" : "Mark \(link.title) as watched")
             }
+            // Always laid out, only shown on hover, so the row doesn't shift.
+            RowDeleteButton(name: link.title, action: delete)
+                .opacity(hovering && !editing ? 1 : 0)
+                .disabled(editing)
         }
         .padding(.vertical, density.rowPadding)
         .keyboardHighlight(link.id)
@@ -490,10 +496,12 @@ struct LinkRowView: View {
             }
         }
         Divider()
-        Button("Delete", role: .destructive) {
-            store.delete(link)
-            actions.confirm("Link deleted  ·  ⌘Z to undo")
-        }
+        Button("Delete", role: .destructive, action: delete)
+    }
+
+    private func delete() {
+        store.delete(link)
+        actions.confirm("Link deleted  ·  ⌘Z to undo")
     }
 }
 

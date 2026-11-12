@@ -168,19 +168,10 @@ struct TaskRowView: View {
     }
 
     private var deleteButton: some View {
-        Button {
+        RowDeleteButton(name: task.title) {
             store.delete(task)
             actions.confirm("Task deleted  ·  ⌘Z to undo")
-        } label: {
-            Image(systemName: "trash")
-                .font(Tokens.TextRole.detail)
-                .foregroundStyle(.secondary)
-                .frame(width: 22, height: 22)
-                .contentShape(Rectangle())
         }
-        .buttonStyle(PressScale(scale: 0.96))
-        .help("Delete (⌘Z undoes it)")
-        .accessibilityLabel("Delete \(task.title)")
     }
 
     /// The task's doorway: one click opens the link, app or folder.
@@ -286,5 +277,27 @@ struct TaskRowView: View {
         editing = false
         store.rename(task, to: draft)
         actions.focusCapture()
+    }
+}
+
+/// The trash button rows show on hover; it turns red under the pointer.
+struct RowDeleteButton: View {
+    let name: String
+    let action: () -> Void
+    @State private var hovering = false
+
+    var body: some View {
+        Button(action: action) {
+            Image(systemName: "trash")
+                .font(Tokens.TextRole.detail)
+                .foregroundStyle(hovering ? AnyShapeStyle(Color.red) : AnyShapeStyle(.secondary))
+                .frame(width: 22, height: 22)
+                .contentShape(Rectangle())
+        }
+        .buttonStyle(PressScale(scale: 0.96))
+        .onHover { hovering = $0 }
+        .animation(Motion.hover, value: hovering)
+        .help("Delete (⌘Z undoes it)")
+        .accessibilityLabel("Delete \(name)")
     }
 }
