@@ -41,12 +41,12 @@ final class AppController: NSObject, NSApplicationDelegate {
     /// Self-tests and demos keep everything in memory and must not show permission prompts or write backups.
     var isScratchSession: Bool {
         ["--demo-data", "--m2-selftest", "--m3-selftest", "--m4-selftest", "--m5-selftest", "--m6-selftest", "--clipboard-selftest", "--add-selftest"]
-            .contains { CommandLine.arguments.contains($0) }
+            .contains { CommandLine.arguments.contains($0) } || videoDataVariant != nil
     }
 
     lazy var store: LibraryStore = {
         let arguments = CommandLine.arguments
-        let usesMemory = ["--demo-data", "--m2-selftest", "--m3-selftest", "--m4-selftest", "--m5-selftest", "--m6-selftest", "--clipboard-selftest", "--add-selftest"].contains { arguments.contains($0) }
+        let usesMemory = ["--demo-data", "--m2-selftest", "--m3-selftest", "--m4-selftest", "--m5-selftest", "--m6-selftest", "--clipboard-selftest", "--add-selftest"].contains { arguments.contains($0) } || videoDataVariant != nil
         // --data-dir=PATH opens another library, used to check a copy of real data after a model change.
         let custom = arguments.first { $0.hasPrefix("--data-dir=") }.map { URL(fileURLWithPath: String($0.dropFirst("--data-dir=".count))) }
         let store = LibraryStore(directory: usesMemory ? nil : custom ?? LibraryStore.defaultDirectory)
@@ -54,6 +54,7 @@ final class AppController: NSObject, NSApplicationDelegate {
             print("data-dir temporary=\(store.isTemporary) spaces=\(store.spaces.count) tasks=\(store.tasks.count) notes=\(store.notes.count)")
         }
         if CommandLine.arguments.contains("--demo-data") { seedDemo(store) }
+        if let variant = videoDataVariant { seedVideoDay(store, variant: variant) }
         return store
     }()
 
@@ -141,22 +142,9 @@ final class AppController: NSObject, NSApplicationDelegate {
                 editor.setSelectedRange(NSRange(location: (editor.string as NSString).length, length: 0))
             }
         }
-        // --demo-type=TEXT types a line into the capture bar, one letter at a time, then presses Return.
-        // For recording the README loop without touching the keyboard. Pair with --demo-data --open.
+        // --demo-type=TEXT types into the capture bar for recordings; see runDemoTyping for lines and pace.
         if let text = CommandLine.arguments.first(where: { $0.hasPrefix("--demo-type=") }) {
-            let letters = Array(text.dropFirst("--demo-type=".count))
-            let start = Double(ProcessInfo.processInfo.environment["DEMO_TYPE_DELAY"] ?? "") ?? 1.5
-            for index in letters.indices {
-                DispatchQueue.main.asyncAfter(deadline: .now() + start + Double(index) * 0.075) { [self] in
-                    capture.text.append(letters[index])
-                    if let editor = panel.firstResponder as? NSTextView {
-                        editor.setSelectedRange(NSRange(location: (editor.string as NSString).length, length: 0))
-                    }
-                }
-            }
-            DispatchQueue.main.asyncAfter(deadline: .now() + start + Double(letters.count) * 0.075 + 0.7) { [self] in
-                capture.submit?()
-            }
+            runDemoTyping(String(text.dropFirst("--demo-type=".count)))
         }
         if let text = CommandLine.arguments.first(where: { $0.hasPrefix("--search=") }) {
             search.active = true
@@ -165,6 +153,10 @@ final class AppController: NSObject, NSApplicationDelegate {
         presentation.widget = companion
         presentation.onWelcomeDone = { [weak self] in self?.finishWelcome() }
         if options.open { showPanel() }
+        // For filming: --open-at=SECONDS opens the panel then, so the opening is on camera.
+        if let seconds = CommandLine.arguments.first(where: { $0.hasPrefix("--open-at=") }).flatMap({ Double($0.dropFirst("--open-at=".count)) }) {
+            DispatchQueue.main.asyncAfter(deadline: .now() + seconds) { self.showPanel() }
+        }
         showWelcomeOnFirstRun()
         // For screenshots of the closing animation: --close-at=SECONDS closes the panel then.
         if let text = CommandLine.arguments.first(where: { $0.hasPrefix("--close-at=") }),
@@ -192,8 +184,13 @@ final class AppController: NSObject, NSApplicationDelegate {
             handle.orderOut(nil)
             showSettings(tab: SettingsTab.allCases.first { $0.rawValue.replacingOccurrences(of: " ", with: "").lowercased() == name.lowercased() } ?? .general)
         }
-        if CommandLine.arguments.contains("--open-note") {
-            DispatchQueue.main.async { self.presentation.noteToOpen = self.store.notes(in: nil).dropFirst().first?.id }
+        if CommandLine.arguments.contains(where: { $0.hasPrefix("--open-note") }) {
+            // --open-note=TITLE opens the note whose title starts with TITLE; plain --open-note opens the second note.
+            let title = CommandLine.arguments.first { $0.hasPrefix("--open-note=") }.map { String($0.dropFirst("--open-note=".count)) }
+            DispatchQueue.main.async {
+                let notes = self.store.notes(in: nil)
+                self.presentation.noteToOpen = (title.flatMap { t in notes.first { $0.title.hasPrefix(t) } } ?? notes.dropFirst().first)?.id
+            }
         }
         if CommandLine.arguments.contains("--m1-selftest") { runShellSelfTest() }
         if CommandLine.arguments.contains("--m2-selftest") { runCaptureSelfTest() }
