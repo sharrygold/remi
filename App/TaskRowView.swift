@@ -21,8 +21,11 @@ struct TaskRowView: View {
     let density: Density
     @State private var editing = false
     @State private var draft = ""
+    @State private var addingLink = false
+    @State private var linkDraft = ""
     @State private var hovering = CommandLine.arguments.contains("--preview-row-hover")
     @FocusState private var fieldFocused: Bool
+    @FocusState private var linkFocused: Bool
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @Environment(\.panelActions) private var actions
 
@@ -82,7 +85,9 @@ struct TaskRowView: View {
     }
 
     @ViewBuilder private var title: some View {
-        if editing {
+        if addingLink {
+            linkField
+        } else if editing {
             TextField("Task", text: $draft)
                 .brandTextInput()
                 .textFieldStyle(.plain)
@@ -106,6 +111,60 @@ struct TaskRowView: View {
                 .accessibilityAddTraits(.isButton)
                 .accessibilityHint("Edit title")
         }
+    }
+
+    /// Typed or pasted in the row itself, so the link becomes this task's action, not a saved link.
+    private var linkField: some View {
+        HStack(spacing: Tokens.Spacing.s - 2) {
+            Image(systemName: "link").font(Tokens.TextRole.detail).foregroundStyle(.secondary)
+            TextField("Paste or type a link", text: $linkDraft)
+                .brandTextInput()
+                .textFieldStyle(.plain)
+                .font(Tokens.TextRole.row)
+                .focused($linkFocused)
+                .onSubmit(finishLink)
+                .onExitCommand(perform: cancelLink)
+                .onChange(of: linkFocused) { _, focused in
+                    if !focused { cancelLink() }
+                }
+                .onAppear { linkFocused = true }
+                .accessibilityLabel("Link for \(task.title)")
+        }
+    }
+
+    private var hasLink: Bool {
+        if case .url = task.action { true } else { false }
+    }
+
+    private func startLink() {
+        DispatchQueue.main.async {
+            if case .url(let url) = task.action {
+                linkDraft = url.absoluteString
+            } else {
+                linkDraft = ClipboardNudge.readURL()?.absoluteString ?? ""
+            }
+            editing = false
+            addingLink = true
+        }
+    }
+
+    private func finishLink() {
+        guard addingLink else { return }
+        let text = linkDraft.trimmingCharacters(in: .whitespacesAndNewlines)
+        if text.isEmpty { return cancelLink() }
+        guard let url = LinkClassifier.url(from: text) else {
+            actions.confirm("That doesn't look like a link")
+            return
+        }
+        addingLink = false
+        store.setAction(task, .url(url))
+        actions.focusCapture()
+    }
+
+    private func cancelLink() {
+        guard addingLink else { return }
+        addingLink = false
+        actions.focusCapture()
     }
 
     private var deleteButton: some View {
@@ -155,13 +214,7 @@ struct TaskRowView: View {
                 Button("Open \(action.label)") { actions.open(action) }
                 Divider()
             }
-            Button("Paste Link") {
-                guard let url = ClipboardNudge.readURL() else {
-                    actions.confirm("There is no link on the clipboard")
-                    return
-                }
-                store.setAction(task, .url(url))
-            }
+            Button(hasLink ? "Change Link…" : "Add Link…", action: startLink)
             Button("Choose App…") { choose(app: true) }
             Button("Choose File or Folder…") { choose(app: false) }
             if task.action != nil {

@@ -1,5 +1,9 @@
 # Changelog
 
+## Unreleased
+
+- A task's Add Link… opens a link field in the row, so the link becomes the task's action instead of a saved link. Typing a task with a URL in it still works too.
+
 ## 1.0 (November 2026)
 
 The first release.
