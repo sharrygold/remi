@@ -185,6 +185,7 @@ struct PanelView: View {
             capture.saveTab = { saveTab(from: $0) }
             if let name = CommandLine.arguments.first(where: { $0.hasPrefix("--link-list=") })?.dropFirst("--link-list=".count) {
                 linkGroupID = store.linkGroups.first { $0.name == name }?.id
+                if let builtIn = LinkList.allCases.first(where: { $0.title == name }) { linkList = builtIn }
             }
             capture.dismissClipboardOffer = {
                 if reviewing {
