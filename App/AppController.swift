@@ -390,6 +390,8 @@ final class AppController: NSObject, NSApplicationDelegate {
     }
 
     func registerHotKey() {
+        // Screenshot runs leave the shortcuts alone, so they can't take them from the copy in use.
+        guard !CommandLine.arguments.contains("--no-focus") else { return }
         let key = HotKey { [weak self] in DispatchQueue.main.async { self?.togglePanel() } }
         hotKeyRegistered = key.register(HotKeyCombo.saved)
         if !hotKeyRegistered { NSLog("Global shortcut \(HotKeyCombo.saved.display) could not be registered") }
