@@ -8,9 +8,23 @@ final class HandleWindow: NSPanel {
 
 final class PanelWindow: NSPanel {
     var onCancel: (() -> Void)?
+    /// True while the capture or search field has focus; those keep it when you click elsewhere.
+    var keepsFieldFocus: () -> Bool = { false }
     override var canBecomeKey: Bool { true }
     override var canBecomeMain: Bool { false }
     override func cancelOperation(_ sender: Any?) { onCancel?() }
+
+    /// A click outside a row's rename field ends the rename, which AppKit doesn't do on its own
+    /// when the click lands on something that can't take focus.
+    override func sendEvent(_ event: NSEvent) {
+        if event.type == .leftMouseDown, !keepsFieldFocus(),
+           let editor = firstResponder as? NSTextView, editor.isFieldEditor,
+           let field = editor.delegate as? NSView,
+           !field.convert(field.bounds, to: nil).contains(event.locationInWindow) {
+            makeFirstResponder(nil)
+        }
+        super.sendEvent(event)
+    }
 }
 
 /// Settings takes keyboard focus without activating the app, which macOS often refuses for a

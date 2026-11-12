@@ -111,6 +111,7 @@ extension AppController {
         }
         presentation.onResizeEnd = { [weak self] in self?.rememberPanelSize() }
         configure(panel)
+        panel.keepsFieldFocus = { [weak self] in (self?.capture.isFocused ?? false) || (self?.search.isFocused ?? false) }
         // Esc steps back one layer at a time: the clipboard chip, then search, then the panel.
         panel.onCancel = { [weak self] in
             guard let self, self.capture.dismissClipboardOffer?() != true else { return }
