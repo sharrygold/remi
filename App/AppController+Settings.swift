@@ -17,9 +17,17 @@ extension AppController {
         // Open on the desktop you are looking at. A window left open on another desktop is
         // brought over rather than leaving you to go and find it.
         if window.isVisible && !window.isOnActiveSpace { window.orderOut(nil) }
-        if !window.isVisible { window.center() }
+        if !window.isVisible { centre(window, on: handle?.screen ?? NSScreen.main) }
         window.orderFrontRegardless()
         window.makeKey()
+    }
+
+    /// Centres Settings on the screen where Remi lives, so with two displays it opens beside the companion
+    /// rather than on whichever screen happened to be active.
+    func centre(_ window: NSWindow, on screen: NSScreen?) {
+        guard let visible = screen?.visibleFrame else { window.center(); return }
+        let size = window.frame.size
+        window.setFrameOrigin(NSPoint(x: visible.midX - size.width / 2, y: visible.midY - size.height / 2 + visible.height * 0.08))
     }
 
     /// Built once, a few seconds after launch, so the first open is instant.
