@@ -25,13 +25,16 @@ extension AppController {
         }
         let today = ["Review the slides before lunch #work today", "Water the plants #personal today",
                      "Read one chapter #learning today", "Plan next week #work today"]
-        let added = today.compactMap(add)
+        // `--video-data=review`: only yesterday's three, so Fresh start leaves an empty day on camera.
+        let added = variant == "review" ? [] : today.compactMap(add)
         if evening {
             // Everything ticked off except the last one, so the final tick empties the egg.
             for task in added.dropLast() { store.toggleCompleted(task) }
         }
-        _ = add("Pick up a birthday card #personal fri")
-        _ = add("Sketch ideas for the newsletter #work tomorrow")
+        if variant != "review" {
+            _ = add("Pick up a birthday card #personal fri")
+            _ = add("Sketch ideas for the newsletter #work tomorrow")
+        }
 
         let notes = [
             ("Personal", true, "Weekly plan\n- [x] Laundry on Sunday\n- [ ] Call home\n- [ ] Early night on Wednesday"),
