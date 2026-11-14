@@ -49,7 +49,7 @@ extension AppController {
         }
         // Real public pages, renamed to short titles. Their icons are fetched when the panel opens.
         let links = [
-            ("https://en.wikipedia.org/wiki/Sankofa", "Sankofa", "Learning", true),
+            ("https://en.wikipedia.org/wiki/Adinkra_symbols", "Adinkra symbols", "Learning", true),
             ("https://developer.apple.com/design/human-interface-guidelines", "Human Interface Guidelines", "Learning", false),
             ("https://www.gutenberg.org", "Free books to read", "Personal", false),
         ]
