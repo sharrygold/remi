@@ -24,6 +24,8 @@ final class SettingsContext: ObservableObject {
     /// Which shortcut is being recorded, or last had a problem.
     @Published var recordingKind = ShortcutKind.panel
     var showWelcome: () -> Void = {}
+    /// Resizes the panel and shows it beside the companion, so a size can be judged while choosing it.
+    var setPanelSize: (CGSize) -> Void = { _ in }
     private var keyMonitor: Any?
 
     init(store: LibraryStore, widget: CompanionSettings, reminders: Reminders, libraryDirectory: URL?, applyHotKey: @escaping (HotKeyCombo) -> Bool) {
@@ -204,6 +206,7 @@ private struct GeneralSettings: View {
                     Button("Check for Updates…", action: AppInfo.checkForUpdates)
                 }
             }
+            PanelSizeSection(context: context)
             Section("Links") {
                 Picker("Open links in", selection: $browser) {
                     Text("Automatic (Dia, then Arc)").tag("")
@@ -236,6 +239,52 @@ private struct GeneralSettings: View {
     private func setLaunchAtLogin(_ on: Bool) {
         loginNote = LoginItem.set(on)
         launchAtLogin = LoginItem.isEnabled
+    }
+}
+
+/// Width and height sliders. The panel opens beside the companion and follows them as they move,
+/// and dragging the panel's own edges moves the sliders.
+private struct PanelSizeSection: View {
+    let context: SettingsContext
+    @AppStorage(AppController.panelSizeKey) private var saved = ""
+
+    private var size: CGSize {
+        let size = NSSizeFromString(saved)
+        return size.width > 0 && size.height > 0 ? size : Tokens.Size.panel
+    }
+
+    private func binding(_ keyPath: WritableKeyPath<CGSize, CGFloat>) -> Binding<Double> {
+        Binding(get: { Double(size[keyPath: keyPath]) }, set: { value in
+            var next = size
+            next[keyPath: keyPath] = CGFloat((value / 10).rounded() * 10)
+            context.setPanelSize(next)
+        })
+    }
+
+    var body: some View {
+        Section {
+            slider("Width", binding(\.width), Tokens.Size.panelMin.width...Tokens.Size.panelMax.width)
+            slider("Height", binding(\.height), Tokens.Size.panelMin.height...Tokens.Size.panelMax.height)
+            LabeledContent("Default is \(Int(Tokens.Size.panel.width)) × \(Int(Tokens.Size.panel.height))") {
+                Button("Reset Size") { context.setPanelSize(Tokens.Size.panel) }
+                    .disabled(size == Tokens.Size.panel)
+            }
+        } header: {
+            Text("Panel size")
+        } footer: {
+            note("The panel opens beside \(AppInfo.displayName) while you drag, so you can see the size. You can also drag any edge of the panel.")
+        }
+    }
+
+    private func slider(_ title: String, _ value: Binding<Double>, _ range: ClosedRange<CGFloat>) -> some View {
+        LabeledContent(title) {
+            HStack(spacing: 10) {
+                Slider(value: value, in: Double(range.lowerBound)...Double(range.upperBound))
+                    .tint(Color.brand)
+                    .frame(width: 220)
+                Text("\(Int(value.wrappedValue)) pt").monospacedDigit().foregroundStyle(.secondary).frame(width: 52, alignment: .trailing)
+            }
+        }
     }
 }
 

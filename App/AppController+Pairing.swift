@@ -67,8 +67,45 @@ extension AppController {
     }
 
     func companionMoved() {
-        guard let offset = carryOffset else { return }
+        guard var offset = carryOffset else { return }
+        // Carried past the middle of the screen: the panel changes sides so it stays on screen and
+        // the bird turns to face it. It blinks across rather than sliding behind the bird.
+        let visible = screen(for: handle.frame).visibleFrame
+        let birdOnLeft = handle.frame.midX < visible.midX
+        let panelOnLeft = offset.x < 0
+        if birdOnLeft == panelOnLeft {
+            offset.x = birdOnLeft ? handle.frame.width + Tokens.Size.handleGap : -panel.frame.width - Tokens.Size.handleGap
+            carryOffset = offset
+            onLeftEdge = birdOnLeft
+            surface.configure(plumage: companion.plumage, onLeftEdge: onLeftEdge)
+            swapPanelSide { [weak self] in
+                guard let self else { return }
+                self.presentation.anchor = self.panelAnchor(for: self.handle.frame, panelFrame: self.panel.frame)
+            }
+        }
         movingPanel { panel.setFrameOrigin(NSPoint(x: handle.frame.minX + offset.x, y: handle.frame.minY + offset.y)) }
+    }
+
+    /// Fades the panel out, lets `move` put it on the other side, then fades it back in.
+    /// The window keeps following the pointer the whole time; only its opacity animates.
+    func swapPanelSide(_ move: @escaping () -> Void) {
+        guard !NSWorkspace.shared.accessibilityDisplayShouldReduceMotion else {
+            move()
+            return
+        }
+        NSAnimationContext.runAnimationGroup({ context in
+            context.duration = 0.1
+            context.timingFunction = CAMediaTimingFunction(name: .easeIn)
+            panel.animator().alphaValue = 0
+        }, completionHandler: { [weak self] in
+            guard let self, self.presentation.presented else { return }
+            move()
+            NSAnimationContext.runAnimationGroup { context in
+                context.duration = 0.2
+                context.timingFunction = CAMediaTimingFunction(name: .easeOut)
+                self.panel.animator().alphaValue = 1
+            }
+        })
     }
 
     /// Puts the companion back on the nearest edge (and the panel beside it), then remembers the spot.
@@ -108,6 +145,35 @@ extension AppController {
                 self.handle.setFrame(target, display: true)
                 if let panelTarget { self.panel.setFrame(panelTarget, display: true) }
                 finish()
+                return
+            }
+            // The panel is on the wrong side of the bird (it was dragged across the screen): it fades
+            // out while the bird glides, then eases in on the right side from the bird's direction.
+            if let panelTarget, (self.panel.frame.midX < self.handle.frame.midX) != (panelTarget.midX < target.midX) {
+                NSAnimationContext.runAnimationGroup({ context in
+                    context.duration = 0.14
+                    context.timingFunction = CAMediaTimingFunction(name: .easeIn)
+                    self.panel.animator().alphaValue = 0
+                }, completionHandler: nil)
+                NSAnimationContext.runAnimationGroup({ context in
+                    context.duration = far ? 0.9 : 0.32
+                    context.timingFunction = CAMediaTimingFunction(controlPoints: 0.45, 0, 0.2, 1)
+                    self.handle.animator().setFrame(target, display: true)
+                }, completionHandler: { [weak self] in
+                    guard let self, token == self.settleToken, self.presentation.presented else {
+                        self?.panel.alphaValue = 1
+                        self?.settling = false
+                        return
+                    }
+                    let fromBird: CGFloat = panelTarget.midX > target.midX ? -12 : 12
+                    self.panel.setFrame(panelTarget.offsetBy(dx: fromBird, dy: 0), display: true)
+                    NSAnimationContext.runAnimationGroup({ context in
+                        context.duration = 0.24
+                        context.timingFunction = CAMediaTimingFunction(name: .easeOut)
+                        self.panel.animator().alphaValue = 1
+                        self.panel.animator().setFrame(panelTarget, display: true)
+                    }, completionHandler: finish)
+                })
                 return
             }
             NSAnimationContext.runAnimationGroup({ context in
@@ -160,6 +226,27 @@ extension AppController {
         steps.append((0.05, { [self] in print("50ms later bird=\(f(handle.frame))") }))
         steps.append((2.2, { [self] in
             print("settled bird=\(f(handle.frame)) panel=\(f(panel.frame)) gap=\(Int(gap())) edge=\(Int(screen(for: handle.frame).visibleFrame.maxX - handle.frame.maxX))")
+            hidePanel()
+        }))
+        steps.append((0.3, { [self] in
+            showPanel()
+            // Carry the bird across to the left half: the panel should swap to its right.
+            beginCarry()
+            let visible = screen(for: handle.frame).visibleFrame
+            handle.setFrameOrigin(NSPoint(x: visible.minX + 200, y: handle.frame.minY))
+            companionMoved()
+            print("crossed bird=\(f(handle.frame)) panel=\(f(panel.frame)) panelRightOfBird=\(panel.frame.minX > handle.frame.maxX) leftEdge=\(onLeftEdge)")
+            settleCompanion()
+        }))
+        steps.append((2.2, { [self] in
+            let visible = screen(for: handle.frame).visibleFrame
+            print("crossed landed bird=\(f(handle.frame)) panel=\(f(panel.frame)) onLeft=\(Int(handle.frame.minX - visible.minX)) gap=\(Int(gap())) alpha=\(panel.alphaValue)")
+            // Now drag the panel to the right half; the bird should go to the right edge and the panel swap to its left.
+            panel.setFrameOrigin(NSPoint(x: visible.maxX - 500, y: panel.frame.minY))
+        }))
+        steps.append((2.5, { [self] in
+            let visible = screen(for: handle.frame).visibleFrame
+            print("dragged back bird=\(f(handle.frame)) panel=\(f(panel.frame)) onRight=\(Int(visible.maxX - handle.frame.maxX)) panelLeftOfBird=\(panel.frame.maxX < handle.frame.minX) alpha=\(panel.alphaValue) child=\(handle.parent === panel)")
             hidePanel()
         }))
         steps.append((0.5, { [self] in

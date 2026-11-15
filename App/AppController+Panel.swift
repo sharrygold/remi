@@ -182,7 +182,21 @@ extension AppController {
         }
     }
 
-    func showPanel() {
+    /// From Settings: shows the panel without taking the keyboard, at the new size, beside the companion.
+    func setPanelSize(_ wanted: CGSize) {
+        let room = screen(for: handle.frame).visibleFrame.insetBy(dx: Tokens.Size.handleGap, dy: Tokens.Size.handleGap)
+        let size = CGSize(width: min(max(wanted.width, Tokens.Size.panelMin.width), Tokens.Size.panelMax.width, room.width),
+                          height: min(max(wanted.height, Tokens.Size.panelMin.height), Tokens.Size.panelMax.height, room.height))
+        if !panelIsShowing { showPanel(focus: false) }
+        detachCompanion()
+        let frame = panelFrame(beside: handle.frame, size: size)
+        movingPanel { panel.setFrame(frame, display: true) }
+        presentation.anchor = panelAnchor(for: handle.frame, panelFrame: frame)
+        attachCompanion()
+        rememberPanelSize()
+    }
+
+    func showPanel(focus: Bool = true) {
         metadata.fetchMissing()
         // Missed repeating tasks move to their next date rather than piling up as overdue.
         store.rollForwardRepeating()
@@ -193,7 +207,7 @@ extension AppController {
         lastActivity = Date()
         placePanel(beside: handle.frame)
         // --no-focus shows the panel without taking the keyboard, for screenshots while the user works.
-        if CommandLine.arguments.contains("--no-focus") { panel.orderFrontRegardless() } else { panel.makeKeyAndOrderFront(nil) }
+        if !focus || CommandLine.arguments.contains("--no-focus") { panel.orderFrontRegardless() } else { panel.makeKeyAndOrderFront(nil) }
         // A new animation replaces a close that is still fading; setting alphaValue alone could be
         // overtaken by it, leaving an open panel nobody can see.
         NSAnimationContext.runAnimationGroup { context in
