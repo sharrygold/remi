@@ -10,6 +10,39 @@ enum AppInfo {
     static func checkForUpdates() {
         NSWorkspace.shared.open(releasesURL)
     }
+
+    static let issuesURL = "https://github.com/sharrygold/remi/issues/new"
+
+    /// Opens a new bug report on GitHub with the versions already filled in. Nothing is sent until
+    /// the person presses Submit there; the app itself sends nothing.
+    static func reportBug() {
+        let os = ProcessInfo.processInfo.operatingSystemVersion
+        var system = utsname()
+        uname(&system)
+        let machine = withUnsafeBytes(of: &system.machine) { String(decoding: $0.prefix { $0 != 0 }, as: UTF8.self) }
+        let body = """
+        **What happened**
+
+
+        **What you expected**
+
+
+        **Steps to see it**
+
+        1.
+        2.
+        3.
+
+        **Your Mac**
+
+        - macOS version: \(os.majorVersion).\(os.minorVersion).\(os.patchVersion)
+        - \(displayName) version: \(version)
+        - Apple Silicon or Intel: \(machine == "arm64" ? "Apple Silicon" : "Intel")
+        """
+        var components = URLComponents(string: issuesURL)!
+        components.queryItems = [URLQueryItem(name: "labels", value: "bug"), URLQueryItem(name: "body", value: body)]
+        if let url = components.url { NSWorkspace.shared.open(url) }
+    }
 }
 
 /// Phase 1 review switches, e.g. --handle=tile --density=compact --tab=notes --open --appearance=dark

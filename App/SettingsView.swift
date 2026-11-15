@@ -205,6 +205,12 @@ private struct GeneralSettings: View {
                 LabeledContent("\(AppInfo.displayName) \(AppInfo.version)") {
                     Button("Check for Updates…", action: AppInfo.checkForUpdates)
                 }
+                LabeledContent {
+                    Button("Report a Bug…", action: AppInfo.reportBug)
+                } label: {
+                    Text("Something not working?")
+                    Text("Opens a bug report on GitHub with your Mac and \(AppInfo.displayName) versions filled in. You'll need a free GitHub account.")
+                }
             }
             PanelSizeSection(context: context)
             Section("Links") {

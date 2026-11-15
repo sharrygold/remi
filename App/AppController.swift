@@ -471,6 +471,8 @@ final class AppController: NSObject, NSApplicationDelegate {
 
     @objc func checkForUpdates() { AppInfo.checkForUpdates() }
 
+    @objc func reportBug() { AppInfo.reportBug() }
+
     @objc func newNoteFromMenu() {
         showPanel()
         presentation.newNoteRequests += 1
@@ -516,6 +518,7 @@ final class AppController: NSObject, NSApplicationDelegate {
         menu.addItem(companionMenuItem())
         menu.addItem(withTitle: "Settings…", action: #selector(openSettings), keyEquivalent: ",").target = self
         menu.addItem(withTitle: "Check for Updates…", action: #selector(checkForUpdates), keyEquivalent: "").target = self
+        menu.addItem(withTitle: "Report a Bug…", action: #selector(reportBug), keyEquivalent: "").target = self
         menu.addItem(.separator())
         let quit = menu.addItem(withTitle: "Quit \(AppInfo.displayName)", action: #selector(NSApplication.terminate(_:)), keyEquivalent: "q")
         quit.target = NSApp
