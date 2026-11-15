@@ -175,7 +175,7 @@ struct PanelView: View {
             nav.switchTab = { index in
                 guard PanelTab.allCases.indices.contains(index) else { return }
                 closeSearch()
-                tab = PanelTab.allCases[index]
+                select(PanelTab.allCases[index])
             }
             nav.switchSpace = { step in
                 let ids: [UUID?] = [nil] + store.spaces.map(\.id)
@@ -647,7 +647,7 @@ struct PanelView: View {
     private var tabs: some View {
         HStack(spacing: Tokens.Spacing.xs) {
             ForEach(PanelTab.allCases) { item in
-                Button { tab = item } label: {
+                Button { select(item) } label: {
                     Text(item.rawValue)
                         .font(Tokens.TextRole.meta.weight(tab == item ? .semibold : .regular))
                         .foregroundStyle(tab == item ? .primary : .secondary)
@@ -666,6 +666,17 @@ struct PanelView: View {
                 .fill(.quaternary)
                 .shadow(color: .black.opacity(0.08), radius: 1, y: 1)
         }
+    }
+
+    /// Choosing Notes again while a note is open goes back to the list of notes, like a Back button.
+    private func select(_ item: PanelTab) {
+        if item == .notes, tab == .notes, let id = openNoteID {
+            if let note = store.notes.first(where: { $0.id == id }) { store.finishEditing(note) }
+            openNoteID = nil
+            captureFocused = true
+            return
+        }
+        tab = item
     }
 
     /// Changes when what the list area shows changes, so the old page fades out as the new one comes in.

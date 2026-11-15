@@ -11,7 +11,13 @@ final class PanelWindow: NSPanel {
     /// True while the capture or search field has focus; those keep it when you click elsewhere.
     var keepsFieldFocus: () -> Bool = { false }
     /// True while one of the panel's own resize edges or the corner handle is being dragged.
-    var isResizingByHand = false
+    var isResizingByHand = false {
+        didSet { if isResizingByHand != oldValue { (isResizingByHand ? onResizeStart : onResizeFinish)() } }
+    }
+    var onResizeStart: () -> Void = {}
+    var onResizeFinish: () -> Void = {}
+    /// The companion's frame, so a resize stops at the companion instead of running into it.
+    var companionFrame: () -> NSRect? = { nil }
     override var canBecomeKey: Bool { true }
     override var canBecomeMain: Bool { false }
     override func cancelOperation(_ sender: Any?) { onCancel?() }

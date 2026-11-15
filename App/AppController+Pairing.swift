@@ -6,6 +6,50 @@ import AppKit
 extension AppController {
     /// How long a drop away from the edge hangs in the air before gliding back.
     static let hoverBeforeGlide: TimeInterval = 0.8
+    /// The glide back from the open, and the quick settle from near the edge.
+    static let glideSeconds: TimeInterval = 1.2
+    static let snapSeconds: TimeInterval = 0.32
+
+    /// Ease in and out with no sudden start or stop: speed and acceleration are both zero at each end.
+    static func smootherStep(_ t: Double) -> Double { t * t * t * (t * (t * 6 - 15) + 10) }
+
+    /// Eases out past the target a little and back, for a short settle near the edge.
+    static func softOvershoot(_ t: Double) -> Double {
+        let c1 = 1.1, c3 = c1 + 1
+        return 1 + c3 * pow(t - 1, 3) + c1 * pow(t - 1, 2)
+    }
+
+    /// Moves windows to new frames together, one step per screen refresh. The window server's own
+    /// frame animation stepped visibly on a long glide; this stays smooth.
+    func glide(_ moves: [(window: NSWindow, to: NSRect)], seconds: TimeInterval, curve: @escaping (Double) -> Double,
+               completion: @escaping () -> Void) {
+        glideTimer?.invalidate()
+        let starts = moves.map(\.window.frame)
+        let begin = CACurrentMediaTime()
+        let timer = Timer(timeInterval: 1.0 / 120, repeats: true) { [weak self] timer in
+            let progress = min((CACurrentMediaTime() - begin) / seconds, 1)
+            let eased = CGFloat(curve(progress))
+            for (index, move) in moves.enumerated() {
+                let from = starts[index]
+                move.window.setFrame(NSRect(x: from.minX + (move.to.minX - from.minX) * eased,
+                                            y: from.minY + (move.to.minY - from.minY) * eased,
+                                            width: from.width + (move.to.width - from.width) * eased,
+                                            height: from.height + (move.to.height - from.height) * eased), display: true)
+            }
+            guard progress >= 1 else { return }
+            timer.invalidate()
+            self?.glideTimer = nil
+            completion()
+        }
+        RunLoop.main.add(timer, forMode: .common)
+        glideTimer = timer
+    }
+
+    func stopGlide() {
+        glideTimer?.invalidate()
+        glideTimer = nil
+        settling = false
+    }
     /// Further than this from its spot on the edge counts as a drop in the open.
     static let farFromEdge: CGFloat = 48
 
@@ -40,11 +84,17 @@ extension AppController {
         NotificationCenter.default.addObserver(forName: NSWindow.didMoveNotification, object: panel, queue: .main) { [weak self] _ in
             self?.panelDidMove()
         }
+        // While the panel is resized the companion is unlinked, or a moving left edge would drag it along.
         for name in [NSWindow.willStartLiveResizeNotification, NSWindow.didEndLiveResizeNotification] {
             NotificationCenter.default.addObserver(forName: name, object: panel, queue: .main) { [weak self] note in
-                self?.resizingPanel = note.name == NSWindow.willStartLiveResizeNotification
+                guard let self else { return }
+                self.resizingPanel = note.name == NSWindow.willStartLiveResizeNotification
+                if self.resizingPanel { self.detachCompanion() } else { self.attachCompanion() }
             }
         }
+        panel.onResizeStart = { [weak self] in self?.detachCompanion() }
+        panel.onResizeFinish = { [weak self] in self?.attachCompanion() }
+        panel.companionFrame = { [weak self] in self?.handle.frame }
     }
 
     /// The user dragged the panel: the companion has come along as a child window. Once the mouse
@@ -53,6 +103,7 @@ extension AppController {
         guard panelMovesByCode == 0, !settling, !resizingPanel, !panel.isResizingByHand, carryOffset == nil,
               presentation.presented, !watchingPanelDrop else { return }
         watchingPanelDrop = true
+        stopGlide()
         settleToken += 1
         perched?.setCarried(true)
         // The move notice arrives before the child window has followed, so look again a moment later.
@@ -69,6 +120,7 @@ extension AppController {
     }
 
     func beginCarry() {
+        stopGlide()
         settleToken += 1
         perched?.setCarried(true)
         guard presentation.presented else { return }
@@ -165,11 +217,8 @@ extension AppController {
                     context.timingFunction = CAMediaTimingFunction(name: .easeIn)
                     self.panel.animator().alphaValue = 0
                 }, completionHandler: nil)
-                NSAnimationContext.runAnimationGroup({ context in
-                    context.duration = far ? 0.9 : 0.32
-                    context.timingFunction = CAMediaTimingFunction(controlPoints: 0.45, 0, 0.2, 1)
-                    self.handle.animator().setFrame(target, display: true)
-                }, completionHandler: { [weak self] in
+                self.glide([(self.handle, target)], seconds: far ? Self.glideSeconds : Self.snapSeconds,
+                           curve: Self.smootherStep, completion: { [weak self] in
                     guard let self, token == self.settleToken, self.presentation.presented else {
                         self?.panel.alphaValue = 1
                         self?.settling = false
@@ -186,18 +235,12 @@ extension AppController {
                 })
                 return
             }
-            NSAnimationContext.runAnimationGroup({ context in
-                if far {
-                    // Slow to leave and slow to arrive, like something lowered into place.
-                    context.duration = 0.9
-                    context.timingFunction = CAMediaTimingFunction(controlPoints: 0.45, 0, 0.2, 1)
-                } else {
-                    context.duration = 0.32
-                    context.timingFunction = CAMediaTimingFunction(controlPoints: 0.3, 1.25, 0.5, 1)
-                }
-                self.handle.animator().setFrame(target, display: true)
-                if let panelTarget { self.panel.animator().setFrame(panelTarget, display: true) }
-            }, completionHandler: finish)
+            // From the open: slow to leave and slow to arrive, like something lowered into place.
+            // Near the edge: a short settle with a slight overshoot.
+            var moves: [(window: NSWindow, to: NSRect)] = [(self.handle, target)]
+            if let panelTarget { moves.append((self.panel, panelTarget)) }
+            self.glide(moves, seconds: far ? Self.glideSeconds : Self.snapSeconds,
+                       curve: far ? Self.smootherStep : Self.softOvershoot, completion: finish)
         }
         if far {
             DispatchQueue.main.asyncAfter(deadline: .now() + Self.hoverBeforeGlide, execute: land)
@@ -227,18 +270,35 @@ extension AppController {
             settleCompanion()
         }))
         steps.append((0.4, { [self] in print("hover   bird=\(f(handle.frame)) (should still be in the open)") }))
-        steps.append((1.6, { [self] in
+        steps.append((2.0, { [self] in
             print("landed  bird=\(f(handle.frame)) panel=\(f(panel.frame)) gap=\(Int(gap())) child=\(handle.parent === panel) edge=\(Int(screen(for: handle.frame).visibleFrame.maxX - handle.frame.maxX))")
             // The user drags the panel up by 120: the bird is its child, so it comes too.
             panel.setFrameOrigin(NSPoint(x: panel.frame.minX - 200, y: panel.frame.minY + 120))
             print("panel dragged bird=\(f(handle.frame)) panel=\(f(panel.frame)) child=\(handle.parent === panel) children=\(panel.childWindows?.count ?? -1)")
         }))
         steps.append((0.05, { [self] in print("50ms later bird=\(f(handle.frame))") }))
-        steps.append((2.2, { [self] in
+        steps.append((2.6, { [self] in
             print("settled bird=\(f(handle.frame)) panel=\(f(panel.frame)) gap=\(Int(gap())) edge=\(Int(screen(for: handle.frame).visibleFrame.maxX - handle.frame.maxX))")
             hidePanel()
         }))
-        steps.append((0.3, { [self] in
+        steps.append((0.6, { [self] in
+            showPanel()
+        }))
+        steps.append((0.8, { [self] in
+            // Widen from the far edge, then push the edge next to the bird into it.
+            let bird = handle.frame
+            let left = PanelResize(window: panel, edges: [.left])
+            left.follow(NSPoint(x: left.startMouse.x - 100, y: left.startMouse.y))
+            left.end()
+            print("resize left  width=\(Int(panel.frame.width)) birdMoved=\(handle.frame != bird) child=\(handle.parent === panel)")
+            let right = PanelResize(window: panel, edges: [.right])
+            right.follow(NSPoint(x: right.startMouse.x + 300, y: right.startMouse.y))
+            right.end()
+            print("resize right width=\(Int(panel.frame.width)) birdMoved=\(handle.frame != bird) gapToBird=\(Int(handle.frame.minX - panel.frame.maxX))")
+            panel.setContentSize(NSSize(width: 385, height: 603))
+            hidePanel()
+        }))
+        steps.append((0.5, { [self] in
             showPanel()
             // Carry the bird across to the left half: the panel should swap to its right.
             beginCarry()
@@ -248,13 +308,13 @@ extension AppController {
             print("crossed bird=\(f(handle.frame)) panel=\(f(panel.frame)) panelRightOfBird=\(panel.frame.minX > handle.frame.maxX) leftEdge=\(onLeftEdge)")
             settleCompanion()
         }))
-        steps.append((2.2, { [self] in
+        steps.append((2.6, { [self] in
             let visible = screen(for: handle.frame).visibleFrame
             print("crossed landed bird=\(f(handle.frame)) panel=\(f(panel.frame)) onLeft=\(Int(handle.frame.minX - visible.minX)) gap=\(Int(gap())) alpha=\(panel.alphaValue)")
             // Now drag the panel to the right half; the bird should go to the right edge and the panel swap to its left.
             panel.setFrameOrigin(NSPoint(x: visible.maxX - 500, y: panel.frame.minY))
         }))
-        steps.append((2.5, { [self] in
+        steps.append((3.0, { [self] in
             let visible = screen(for: handle.frame).visibleFrame
             print("dragged back bird=\(f(handle.frame)) panel=\(f(panel.frame)) onRight=\(Int(visible.maxX - handle.frame.maxX)) panelLeftOfBird=\(panel.frame.maxX < handle.frame.minX) alpha=\(panel.alphaValue) child=\(handle.parent === panel)")
             hidePanel()

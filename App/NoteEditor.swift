@@ -128,9 +128,19 @@ final class NoteTextView: NSTextView {
         performTextFinderAction(item)
     }
 
+    /// The pasteboard ⌘V reads; a self-test points it at a private one so the real clipboard is untouched.
+    var pasteSource: NSPasteboard = .general
+
     override func paste(_ sender: Any?) {
-        if let images = NoteImageFile.images(on: .general), onImages?(images, nil) == true { return }
+        if let images = NoteImageFile.images(on: pasteSource), onImages?(images, nil) == true { return }
         super.paste(sender)
+    }
+
+    /// A plain-text view greys out Paste when the clipboard holds only a picture, so ⌘V never reached
+    /// paste(_:). Pictures count as something to paste here.
+    override func validateUserInterfaceItem(_ item: any NSValidatedUserInterfaceItem) -> Bool {
+        if item.action == #selector(paste(_:)), NoteImageFile.images(on: pasteSource) != nil { return isEditable }
+        return super.validateUserInterfaceItem(item)
     }
 
     // Pictures dropped from Finder, a browser or a screenshot thumbnail.

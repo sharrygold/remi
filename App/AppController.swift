@@ -99,6 +99,9 @@ final class AppController: NSObject, NSApplicationDelegate {
 
     var watchingPanelDrop = false
 
+    /// Drives the glide back to the edge, one step per screen refresh.
+    var glideTimer: Timer?
+
     func applicationDidFinishLaunching(_ notification: Notification) {
         // --export-json=PATH writes the same JSON as Settings > Data > Export. Use with --data-dir=.
         if let path = CommandLine.arguments.first(where: { $0.hasPrefix("--export-json=") })?.dropFirst("--export-json=".count) {
@@ -238,6 +241,27 @@ final class AppController: NSObject, NSApplicationDelegate {
             }
         }
         if CommandLine.arguments.contains("--pair-selftest") { runPairSelfTest() }
+        // --paste-selftest=PNG: pastes a picture from a private pasteboard into the open note, and
+        // checks that Paste is enabled for it. The real clipboard is not touched.
+        if let path = CommandLine.arguments.first(where: { $0.hasPrefix("--paste-selftest=") })?.dropFirst("--paste-selftest=".count) {
+            DispatchQueue.main.asyncAfter(deadline: .now() + 1.2) {
+                guard let editor = NoteEditorController.current, let data = FileManager.default.contents(atPath: String(path)) else {
+                    print("paste no editor"); NSApp.terminate(nil); return
+                }
+                let board = NSPasteboard(name: NSPasteboard.Name("remi-paste-selftest"))
+                board.clearContents()
+                board.setData(data, forType: .png)
+                editor.textView.pasteSource = board
+                let item = NSMenuItem(title: "Paste", action: #selector(NSText.paste(_:)), keyEquivalent: "v")
+                let plainReads = editor.textView.readablePasteboardTypes.contains(.png) || editor.textView.readablePasteboardTypes.contains(.tiff)
+                print("paste plain text view reads images=\(plainReads) enabledNow=\(editor.textView.validateUserInterfaceItem(item))")
+                let before = editor.imageURLs.count
+                editor.textView.paste(nil)
+                print("paste images before=\(before) after=\(editor.imageURLs.count) saved=\(editor.imageURLs.allSatisfy { FileManager.default.fileExists(atPath: $0.path) })")
+                print("paste markdown has image=\(editor.markdown.contains("remi-image:"))")
+                NSApp.terminate(nil)
+            }
+        }
         // For screenshots: --demo-image=PATH puts a picture into the open note, as a paste would.
         if let path = CommandLine.arguments.first(where: { $0.hasPrefix("--demo-image=") })?.dropFirst("--demo-image=".count) {
             DispatchQueue.main.asyncAfter(deadline: .now() + 1.2) {

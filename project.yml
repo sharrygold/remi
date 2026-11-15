@@ -23,6 +23,10 @@ targets:
     scheme:
       testTargets: [RemiTests]
     settings:
+      # Debug builds keep their own settings (bird position, panel size), so test runs never touch the installed app's.
+      configs:
+        Debug:
+          PRODUCT_BUNDLE_IDENTIFIER: io.github.sharrygold.remi.debug
       base:
         PRODUCT_NAME: $(APP_DISPLAY_NAME)
         PRODUCT_BUNDLE_IDENTIFIER: io.github.sharrygold.remi

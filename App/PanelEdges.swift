@@ -31,9 +31,18 @@ struct PanelResize {
         let min = Tokens.Size.panelMin, max = Tokens.Size.panelMax
         func clamp(_ value: CGFloat, _ low: CGFloat, _ high: CGFloat) -> CGFloat { Swift.min(Swift.max(value, low), high) }
         var frame = startFrame
-        if edges.contains(.right) { frame.size.width = clamp(startFrame.width + dx, min.width, max.width) }
+        // The side facing the companion grows only up to it; the companion itself never moves.
+        let bird = (window as? PanelWindow)?.companionFrame()
+        let gap = Tokens.Size.handleGap
+        if edges.contains(.right) {
+            var widest = max.width
+            if let bird, bird.minX >= startFrame.maxX - 1 { widest = Swift.min(widest, bird.minX - gap - startFrame.minX) }
+            frame.size.width = clamp(startFrame.width + dx, min.width, Swift.max(widest, startFrame.width))
+        }
         if edges.contains(.left) {
-            frame.size.width = clamp(startFrame.width - dx, min.width, max.width)
+            var widest = max.width
+            if let bird, bird.maxX <= startFrame.minX + 1 { widest = Swift.min(widest, startFrame.maxX - bird.maxX - gap) }
+            frame.size.width = clamp(startFrame.width - dx, min.width, Swift.max(widest, startFrame.width))
             frame.origin.x = startFrame.maxX - frame.width
         }
         if edges.contains(.top) { frame.size.height = clamp(startFrame.height + dy, min.height, max.height) }

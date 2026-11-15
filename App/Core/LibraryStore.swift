@@ -54,7 +54,7 @@ final class LibraryStore: ObservableObject {
         let support = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0]
         var name = Bundle.main.bundleIdentifier ?? "io.github.sharrygold.remi"
         #if DEBUG
-        name += ".debug"
+        if !name.hasSuffix(".debug") { name += ".debug" }
         #endif
         return support.appendingPathComponent(name, isDirectory: true)
     }
