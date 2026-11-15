@@ -10,6 +10,8 @@ final class PanelWindow: NSPanel {
     var onCancel: (() -> Void)?
     /// True while the capture or search field has focus; those keep it when you click elsewhere.
     var keepsFieldFocus: () -> Bool = { false }
+    /// True while one of the panel's own resize edges or the corner handle is being dragged.
+    var isResizingByHand = false
     override var canBecomeKey: Bool { true }
     override var canBecomeMain: Bool { false }
     override func cancelOperation(_ sender: Any?) { onCancel?() }

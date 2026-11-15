@@ -1032,6 +1032,8 @@ struct PanelView: View {
                 iconButton("gearshape", help: "Settings (⌘,)", label: "Settings") { presentation.openSettings() }
             }
         }
+        // Centred on the panel, not the gap between the controls, and drawn above the top row's space.
+        .overlay(alignment: .top) { MoveGrabber().offset(y: -Tokens.Spacing.s + 1) }
     }
 
     private func iconButton(_ symbol: String, help: String, label: String, action: @escaping () -> Void) -> some View {

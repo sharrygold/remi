@@ -110,6 +110,7 @@ extension AppController {
             self?.rememberPanelSize()
         }
         presentation.onResizeEnd = { [weak self] in self?.rememberPanelSize() }
+        installPanelFollowing()
         configure(panel)
         panel.keepsFieldFocus = { [weak self] in (self?.capture.isFocused ?? false) || (self?.search.isFocused ?? false) }
         // Esc steps back one layer at a time: the clipboard chip, then search, then the panel.
@@ -129,7 +130,9 @@ extension AppController {
                                                                                 search: search, nav: nav, tab: options.tab))
         // The window decides the size, so the edges can be dragged.
         hosting.sizingOptions = []
-        panel.contentView = hosting
+        let container = PanelContainerView(content: hosting)
+        container.onResizeEnd = { [weak self] in self?.rememberPanelSize() }
+        panel.contentView = container
         // Lays the panel out once while invisible, so the first real open is as quick as later ones.
         panel.alphaValue = 0
         panel.orderFrontRegardless()
@@ -143,8 +146,14 @@ extension AppController {
         panel.invalidateShadow()
     }
 
+    /// The panel counts as open only if it can actually be seen. If it ever ends up "open" but invisible,
+    /// a click on the companion opens it again rather than closing something nobody can see.
+    var panelIsShowing: Bool {
+        presentation.presented && panel.isVisible && panel.alphaValue > 0.5
+    }
+
     func togglePanel() {
-        presentation.presented ? hidePanel() : showPanel()
+        panelIsShowing ? hidePanel() : showPanel()
     }
 
     func hidePanel() {
@@ -156,16 +165,17 @@ extension AppController {
         // The glass, the list card and the shadow all leave together: the window fades as one
         // while the mask shrinks back into the widget.
         panel.hasShadow = false
-        NSAnimationContext.runAnimationGroup { context in
+        detachCompanion()
+        NSAnimationContext.runAnimationGroup({ context in
             context.duration = Tokens.Motion.panelCloseSeconds
             context.timingFunction = CAMediaTimingFunction(name: .easeIn)
             panel.animator().alphaValue = 0
-        }
-        DispatchQueue.main.asyncAfter(deadline: .now() + Tokens.Motion.panelCloseSeconds) { [weak self] in
+        }, completionHandler: { [weak self] in
+            // Reopened while fading: showPanel has already taken the window back.
             guard let self, !self.presentation.presented else { return }
             self.panel.orderOut(nil)
             self.presentation.shown = false
-        }
+        })
         if let monitor = outsideClickMonitor {
             NSEvent.removeMonitor(monitor)
             outsideClickMonitor = nil
@@ -181,23 +191,19 @@ extension AppController {
         surface.setPanelOpen(true)
         if !isScratchSession, claimDay("lastStretchDay") { perched?.playMorningStretch() }
         lastActivity = Date()
-        let visible = (handle.screen ?? NSScreen.screens[0]).visibleFrame
-        let anchor = handle.frame
-        let size = panel.frame.size
-        let gap = Tokens.Size.handleGap
-        let bounds = visible.insetBy(dx: gap, dy: gap)
-        let x = anchor.midX > visible.midX ? anchor.minX - size.width - gap : anchor.maxX + gap
-        let y = anchor.midY - size.height / 2
-        panel.setFrameOrigin(NSPoint(x: min(max(x, bounds.minX), bounds.maxX - size.width),
-                                     y: min(max(y, bounds.minY), bounds.maxY - size.height)))
-        let origin = panel.frame.origin
-        presentation.anchor = UnitPoint(x: min(max((anchor.midX - origin.x) / size.width, 0), 1),
-                                        y: min(max(1 - (anchor.midY - origin.y) / size.height, 0), 1))
+        placePanel(beside: handle.frame)
         // --no-focus shows the panel without taking the keyboard, for screenshots while the user works.
         if CommandLine.arguments.contains("--no-focus") { panel.orderFrontRegardless() } else { panel.makeKeyAndOrderFront(nil) }
+        // A new animation replaces a close that is still fading; setting alphaValue alone could be
+        // overtaken by it, leaving an open panel nobody can see.
+        NSAnimationContext.runAnimationGroup { context in
+            context.duration = 0
+            panel.animator().alphaValue = 1
+        }
         panel.alphaValue = 1
         presentation.shown = true
         presentation.presented = true
+        attachCompanion()
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.4) { [weak self] in
             guard let self, self.presentation.presented else { return }
             self.panel.hasShadow = true
@@ -208,5 +214,39 @@ extension AppController {
             guard self?.presentation.pinned == false else { return }
             self?.hidePanel()
         }
+    }
+
+    /// The display a window is on, falling back to the one under its centre, then the main display.
+    func screen(for frame: NSRect) -> NSScreen {
+        let centre = NSPoint(x: frame.midX, y: frame.midY)
+        return NSScreen.screens.first { $0.frame.contains(centre) }
+            ?? NSScreen.screens.max { $0.frame.intersection(frame).width * $0.frame.intersection(frame).height
+                                     < $1.frame.intersection(frame).width * $1.frame.intersection(frame).height }
+            ?? NSScreen.screens[0]
+    }
+
+    /// Where the panel goes for a companion at `anchor`: beside it, on the side with more room, kept on screen.
+    func panelFrame(beside anchor: NSRect, size: NSSize? = nil) -> NSRect {
+        let size = size ?? panel.frame.size
+        let visible = screen(for: anchor).visibleFrame
+        let gap = Tokens.Size.handleGap
+        let bounds = visible.insetBy(dx: gap, dy: gap)
+        let x = anchor.midX > visible.midX ? anchor.minX - size.width - gap : anchor.maxX + gap
+        let y = anchor.midY - size.height / 2
+        return NSRect(x: min(max(x, bounds.minX), bounds.maxX - size.width),
+                      y: min(max(y, bounds.minY), bounds.maxY - size.height),
+                      width: size.width, height: size.height)
+    }
+
+    /// Where the panel grows from, as a point inside it, so the opening and the resize handle follow the companion.
+    func panelAnchor(for anchor: NSRect, panelFrame frame: NSRect) -> UnitPoint {
+        UnitPoint(x: min(max((anchor.midX - frame.minX) / frame.width, 0), 1),
+                  y: min(max(1 - (anchor.midY - frame.minY) / frame.height, 0), 1))
+    }
+
+    func placePanel(beside anchor: NSRect) {
+        let frame = panelFrame(beside: anchor)
+        movingPanel { panel.setFrame(frame, display: true) }
+        presentation.anchor = panelAnchor(for: anchor, panelFrame: frame)
     }
 }

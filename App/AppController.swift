@@ -82,6 +82,23 @@ final class AppController: NSObject, NSApplicationDelegate {
 
     static let panelSizeKey = "panelSize"
 
+    /// Above zero while the app moves the panel itself, so only the user's own drags make the companion follow.
+    var panelMovesByCode = 0
+
+    /// True while the companion and panel glide to the edge together.
+    var settling = false
+
+    /// True while an edge of the panel is being dragged; a resize from the left or top moves the window too.
+    var resizingPanel = false
+
+    /// Bumped by every new drag, so a glide waiting to start after an earlier drop is called off.
+    var settleToken = 0
+
+    /// The panel's offset from the companion while the companion is carried with the panel open.
+    var carryOffset: NSPoint?
+
+    var watchingPanelDrop = false
+
     func applicationDidFinishLaunching(_ notification: Notification) {
         // --export-json=PATH writes the same JSON as Settings > Data > Export. Use with --data-dir=.
         if let path = CommandLine.arguments.first(where: { $0.hasPrefix("--export-json=") })?.dropFirst("--export-json=".count) {
@@ -220,6 +237,7 @@ final class AppController: NSObject, NSApplicationDelegate {
                 NSApp.terminate(nil)
             }
         }
+        if CommandLine.arguments.contains("--pair-selftest") { runPairSelfTest() }
         if CommandLine.arguments.contains("--head-selftest") { runHeadSelfTest() }
         if CommandLine.arguments.contains("--motion-selftest") { runMotionSelfTest() }
         if CommandLine.arguments.contains("--tuck-selftest") { runTuckSelfTest() }
@@ -448,6 +466,7 @@ final class AppController: NSObject, NSApplicationDelegate {
     }
 
     @objc func hideForAnHour() {
+        detachCompanion()
         hiddenUntil = Date().addingTimeInterval(3600)
         handle.orderOut(nil)
         showNowItem.isHidden = false

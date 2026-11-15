@@ -138,6 +138,8 @@ final class CompanionHostView: NSView {
     /// When this returns true, dragging down pulls and dragging sideways slides along the edge.
     var isPullMode: () -> Bool = { false }
     var onDragStart: (() -> Void)?
+    /// After each step of a carry, so the open panel can come along.
+    var onDragMove: (() -> Void)?
     var onPullStart: (() -> Void)?
     var onPull: ((CGFloat) -> Void)?
     var onPullEnd: (() -> Void)?
@@ -186,6 +188,7 @@ final class CompanionHostView: NSView {
             return
         }
         window?.setFrameOrigin(NSPoint(x: mouse.x - grabOffset.x, y: mouse.y - grabOffset.y))
+        onDragMove?()
     }
 
     override func mouseUp(with event: NSEvent) {

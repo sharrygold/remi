@@ -53,8 +53,7 @@ private struct GripHandle: NSViewRepresentable {
 final class GripView: NSView {
     var leading = false
     var onEnd: () -> Void = {}
-    private var startFrame = NSRect.zero
-    private var startMouse = NSPoint.zero
+    private var resize: PanelResize?
 
     override func acceptsFirstMouse(for event: NSEvent?) -> Bool { true }
     override var mouseDownCanMoveWindow: Bool { false }
@@ -64,20 +63,14 @@ final class GripView: NSView {
     }
 
     override func mouseDown(with event: NSEvent) {
-        startFrame = window?.frame ?? .zero
-        startMouse = NSEvent.mouseLocation
+        resize = window.map { PanelResize(window: $0, edges: leading ? [.bottom, .left] : [.bottom, .right]) }
     }
 
-    override func mouseDragged(with event: NSEvent) {
-        guard let window else { return }
-        let mouse = NSEvent.mouseLocation
-        let dx = mouse.x - startMouse.x, dy = mouse.y - startMouse.y
-        let width = min(max(startFrame.width + (leading ? -dx : dx), Tokens.Size.panelMin.width), Tokens.Size.panelMax.width)
-        let height = min(max(startFrame.height - dy, Tokens.Size.panelMin.height), Tokens.Size.panelMax.height)
-        // The top edge and the side nearest the companion stay put.
-        let x = leading ? startFrame.maxX - width : startFrame.minX
-        window.setFrame(NSRect(x: x, y: startFrame.maxY - height, width: width, height: height), display: true)
-    }
+    override func mouseDragged(with event: NSEvent) { resize?.follow(NSEvent.mouseLocation) }
 
-    override func mouseUp(with event: NSEvent) { onEnd() }
+    override func mouseUp(with event: NSEvent) {
+        resize?.end()
+        resize = nil
+        onEnd()
+    }
 }

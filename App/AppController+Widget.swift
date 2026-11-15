@@ -33,27 +33,8 @@ extension AppController {
         surface.configure(plumage: companion.plumage, onLeftEdge: onLeftEdge)
     }
 
-    /// Snaps to the nearest edge with a soft overshoot, then remembers the spot.
-    func finishDrag() {
-        lastActivity = Date()
-        perched?.setCarried(false)
-        let style = companion.style
-        let screen = handle.screen ?? NSScreen.screens[0]
-        let placement = WidgetPlacement.nearest(to: handle.frame, prototype: style, on: screen.visibleFrame)
-        PlacementStore.save(placement, prototype: style, on: screen)
-        onLeftEdge = placement.onLeftEdge
-        surface.configure(plumage: companion.plumage, onLeftEdge: onLeftEdge)
-        let target = placement.frame(for: style, on: screen.visibleFrame)
-        if NSWorkspace.shared.accessibilityDisplayShouldReduceMotion {
-            handle.setFrame(target, display: true)
-            return
-        }
-        NSAnimationContext.runAnimationGroup { context in
-            context.duration = 0.32
-            context.timingFunction = CAMediaTimingFunction(controlPoints: 0.3, 1.25, 0.5, 1)
-            handle.animator().setFrame(target, display: true)
-        }
-    }
+    /// Called when the companion is let go after a drag.
+    func finishDrag() { settleCompanion() }
 
     func idleTick() {
         if let until = hiddenUntil, Date() >= until { showWidgetNow() }
@@ -83,7 +64,8 @@ extension AppController {
             self?.togglePanel()
         }
         host.isPullMode = { [weak self] in self?.companion.style == .cord }
-        host.onDragStart = { [weak self] in self?.perched?.setCarried(true) }
+        host.onDragStart = { [weak self] in self?.beginCarry() }
+        host.onDragMove = { [weak self] in self?.companionMoved() }
         host.onPullStart = { [weak self] in self?.cord?.beginPull() }
         host.onPull = { [weak self] amount in self?.cord?.drag(by: amount) }
         host.onPullEnd = { [weak self] in
@@ -166,12 +148,13 @@ extension AppController {
     }
 
     func pointerMoved(at point: NSPoint = NSEvent.mouseLocation) {
-        updateMouseCatching()
         if isPointerNearWidget(point) {
             lastActivity = Date()
             perched?.setTucked(false)
             perched?.setDozing(false)
         }
+        // After waking, so a pointer resting where the bird is about to be still catches the click.
+        updateMouseCatching()
         surface.pointerMoved(toScreen: point)
     }
 
@@ -189,7 +172,13 @@ extension AppController {
         let screen = NSScreen.screens.first { $0.frame.contains(mouse) } ?? handle.screen ?? NSScreen.screens[0]
         let visible = screen.visibleFrame
         let x = min(max(left, visible.minX), visible.maxX - handle.frame.width)
-        cord?.carry(dx: x - handle.frame.minX)
+        let dx = x - handle.frame.minX
+        cord?.carry(dx: dx)
+        settleToken += 1
+        if presentation.presented {
+            detachCompanion()
+            movingPanel { panel.setFrameOrigin(NSPoint(x: panel.frame.minX + dx, y: panel.frame.minY)) }
+        }
         handle.setFrameOrigin(NSPoint(x: x, y: visible.maxY - handle.frame.height))
     }
 
