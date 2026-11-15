@@ -121,7 +121,7 @@ A welcome card shows the shortcut, how to type a task and lets you pick a compan
 | ⌘, | Settings |
 | Esc | Step back: list, search, then close |
 
-In a note: `# ` heading, `- ` bullet, `[] ` checkbox, `**bold**` or ⌘B, ⇧⌘L checklist line, ⇧⌘U tick.
+In a note: `# ` heading, `- ` bullet, `[] ` checkbox, `**bold**` or ⌘B, ⇧⌘L checklist line, ⇧⌘U tick, ⌘V or drop to add a picture, ⌘F find in the note, ⌘G next match.
 </details>
 
 ## Privacy
