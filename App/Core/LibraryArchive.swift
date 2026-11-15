@@ -15,6 +15,13 @@ struct LibraryArchive: Codable, Equatable {
     var links: [LinkRecord]
     /// Optional so archives written before custom lists still import.
     var linkGroups: [LinkGroupRecord]? = nil
+    /// Pictures pasted into notes, by file name. Optional so archives from before images still import.
+    var images: [ImageRecord]? = nil
+
+    struct ImageRecord: Codable, Equatable {
+        var name: String
+        var data: Data
+    }
 
     struct LinkGroupRecord: Codable, Equatable {
         var id: UUID
@@ -141,8 +148,17 @@ extension LibraryStore {
             },
             linkGroups: all(LinkGroup.self).sorted { $0.sortOrder < $1.sortOrder }.map {
                 .init(id: $0.id, name: $0.name, symbol: $0.symbol, sortOrder: $0.sortOrder, createdAt: $0.createdAt, updatedAt: $0.updatedAt)
-            }
+            },
+            images: archivedImages()
         )
+    }
+
+    /// Nil when no note has a picture, so archives without any look exactly as they did before.
+    private func archivedImages() -> [LibraryArchive.ImageRecord]? {
+        let images = referencedNoteImages().sorted().compactMap { name in
+            (try? Data(contentsOf: noteImageURL(name))).map { LibraryArchive.ImageRecord(name: name, data: $0) }
+        }
+        return images.isEmpty ? nil : images
     }
 
     /// Merges an archive into the library. Items are matched by ID and the newer copy wins, so importing
@@ -151,6 +167,11 @@ extension LibraryStore {
     @discardableResult
     func importArchive(_ archive: LibraryArchive) -> ImportSummary {
         var summary = ImportSummary()
+        // Pictures first, so notes that use them open complete. Files already here are kept.
+        for image in archive.images ?? [] where !image.name.contains("/") {
+            let url = noteImageURL(image.name)
+            if !FileManager.default.fileExists(atPath: url.path) { try? image.data.write(to: url, options: .atomic) }
+        }
         var spacesByID: [UUID: Space] = [:]
         let existingSpaces = all(Space.self)
         for record in archive.spaces {

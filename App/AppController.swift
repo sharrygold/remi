@@ -238,6 +238,16 @@ final class AppController: NSObject, NSApplicationDelegate {
             }
         }
         if CommandLine.arguments.contains("--pair-selftest") { runPairSelfTest() }
+        // For screenshots: --demo-image=PATH puts a picture into the open note, as a paste would.
+        if let path = CommandLine.arguments.first(where: { $0.hasPrefix("--demo-image=") })?.dropFirst("--demo-image=".count) {
+            DispatchQueue.main.asyncAfter(deadline: .now() + 1.2) {
+                guard let data = FileManager.default.contents(atPath: String(path)) else { return }
+                _ = NoteEditorController.current?.insertImages([(data, NSImage(data: data)?.size)], at: nil)
+                if let width = CommandLine.arguments.first(where: { $0.hasPrefix("--panel-width=") }).flatMap({ Double($0.dropFirst("--panel-width=".count)) }) {
+                    self.panel.setContentSize(NSSize(width: width, height: self.panel.frame.height))
+                }
+            }
+        }
         if CommandLine.arguments.contains("--head-selftest") { runHeadSelfTest() }
         if CommandLine.arguments.contains("--motion-selftest") { runMotionSelfTest() }
         if CommandLine.arguments.contains("--tuck-selftest") { runTuckSelfTest() }
@@ -345,6 +355,7 @@ final class AppController: NSObject, NSApplicationDelegate {
     /// Clears Recently deleted items older than 30 days and writes today's backup, once per day.
     func runDailyMaintenance() {
         store.purgeDeleted()
+        store.purgeUnusedNoteImages()
         guard let directory = store.directory else { return }
         do {
             try Backups.backUp({ store.makeArchive() }, to: Backups.directory(in: directory))

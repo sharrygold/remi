@@ -98,6 +98,10 @@ final class NoteTextView: NSTextView {
     var onToggleCheckbox: ((Int) -> Void)?
     var onCommand: ((String, NSEvent.ModifierFlags) -> Bool)?
     var onMakeTask: ((String) -> Void)?
+    /// Pictures pasted or dropped, with where a drop landed. Returns false to paste the usual way.
+    var onImages: (([(data: Data, points: CGSize?)], Int?) -> Bool)?
+    /// The note's Markdown for part of the text, so copying keeps checkboxes and pictures.
+    var markdownFor: ((NSRange) -> String)?
     var focusOnAppear = true
     let placeholder = "Start typing. The first line becomes the title."
 
@@ -108,9 +112,76 @@ final class NoteTextView: NSTextView {
         DispatchQueue.main.async { window.makeFirstResponder(self) }
     }
 
-    /// Esc leaves the note instead of offering word completions.
+    /// Esc closes the find bar first, then leaves the note (instead of offering word completions).
     override func cancelOperation(_ sender: Any?) {
+        if enclosingScrollView?.isFindBarVisible == true {
+            finderAction(.hideFindInterface)
+            window?.makeFirstResponder(self)
+            return
+        }
         onEscape?()
+    }
+
+    func finderAction(_ action: NSTextFinder.Action) {
+        let item = NSMenuItem()
+        item.tag = action.rawValue
+        performTextFinderAction(item)
+    }
+
+    override func paste(_ sender: Any?) {
+        if let images = NoteImageFile.images(on: .general), onImages?(images, nil) == true { return }
+        super.paste(sender)
+    }
+
+    // Pictures dropped from Finder, a browser or a screenshot thumbnail.
+    override var acceptableDragTypes: [NSPasteboard.PasteboardType] {
+        super.acceptableDragTypes + [.png, .tiff, .fileURL]
+    }
+
+    override func draggingEntered(_ sender: any NSDraggingInfo) -> NSDragOperation {
+        NoteImageFile.images(on: sender.draggingPasteboard) != nil ? .copy : super.draggingEntered(sender)
+    }
+
+    override func draggingUpdated(_ sender: any NSDraggingInfo) -> NSDragOperation {
+        NoteImageFile.images(on: sender.draggingPasteboard) != nil ? .copy : super.draggingUpdated(sender)
+    }
+
+    override func performDragOperation(_ sender: any NSDraggingInfo) -> Bool {
+        if let images = NoteImageFile.images(on: sender.draggingPasteboard) {
+            let index = characterIndexForInsertion(at: convert(sender.draggingLocation, from: nil))
+            return onImages?(images, index) ?? false
+        }
+        return super.performDragOperation(sender)
+    }
+
+    /// Copies as the note's Markdown, so pasting into another note keeps checkboxes and pictures.
+    /// A single picture on its own is copied as the picture too.
+    override func writeSelection(to pboard: NSPasteboard, type: NSPasteboard.PasteboardType) -> Bool {
+        guard type == .string, let markdownFor else { return super.writeSelection(to: pboard, type: type) }
+        let range = selectedRange()
+        guard range.length > 0 else { return false }
+        return pboard.setString(markdownFor(range), forType: .string)
+    }
+
+    override var writablePasteboardTypes: [NSPasteboard.PasteboardType] {
+        let range = selectedRange()
+        if range.length == 1, textStorage?.attribute(.attachment, at: range.location, effectiveRange: nil) is ImageAttachment {
+            return [.string, .tiff]
+        }
+        return super.writablePasteboardTypes
+    }
+
+    override func writeSelection(to pboard: NSPasteboard, types: [NSPasteboard.PasteboardType]) -> Bool {
+        pboard.clearContents()
+        let range = selectedRange()
+        var wrote = false
+        if types.contains(.string) { wrote = writeSelection(to: pboard, type: .string) || wrote }
+        if types.contains(.tiff), range.length == 1,
+           let image = (textStorage?.attribute(.attachment, at: range.location, effectiveRange: nil) as? ImageAttachment)?.picture,
+           let tiff = image.tiffRepresentation {
+            wrote = pboard.setData(tiff, forType: .tiff) || wrote
+        }
+        return wrote
     }
 
     override func performKeyEquivalent(with event: NSEvent) -> Bool {
@@ -191,6 +262,9 @@ final class NoteEditorController: NSObject, NSTextViewDelegate {
     /// True while this controller makes its own edits, so the shortcut rules don't run on them.
     private var applying = false
 
+    /// The note open in the panel, if any. Panel keys use it for ⌘F and Esc.
+    static weak var current: NoteEditorController?
+
     init(note: Note, store: LibraryStore) {
         self.note = note
         self.store = store
@@ -199,6 +273,22 @@ final class NoteEditorController: NSObject, NSTextViewDelegate {
         super.init()
         configure()
         load()
+        Self.current = self
+    }
+
+    /// True when the keyboard is in this note's text or its find bar.
+    func hasFocus(in window: NSWindow) -> Bool {
+        guard textView.window === window, let responder = window.firstResponder else { return false }
+        if responder === textView { return true }
+        let view = ((responder as? NSTextView)?.delegate as? NSView) ?? (responder as? NSView)
+        return view?.isDescendant(of: scrollView) ?? false
+    }
+
+    var isFindBarVisible: Bool { scrollView.isFindBarVisible }
+
+    func hideFind() {
+        textView.finderAction(.hideFindInterface)
+        textView.window?.makeFirstResponder(textView)
     }
 
     private func configure() {
@@ -225,6 +315,10 @@ final class NoteEditorController: NSObject, NSTextViewDelegate {
         textView.onToggleCheckbox = { [weak self] index in self?.toggleCheckbox(at: index) }
         textView.onCommand = { [weak self] key, flags in self?.command(key, flags) ?? false }
         textView.onMakeTask = { [weak self] title in self?.makeTask(title) }
+        textView.onImages = { [weak self] images, index in self?.insertImages(images, at: index) ?? false }
+        textView.markdownFor = { [weak self] range in self?.markdown(in: range) ?? "" }
+        textView.usesFindBar = true
+        textView.isIncrementalSearchingEnabled = true
 
         scrollView.documentView = textView
         scrollView.hasVerticalScroller = true
@@ -234,38 +328,106 @@ final class NoteEditorController: NSObject, NSTextViewDelegate {
     }
 
     private func load() {
-        let (text, checkboxes) = NoteText.editorText(fromMarkdown: note.body)
-        textView.textStorage?.setAttributedString(Self.attributed(text, checkboxes: checkboxes))
+        let (text, attachments) = NoteText.editorContent(fromMarkdown: note.body)
+        textView.textStorage?.setAttributedString(attributed(text, attachments: attachments))
         restyle()
         textView.setSelectedRange(NSRange(location: (text as NSString).length, length: 0))
         textView.undoManager?.removeAllActions()
     }
 
-    /// Builds editor text, putting a checkbox wherever the checkbox character appears.
-    static func attributed(_ text: String, checkboxes: [Bool]) -> NSAttributedString {
+    /// Builds editor text, putting a checkbox or a picture wherever the object replacement character appears.
+    func attributed(_ text: String, attachments: [NoteText.Attachment]) -> NSAttributedString {
         let result = NSMutableAttributedString()
-        var remaining = checkboxes[...]
+        var remaining = attachments[...]
         var run = ""
         for character in text {
-            if character == NoteText.checkboxCharacter {
-                result.append(NSAttributedString(string: run))
-                run = ""
-                result.append(CheckboxAttachment.string(checked: remaining.popFirst() ?? false))
-            } else {
+            guard character == NoteText.checkboxCharacter else {
                 run.append(character)
+                continue
+            }
+            result.append(NSAttributedString(string: run))
+            run = ""
+            switch remaining.popFirst() ?? .checkbox(checked: false) {
+            case .checkbox(let checked): result.append(CheckboxAttachment.string(checked: checked))
+            case .image(let name): result.append(ImageAttachment.string(name: name, url: store.noteImageURL(name)))
             }
         }
         result.append(NSAttributedString(string: run))
         return result
     }
 
+    /// What each attachment character in a stretch of the text stands for.
+    private func attachments(in range: NSRange) -> [NoteText.Attachment] {
+        guard let storage = textView.textStorage else { return [] }
+        var found: [NoteText.Attachment] = []
+        let text = storage.string as NSString
+        for index in range.location..<NSMaxRange(range) where text.character(at: index) == 0xFFFC {
+            switch storage.attribute(.attachment, at: index, effectiveRange: nil) {
+            case let image as ImageAttachment: found.append(.image(name: image.name))
+            case let box as CheckboxAttachment: found.append(.checkbox(checked: box.isChecked))
+            default: found.append(.checkbox(checked: false))
+            }
+        }
+        return found
+    }
+
     var markdown: String {
         guard let storage = textView.textStorage else { return note.body }
-        var checkboxes: [Bool] = []
-        storage.enumerateAttribute(.attachment, in: NSRange(location: 0, length: storage.length)) { value, _, _ in
-            if let box = value as? CheckboxAttachment { checkboxes.append(box.isChecked) }
+        return markdown(in: NSRange(location: 0, length: storage.length))
+    }
+
+    func markdown(in range: NSRange) -> String {
+        NoteText.markdown(fromEditor: string.substring(with: range), attachments: attachments(in: range))
+    }
+
+    /// Images in the order they appear, for sharing.
+    var imageURLs: [URL] {
+        attachments(in: NSRange(location: 0, length: string.length)).compactMap {
+            if case .image(let name) = $0 { store.noteImageURL(name) } else { nil }
         }
-        return NoteText.markdown(fromEditor: storage.string, checkboxes: checkboxes)
+    }
+
+    // MARK: Pictures
+
+    /// Each picture goes on a line of its own, at the cursor or where it was dropped.
+    func insertImages(_ images: [(data: Data, points: CGSize?)], at index: Int?) -> Bool {
+        let names = images.compactMap { NoteImageFile.save($0.data, points: $0.points, in: store.noteImagesFolder) }
+        guard !names.isEmpty else {
+            onConfirm?("Couldn't read that picture")
+            return true
+        }
+        let range = index.map { NSRange(location: min($0, string.length), length: 0) } ?? textView.selectedRange()
+        let insertion = NSMutableAttributedString()
+        if range.location > 0, string.character(at: range.location - 1) != 0x0A { insertion.append(NSAttributedString(string: "\n")) }
+        for (offset, name) in names.enumerated() {
+            if offset > 0 { insertion.append(NSAttributedString(string: "\n")) }
+            insertion.append(ImageAttachment.string(name: name, url: store.noteImageURL(name)))
+        }
+        let end = NSMaxRange(range)
+        if end >= string.length || string.character(at: end) != 0x0A { insertion.append(NSAttributedString(string: "\n")) }
+        replace(range, with: insertion)
+        textView.window?.makeFirstResponder(textView)
+        return true
+    }
+
+    /// A line starting with a picture is a plain line, not a checkbox, though both use the same character.
+    private func kind(of line: String, at location: Int) -> NoteText.LineKind {
+        let kind = NoteText.kind(ofEditorLine: line)
+        guard case .checkbox = kind else { return kind }
+        let index = location + (NoteText.splitIndent(line).indent as NSString).length
+        return textView.textStorage?.attribute(.attachment, at: index, effectiveRange: nil) is ImageAttachment ? .plain : kind
+    }
+
+    // MARK: Find and share
+
+    func showFind() {
+        textView.window?.makeFirstResponder(textView)
+        textView.finderAction(.showFindInterface)
+    }
+
+    /// The note as readable text, then its pictures.
+    var sharingItems: [Any] {
+        [NoteText.plainText(fromMarkdown: markdown) as NSString] + imageURLs.filter { FileManager.default.fileExists(atPath: $0.path) }.map { $0 as NSURL }
     }
 
     /// The line stays in the note as it was; the task is a new thing in the note's Space.
@@ -300,9 +462,9 @@ final class NoteEditorController: NSObject, NSTextViewDelegate {
         if text == " ", range.length == 0 { return !applyShortcut(at: range.location) }
         // Pasted Markdown keeps its bullets and checkboxes.
         if text.count > 1 {
-            let (converted, checkboxes) = NoteText.editorText(fromMarkdown: text)
+            let (converted, attachments) = NoteText.editorContent(fromMarkdown: text)
             if converted != text {
-                replace(range, with: Self.attributed(converted, checkboxes: checkboxes))
+                replace(range, with: attributed(converted, attachments: attachments))
                 return false
             }
         }
@@ -353,7 +515,7 @@ final class NoteEditorController: NSObject, NSTextViewDelegate {
     private func continueList(at range: NSRange) -> Bool {
         let line = lineRange(at: range.location)
         let text = string.substring(with: line)
-        let kind = NoteText.kind(ofEditorLine: text)
+        let kind = kind(of: text, at: line.location)
         guard kind == .bullet || kind == .checkbox(checked: false) else { return false }
         let indent = NoteText.splitIndent(text).indent
         let markerStart = line.location + (indent as NSString).length
@@ -376,8 +538,17 @@ final class NoteEditorController: NSObject, NSTextViewDelegate {
     }
 
     /// ⌘B bold, ⇧⌘L checklist line, ⇧⌘U check or uncheck, matching Apple Notes where it has them.
+    /// ⌘F find, ⌘G and ⇧⌘G next and previous match, ⌘E find the selection.
     private func command(_ key: String, _ flags: NSEvent.ModifierFlags) -> Bool {
         switch (key, flags) {
+        case ("f", [.command]):
+            showFind()
+        case ("g", [.command]):
+            textView.finderAction(.nextMatch)
+        case ("g", [.command, .shift]):
+            textView.finderAction(.previousMatch)
+        case ("e", [.command]):
+            textView.finderAction(.setSearchString)
         case ("b", [.command]):
             toggleBold()
         case ("l", [.command, .shift]):
@@ -402,7 +573,7 @@ final class NoteEditorController: NSObject, NSTextViewDelegate {
         let text = string.substring(with: line)
         let indentLength = (NoteText.splitIndent(text).indent as NSString).length
         let start = line.location + indentLength
-        switch NoteText.kind(ofEditorLine: text) {
+        switch kind(of: text, at: line.location) {
         case .checkbox:
             replace(NSRange(location: start, length: 2), with: NSAttributedString(), select: NSRange(location: max(start, selection.location - 2), length: 0))
         case .bullet:
@@ -451,9 +622,12 @@ final class NoteEditorController: NSObject, NSTextViewDelegate {
         var isFirstLine = true
         text.enumerateSubstrings(in: full, options: [.byParagraphs, .substringNotRequired]) { _, range, _, _ in
             let line = text.substring(with: range)
-            defer { if !line.trimmingCharacters(in: .whitespaces).isEmpty { isFirstLine = false } }
+            // Pictures don't make a title; the first line of words does.
+            let words = line.replacingOccurrences(of: String(NoteText.checkboxCharacter), with: "").trimmingCharacters(in: .whitespaces)
+            let lineKind = self.kind(of: line, at: range.location)
+            defer { if !words.isEmpty || lineKind != .plain { isFirstLine = false } }
             let indent = (NoteText.splitIndent(line).indent as NSString).length
-            switch NoteText.kind(ofEditorLine: line) {
+            switch lineKind {
             case .heading(let level):
                 storage.addAttribute(.font, value: NoteStyle.heading(level), range: range)
                 storage.addAttribute(.foregroundColor, value: quiet, range: NSRange(location: range.location + indent, length: level))

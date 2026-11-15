@@ -41,6 +41,7 @@ extension AppController {
     ///   or inside a note, it undoes the typing instead.
     /// - ⌘Return in the capture field saves a note.
     /// - ⌘N starts a new note.
+    /// - ⌘F searches everything, or finds within the open note when its text has the cursor.
     /// - Tab on a pasted link switches between Saved links and Watch later.
     func installPanelKeys() {
         NSEvent.addLocalMonitorForEvents(matching: .keyDown) { [weak self] event in
@@ -71,6 +72,11 @@ extension AppController {
                 submit()
                 return nil
             case UInt16(kVK_ANSI_F):
+                // Inside a note, ⌘F finds in the note; everywhere else it searches everything.
+                if let editor = NoteEditorController.current, editor.hasFocus(in: self.panel) {
+                    editor.showFind()
+                    return nil
+                }
                 self.search.requests += 1
                 return nil
             case UInt16(kVK_ANSI_1), UInt16(kVK_ANSI_2), UInt16(kVK_ANSI_3), UInt16(kVK_ANSI_4):
@@ -115,6 +121,10 @@ extension AppController {
         panel.keepsFieldFocus = { [weak self] in (self?.capture.isFocused ?? false) || (self?.search.isFocused ?? false) }
         // Esc steps back one layer at a time: the clipboard chip, then search, then the panel.
         panel.onCancel = { [weak self] in
+            if let editor = NoteEditorController.current, editor.textView.window != nil, editor.isFindBarVisible {
+                editor.hideFind()
+                return
+            }
             guard let self, self.capture.dismissClipboardOffer?() != true else { return }
             if self.search.active {
                 self.search.active = false
@@ -217,7 +227,8 @@ extension AppController {
         panel.alphaValue = 1
         presentation.shown = true
         presentation.presented = true
-        attachCompanion()
+        // Linked once the panel has finished appearing; see attachCompanion.
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) { [weak self] in self?.attachCompanion() }
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.4) { [weak self] in
             guard let self, self.presentation.presented else { return }
             self.panel.hasShadow = true

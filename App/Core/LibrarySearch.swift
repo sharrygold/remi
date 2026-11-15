@@ -54,7 +54,7 @@ extension LibraryStore {
                      date: \.updatedAt)
         return SearchResults(
             tasks: Array(tasks.prefix(Self.searchLimitPerGroup)),
-            notes: ranked(notes, title: \.title, text: { "\($0.body) \($0.space?.name ?? "")" }, date: \.updatedAt),
+            notes: ranked(notes, title: \.title, text: { "\(NoteImages.removingReferences(from: $0.body)) \($0.space?.name ?? "")" }, date: \.updatedAt),
             links: ranked(links, title: \.title, text: { "\($0.title) \($0.urlString) \($0.space?.name ?? "")" }, date: \.createdAt)
         )
     }

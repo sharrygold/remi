@@ -19,7 +19,17 @@ extension AppController {
     /// with the panel during a drag, with no lag.
     func attachCompanion() {
         guard presentation.presented, handle.parent == nil, handle.isVisible else { return }
+        let offset = NSPoint(x: handle.frame.minX - panel.frame.minX, y: handle.frame.minY - panel.frame.minY)
         panel.addChildWindow(handle, ordered: .above)
+        // Linked too soon after the panel appears, the window server once moved the bird to a stale
+        // spot a moment later. If that happens, put it back beside the panel.
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) { [weak self] in
+            guard let self, self.handle.parent === self.panel, !self.settling else { return }
+            let expected = NSPoint(x: self.panel.frame.minX + offset.x, y: self.panel.frame.minY + offset.y)
+            if hypot(self.handle.frame.minX - expected.x, self.handle.frame.minY - expected.y) > 1 {
+                self.handle.setFrameOrigin(expected)
+            }
+        }
     }
 
     func detachCompanion() {

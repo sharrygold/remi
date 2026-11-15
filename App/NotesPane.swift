@@ -1,3 +1,4 @@
+import AppKit
 import SwiftUI
 
 /// The Notes tab: a calm list like Apple Notes, and the editor when a note is open.
@@ -124,6 +125,7 @@ struct NotesPane: View {
                 Button(space.name) { store.move(note, to: space) }.disabled(space.id == note.space?.id)
             }
         }
+        ShareLink("Share…", item: NoteText.plainText(fromMarkdown: note.body))
         Divider()
         Button("Delete", role: .destructive) { delete(note) }
     }
@@ -158,6 +160,13 @@ struct NotesPane: View {
                 .buttonStyle(.plain)
                 .fixedSize()
                 .accessibilityLabel("Space: \(note.space?.name ?? "none")")
+                Button { NoteEditorController.current?.showFind() } label: { Image(systemName: "text.magnifyingglass") }
+                    .buttonStyle(.plain)
+                    .help("Find in note (⌘F)")
+                    .accessibilityLabel("Find in note")
+                ShareButton { NoteEditorController.current?.sharingItems ?? [NoteText.plainText(fromMarkdown: note.body)] }
+                    .frame(width: 18, height: 18)
+                    .help("Share note")
                 Button { store.setPinned(note, !note.isPinned) } label: {
                     Image(systemName: note.isPinned ? "pin.fill" : "pin")
                 }
@@ -193,5 +202,33 @@ enum NoteDate {
             if days < 7 { return date.formatted(.dateTime.weekday(.wide)) }
         }
         return date.formatted(date: .numeric, time: .omitted)
+    }
+}
+
+/// The share sheet's own button, so the picker can open beside it (Mail, Messages, AirDrop, Notes…).
+struct ShareButton: NSViewRepresentable {
+    let items: () -> [Any]
+
+    func makeNSView(context: Context) -> NSButton {
+        let configuration = NSImage.SymbolConfiguration(textStyle: .footnote)
+        let image = NSImage(systemSymbolName: "square.and.arrow.up", accessibilityDescription: "Share note")?.withSymbolConfiguration(configuration)
+        let button = NSButton(image: image ?? NSImage(), target: context.coordinator, action: #selector(Coordinator.share(_:)))
+        button.isBordered = false
+        button.contentTintColor = .secondaryLabelColor
+        button.setAccessibilityLabel("Share note")
+        return button
+    }
+
+    func updateNSView(_ button: NSButton, context: Context) { context.coordinator.items = items }
+
+    func makeCoordinator() -> Coordinator { Coordinator(items: items) }
+
+    final class Coordinator: NSObject {
+        var items: () -> [Any]
+        init(items: @escaping () -> [Any]) { self.items = items }
+
+        @objc func share(_ sender: NSButton) {
+            NSSharingServicePicker(items: items()).show(relativeTo: sender.bounds, of: sender, preferredEdge: .minY)
+        }
     }
 }
