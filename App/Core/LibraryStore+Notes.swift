@@ -3,6 +3,15 @@ import SwiftData
 
 extension LibraryStore {
     /// Pinned first, then most recently edited, like Apple Notes.
+    /// The notes whose text holds every word of `query`, ignoring case and accents, in the same order.
+    static func filter(_ notes: [Note], by query: String) -> [Note] {
+        let words = query.split(whereSeparator: \.isWhitespace).map(String.init)
+        guard !words.isEmpty else { return notes }
+        return notes.filter { note in
+            words.allSatisfy { note.body.range(of: $0, options: [.caseInsensitive, .diacriticInsensitive]) != nil }
+        }
+    }
+
     func notes(in space: Space?) -> [Note] {
         notes.filter { space == nil || $0.space?.id == space?.id }
             .sorted { lhs, rhs in

@@ -16,6 +16,17 @@ final class NoteTextTests: XCTestCase {
         XCTAssertEqual(NoteText.title(of: "   \n"), "")
     }
 
+    func testFilterMatchesEveryWordAnywhere() {
+        let notes = [Note(body: "Launch meeting\nAgree the date with Dana", space: nil),
+                     Note(body: "Trip ideas\nLisbon in December", space: nil),
+                     Note(body: "Café list", space: nil)]
+        XCTAssertEqual(LibraryStore.filter(notes, by: "").count, 3)
+        XCTAssertEqual(LibraryStore.filter(notes, by: "  launch ").map(\.title), ["Launch meeting"])
+        XCTAssertEqual(LibraryStore.filter(notes, by: "dana LAUNCH").map(\.title), ["Launch meeting"])
+        XCTAssertEqual(LibraryStore.filter(notes, by: "cafe").map(\.title), ["Café list"])
+        XCTAssertTrue(LibraryStore.filter(notes, by: "lisbon launch").isEmpty)
+    }
+
     func testMarkdownRoundTrip() {
         let markdown = "Groceries\n- milk\n  - [ ] eggs\n- [x] bread\n* [ ] jam\nplain - dash\n# Heading"
         let editor = NoteText.editorText(fromMarkdown: markdown)

@@ -7,12 +7,16 @@ struct NotesPane: View {
     let density: Density
     let space: Space?
     @Binding var openNoteID: UUID?
+    @Binding var filter: String
+    /// Changes on ⌘F while the list is showing.
+    var filterRequests: Int
     var onNewNote: () -> Void
     /// Hands focus back to the capture bar after leaving a note.
     var onClose: () -> Void
     var onConfirm: (String) -> Void
     @Environment(\.panelActions) private var actions
     @State private var hoveredNoteID: UUID?
+    @FocusState private var filterFocused: Bool
 
     private var openNote: Note? { store.notes.first { $0.id == openNoteID } }
 
@@ -27,20 +31,27 @@ struct NotesPane: View {
     // MARK: List
 
     @ViewBuilder private var list: some View {
-        let notes = store.notes(in: space)
+        let all = store.notes(in: space)
+        let notes = LibraryStore.filter(all, by: filter)
         let pinned = notes.filter(\.isPinned)
         let others = notes.filter { !$0.isPinned }
         VStack(spacing: 0) {
         PaneHeader(addTitle: "New note", addHelp: "New note (⌘N)", onAdd: onNewNote) {
-            Text(notes.count == 1 ? "1 note" : "\(notes.count) notes")
+            Text(countLabel(shown: notes.count, total: all.count))
                 .font(Tokens.TextRole.detail.weight(.medium))
                 .foregroundStyle(.secondary)
         }
+        if !all.isEmpty { filterField(first: notes.first) }
         ScrollViewReader { proxy in
         ScrollView {
             VStack(alignment: .leading, spacing: density.sectionGap) {
-                if notes.isEmpty {
+                if all.isEmpty {
                     emptyState
+                } else if notes.isEmpty {
+                    Text("No notes match “\(filter)”")
+                        .font(Tokens.TextRole.detail).foregroundStyle(.secondary)
+                        .frame(maxWidth: .infinity)
+                        .padding(.top, Tokens.Spacing.l)
                 } else {
                     if !pinned.isEmpty { group("Pinned", symbol: "pin", notes: pinned) }
                     // Newest first, under headings for when each was last written in.
@@ -55,6 +66,44 @@ struct NotesPane: View {
         .modifier(FollowSelection(proxy: proxy))
         }
         }
+    }
+
+    private func countLabel(shown: Int, total: Int) -> String {
+        let noun = total == 1 ? "note" : "notes"
+        return shown == total ? "\(total) \(noun)" : "\(shown) of \(total) \(noun)"
+    }
+
+    /// Narrows the list as you type, matching words anywhere in a note. Return opens the top match;
+    /// Esc clears it, then hands the keyboard back to the capture bar.
+    private func filterField(first: Note?) -> some View {
+        HStack(spacing: Tokens.Spacing.s) {
+            Image(systemName: "magnifyingglass").foregroundStyle(.tertiary).accessibilityHidden(true)
+            TextField("Filter notes", text: $filter)
+                .brandTextInput()
+                .textFieldStyle(.plain)
+                .focused($filterFocused)
+                .onSubmit { if let first { openNoteID = first.id } }
+                .onExitCommand {
+                    if filter.isEmpty { filterFocused = false; onClose() } else { filter = "" }
+                }
+                .accessibilityLabel("Filter notes")
+            if !filter.isEmpty {
+                Button { filter = "" } label: {
+                    Image(systemName: "xmark.circle.fill").foregroundStyle(.tertiary).iconTarget(22)
+                }
+                .buttonStyle(HoverButtonStyle(radius: 11))
+                .help("Clear filter")
+                .accessibilityLabel("Clear filter")
+            }
+        }
+        .font(Tokens.TextRole.detail)
+        .padding(.leading, Tokens.Spacing.s + 2)
+        .padding(.trailing, Tokens.Spacing.xs)
+        .frame(height: 30)
+        .background(.quaternary.opacity(0.5), in: RoundedRectangle(cornerRadius: Tokens.Radius.small, style: .continuous))
+        .padding(.horizontal, Tokens.Spacing.s + 2)
+        .padding(.top, Tokens.Spacing.s)
+        .onChange(of: filterRequests) { _, _ in filterFocused = true }
     }
 
     private var emptyState: some View {

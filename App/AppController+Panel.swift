@@ -77,7 +77,11 @@ extension AppController {
                     editor.showFind()
                     return nil
                 }
-                self.search.requests += 1
+                if self.search.notesListShowing, !self.search.active {
+                    self.search.noteFilterRequests += 1
+                } else {
+                    self.search.requests += 1
+                }
                 return nil
             case UInt16(kVK_ANSI_1), UInt16(kVK_ANSI_2), UInt16(kVK_ANSI_3), UInt16(kVK_ANSI_4):
                 let order = [kVK_ANSI_1, kVK_ANSI_2, kVK_ANSI_3, kVK_ANSI_4]

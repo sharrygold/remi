@@ -57,6 +57,8 @@ struct PanelView: View {
     @State private var confirmingFreshStart = false
     @State private var confirmation: String?
     @State private var openNoteID: UUID?
+    /// Kept while you open and leave notes, so moving between matching notes is one click each.
+    @State private var noteFilter = ""
     @State private var linkList: LinkList = .saved
     @State private var linkGroupID: UUID?
     /// The "+ New task" field at the top of Today and Tasks.
@@ -78,6 +80,10 @@ struct PanelView: View {
 
     /// Between the close starting and the window being ordered out.
     private var closing: Bool { presentation.shown && !presentation.presented }
+
+    /// Reading a note: the tabs, chips and capture bar step aside so the note gets the whole panel.
+    /// Nothing to switch off: going back to the list (‹ Notes, Esc or ⌘3) brings them all back.
+    private var reading: Bool { tab == .notes && openNoteID != nil && !search.active }
 
     private var selectedSpace: Space? { store.spaces.first { $0.id == selectedSpaceID } }
 
@@ -109,20 +115,23 @@ struct PanelView: View {
                                 in: RoundedRectangle(cornerRadius: Tokens.Radius.large, style: .continuous))
             } else {
                 Group {
-                    tabs
+                    if !reading { tabs.transition(.opacity) }
                     content
                 }
                 .transition(Motion.paneSwap(reduce: reduceMotion))
             }
             if showsTokens {
                 tokenRow
+            } else if reading {
+                EmptyView()
             } else if let clipboardOffer {
                 clipboardChip(clipboardOffer)
             } else if let tabOffer {
                 browserChip(tabOffer)
             }
-            captureBar
+            if !reading { captureBar.transition(.opacity) }
         }
+        .animation(Motion.adaptive(Motion.ease(0.25), reduce: reduceMotion), value: reading)
         .animation(Motion.adaptive(Motion.pane, reduce: reduceMotion), value: search.active)
         .animation(Motion.adaptive(Motion.pane, reduce: reduceMotion), value: presentation.showWelcome)
         .animation(Motion.adaptive(Motion.toast, reduce: reduceMotion), value: showsTokens)
@@ -165,6 +174,7 @@ struct PanelView: View {
         .onChange(of: linkGroupID) { _, _ in nav.clear() }
         .onChange(of: openNoteID) { _, _ in nav.clear() }
         .onChange(of: search.active) { _, _ in nav.clear() }
+        .onChange(of: tab == .notes && openNoteID == nil, initial: true) { _, showing in search.notesListShowing = showing }
         .onAppear {
             captureFocused = true
             capture.submitNote = submitNote
@@ -509,7 +519,7 @@ struct PanelView: View {
         case .tasks:
             return (store.open(in: selectedSpace) + (showDone ? store.doneToday(in: selectedSpace) : [])).map(NavItem.task)
         case .notes:
-            return openNoteID == nil ? store.notes(in: selectedSpace).map(NavItem.note) : []
+            return openNoteID == nil ? LibraryStore.filter(store.notes(in: selectedSpace), by: noteFilter).map(NavItem.note) : []
         case .links:
             return (linkGroupID.map { store.links(in: selectedSpace, group: $0) } ?? store.links(in: selectedSpace, list: linkList)).map(NavItem.link)
         }
@@ -694,7 +704,10 @@ struct PanelView: View {
                 }
             } else if tab == .notes {
                 NotesPane(store: store, density: density, space: selectedSpace,
-                          openNoteID: $openNoteID, onNewNote: startNewNote, onClose: { captureFocused = true },
+                          openNoteID: $openNoteID, filter: $noteFilter, filterRequests: search.noteFilterRequests,
+                          onNewNote: startNewNote,
+                          // The capture bar comes back as the note closes, so focus it once it's there.
+                          onClose: { DispatchQueue.main.async { captureFocused = true } },
                           onConfirm: { show(confirmation: $0) })
             } else if tab == .links {
                 LinksPane(store: store, density: density, space: selectedSpace, showsSpace: selectedSpaceID == nil, list: $linkList, groupID: $linkGroupID,

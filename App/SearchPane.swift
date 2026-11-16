@@ -7,6 +7,9 @@ final class SearchState: ObservableObject {
     @Published var selection = 0
     /// Bumped by ⌘F; the panel answers by showing and focusing the search field.
     @Published var requests = 0
+    /// Bumped by ⌘F while the notes list is showing: it filters that list instead of searching everything.
+    @Published var noteFilterRequests = 0
+    var notesListShowing = false
     var isFocused = false
     var resultCount = 0
 }
