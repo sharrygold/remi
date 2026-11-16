@@ -407,10 +407,9 @@ struct PanelView: View {
             Button { dismissClipboard(offer) } label: {
                 Image(systemName: "xmark")
                     .frame(width: Tokens.Spacing.l, height: Tokens.Spacing.l)
-                    .frame(maxHeight: .infinity)
                     .contentShape(Rectangle())
             }
-            .buttonStyle(.plain)
+            .buttonStyle(HoverButtonStyle(radius: Tokens.Spacing.l / 2))
             .foregroundStyle(.secondary)
             .help("Not this one (Esc)")
             .accessibilityLabel("Dismiss")
@@ -694,7 +693,7 @@ struct PanelView: View {
                     tasksList
                 }
             } else if tab == .notes {
-                NotesPane(store: store, density: density, space: selectedSpace, showsSpace: selectedSpaceID == nil,
+                NotesPane(store: store, density: density, space: selectedSpace,
                           openNoteID: $openNoteID, onNewNote: startNewNote, onClose: { captureFocused = true },
                           onConfirm: { show(confirmation: $0) })
             } else if tab == .links {
@@ -806,8 +805,11 @@ struct PanelView: View {
                 Label(count == 1 ? "1 to watch later" : "\(count) to watch later", systemImage: "play.rectangle")
                     .font(Tokens.TextRole.detail)
                     .foregroundStyle(.secondary)
+                    .padding(.horizontal, Tokens.Spacing.xs + 2)
+                    .padding(.vertical, Tokens.Spacing.xs)
             }
-            .buttonStyle(.plain)
+            .buttonStyle(.hover)
+            .padding(.leading, -(Tokens.Spacing.xs + 2))
             .padding(.top, Tokens.Spacing.xs)
         }
     }
@@ -827,6 +829,8 @@ struct PanelView: View {
         .buttonStyle(.plain)
         .menuIndicator(.hidden)
         .fixedSize()
+        .iconTarget()
+        .hoverHighlight()
         .help("More")
         .accessibilityLabel("More task actions")
     }
@@ -837,15 +841,19 @@ struct PanelView: View {
         return HStack(spacing: Tokens.Spacing.s) {
             Text(count == 1 ? "Let go of 1 open task?" : "Let go of \(count) open tasks?").lineLimit(1)
             Spacer(minLength: Tokens.Spacing.xs)
-            Button("Cancel") { confirmingFreshStart = false }
-                .buttonStyle(.plain)
+            Button { confirmingFreshStart = false } label: {
+                Text("Cancel").padding(.horizontal, Tokens.Spacing.s).padding(.vertical, Tokens.Spacing.xs)
+            }
+                .buttonStyle(.hover)
                 .foregroundStyle(.secondary)
-            Button("Let Go") {
+            Button {
                 let total = store.freshStart(in: selectedSpace)
                 confirmingFreshStart = false
                 show(confirmation: "\(total) set aside  ·  ⌘Z to undo")
+            } label: {
+                Text("Let Go").padding(.horizontal, Tokens.Spacing.s).padding(.vertical, Tokens.Spacing.xs)
             }
-            .buttonStyle(.plain)
+            .buttonStyle(.hover)
             .fontWeight(.semibold)
             .foregroundStyle(Color.brand)
         }
@@ -1053,10 +1061,9 @@ struct PanelView: View {
                 .font(Tokens.TextRole.detail)
                 .foregroundStyle(.secondary)
                 .contentTransition(.symbolEffect(.replace))
-                .frame(width: 24, height: 24)
-                .contentShape(Rectangle())
+                .iconTarget()
         }
-        .buttonStyle(PressScale(scale: 0.96))
+        .buttonStyle(.hover)
         .help(help)
         .accessibilityLabel(label)
     }

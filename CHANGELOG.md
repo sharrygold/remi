@@ -14,6 +14,9 @@
 - A task's Add Link… opens a link field in the row, so the link becomes the task's action instead of a saved link. Typing a task with a URL in it still works too.
 - Links show a delete button on hover, like tasks, and the button turns red under the pointer.
 - Clicking anywhere outside a task or link you are renaming finishes the rename.
+- The notes list shows only each note's title, time and first line, with a little more room between notes, so it's quicker to scan. The coloured Space name under each note is gone.
+- A note's top bar is a steady height with its buttons centred, and a thin line under it where the text scrolls away.
+- Icon buttons across the panel have bigger targets and a soft grey highlight under the pointer, so you can see what a click will hit.
 
 ## 1.0 (November 2026)
 

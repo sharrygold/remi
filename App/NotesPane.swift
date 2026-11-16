@@ -6,14 +6,13 @@ struct NotesPane: View {
     @ObservedObject var store: LibraryStore
     let density: Density
     let space: Space?
-    /// True for "All", where each row names its Space.
-    let showsSpace: Bool
     @Binding var openNoteID: UUID?
     var onNewNote: () -> Void
     /// Hands focus back to the capture bar after leaving a note.
     var onClose: () -> Void
     var onConfirm: (String) -> Void
     @Environment(\.panelActions) private var actions
+    @State private var hoveredNoteID: UUID?
 
     private var openNote: Note? { store.notes.first { $0.id == openNoteID } }
 
@@ -84,7 +83,8 @@ struct NotesPane: View {
 
     private func row(_ note: Note) -> some View {
         Button { openNoteID = note.id } label: {
-            VStack(alignment: .leading, spacing: 2) {
+            // Title and one quiet line under it, nothing else, so the list scans at a glance during a call.
+            VStack(alignment: .leading, spacing: 3) {
                 HStack(spacing: Tokens.Spacing.xs) {
                     Text(note.title.isEmpty ? "New Note" : note.title)
                         .font(Tokens.TextRole.row.weight(.semibold))
@@ -101,17 +101,21 @@ struct NotesPane: View {
                         .lineLimit(1)
                 }
                 .font(Tokens.TextRole.detail)
-                if showsSpace, let space = note.space {
-                    Label(space.name, systemImage: space.symbol)
-                        .font(Tokens.TextRole.detail)
-                        .foregroundStyle(space.tint)
-                }
             }
-            .padding(.vertical, density.rowPadding)
+            .padding(.vertical, density.rowPadding + 2)
             .frame(maxWidth: .infinity, alignment: .leading)
             .contentShape(Rectangle())
+            .background {
+                RoundedRectangle(cornerRadius: Tokens.Radius.small, style: .continuous)
+                    .fill(Color.primary.opacity(hoveredNoteID == note.id ? 0.06 : 0))
+                    .padding(.horizontal, -Tokens.Spacing.s + 2)
+            }
         }
         .buttonStyle(.plain)
+        .onHover { inside in
+            if inside { hoveredNoteID = note.id } else if hoveredNoteID == note.id { hoveredNoteID = nil }
+        }
+        .animation(Motion.hover, value: hoveredNoteID == note.id)
         .keyboardHighlight(note.id)
         .id(note.id)
         .accessibilityHint("Opens the note")
@@ -140,46 +144,63 @@ struct NotesPane: View {
 
     private func editor(_ note: Note) -> some View {
         VStack(spacing: 0) {
-            HStack(spacing: Tokens.Spacing.m) {
+            // One row, a fixed height with every control centred in it, and a hairline under it
+            // so text scrolling up stops at a clear edge.
+            HStack(spacing: 2) {
                 Button(action: close) {
                     Label("Notes", systemImage: "chevron.left")
+                        .padding(.horizontal, Tokens.Spacing.xs + 2)
+                        .frame(height: Tokens.Size.iconTarget)
                 }
-                .buttonStyle(.plain)
+                .buttonStyle(.hover)
                 .foregroundStyle(Color.brand)
                 .help("Back to notes (Esc)")
-                Spacer()
+                Spacer(minLength: Tokens.Spacing.s)
                 Menu {
                     ForEach(store.spaces) { space in
                         Button(space.name) { store.move(note, to: space) }.disabled(space.id == note.space?.id)
                     }
                 } label: {
-                    Label(note.space?.name ?? "Space", systemImage: note.space?.symbol ?? "folder")
-                        .foregroundStyle(note.space?.tint ?? .secondary)
+                    Label(note.space?.name ?? "Space", systemImage: "folder")
                 }
                 .menuStyle(.button)
                 .buttonStyle(.plain)
+                .menuIndicator(.hidden)
                 .fixedSize()
+                .padding(.horizontal, Tokens.Spacing.xs + 2)
+                .frame(height: Tokens.Size.iconTarget)
+                .hoverHighlight()
+                .help("Move to another Space")
                 .accessibilityLabel("Space: \(note.space?.name ?? "none")")
-                Button { NoteEditorController.current?.showFind() } label: { Image(systemName: "text.magnifyingglass") }
-                    .buttonStyle(.plain)
-                    .help("Find in note (⌘F)")
-                    .accessibilityLabel("Find in note")
+                Button { NoteEditorController.current?.showFind() } label: {
+                    Image(systemName: "text.magnifyingglass").iconTarget()
+                }
+                .buttonStyle(.hover)
+                .help("Find in note (⌘F)")
+                .accessibilityLabel("Find in note")
                 ShareButton { NoteEditorController.current?.sharingItems ?? [NoteText.plainText(fromMarkdown: note.body)] }
-                    .frame(width: 18, height: 18)
+                    .iconTarget()
+                    .hoverHighlight()
                     .help("Share note")
                 Button { store.setPinned(note, !note.isPinned) } label: {
-                    Image(systemName: note.isPinned ? "pin.fill" : "pin")
+                    Image(systemName: note.isPinned ? "pin.fill" : "pin").iconTarget()
                 }
-                .buttonStyle(.plain)
+                .buttonStyle(.hover)
+                .help(note.isPinned ? "Unpin note" : "Pin note to the top")
                 .accessibilityLabel(note.isPinned ? "Unpin note" : "Pin note")
-                Button { delete(note) } label: { Image(systemName: "trash") }
-                    .buttonStyle(.plain)
-                    .accessibilityLabel("Delete note")
+                Button { delete(note) } label: {
+                    Image(systemName: "trash").iconTarget()
+                }
+                .buttonStyle(.hover)
+                .help("Delete note (⌘Z undoes it)")
+                .accessibilityLabel("Delete note")
             }
             .font(Tokens.TextRole.detail)
             .foregroundStyle(.secondary)
-            .padding(.horizontal, Tokens.Spacing.m)
-            .padding(.top, Tokens.Spacing.s + Tokens.Spacing.xs)
+            .padding(.leading, Tokens.Spacing.s)
+            .padding(.trailing, Tokens.Spacing.s + 2)
+            .frame(height: 44)
+            Divider().opacity(0.6)
 
             NoteEditor(note: note, store: store, onEscape: close, onOpenLink: { actions.open(.url($0)) }, onConfirm: onConfirm)
                 .id(note.id)

@@ -291,10 +291,11 @@ struct RowDeleteButton: View {
             Image(systemName: "trash")
                 .font(Tokens.TextRole.detail)
                 .foregroundStyle(hovering ? AnyShapeStyle(Color.red) : AnyShapeStyle(.secondary))
-                .frame(width: 22, height: 22)
-                .contentShape(Rectangle())
+                .iconTarget(26)
         }
-        .buttonStyle(PressScale(scale: 0.96))
+        .buttonStyle(.hover)
+        // A bigger target than the row's line, without making the row taller.
+        .padding(.vertical, -3)
         .onHover { hovering = $0 }
         .animation(Motion.hover, value: hovering)
         .help("Delete (⌘Z undoes it)")

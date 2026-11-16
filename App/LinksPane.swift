@@ -320,8 +320,10 @@ private struct ListNamingCard: View {
             IconGrid(symbols: LibraryStore.linkGroupSymbols, selected: symbol) { symbol = $0 }
             HStack(spacing: Tokens.Spacing.m) {
                 Spacer()
-                Button("Cancel", action: onCancel)
-                    .buttonStyle(PressScale(scale: 0.96))
+                Button(action: onCancel) {
+                    Text("Cancel").padding(.horizontal, Tokens.Spacing.s).padding(.vertical, Tokens.Spacing.xs)
+                }
+                    .buttonStyle(.hover)
                     .font(Tokens.TextRole.detail)
                     .foregroundStyle(.secondary)
                 Button(action: save) {
@@ -382,8 +384,10 @@ struct LinkRowView: View {
                 Button { store.setWatched(link, !link.isWatched) } label: {
                     Image(systemName: link.isWatched ? "arrow.uturn.backward" : "checkmark")
                         .foregroundStyle(.secondary)
+                        .iconTarget(26)
                 }
-                .buttonStyle(.plain)
+                .buttonStyle(.hover)
+                .padding(.vertical, -3)
                 .opacity(hovering || link.isWatched ? 1 : 0.35)
                 .help(link.isWatched ? "Back to Watch later" : "Mark as watched")
                 .accessibilityLabel(link.isWatched ? "Mark \(link.title) as not watched" : "Mark \(link.title) as watched")

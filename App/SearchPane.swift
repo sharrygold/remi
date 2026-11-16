@@ -57,8 +57,8 @@ struct SearchPane: View {
                         onOpen(hits[search.selection])
                     }
                     .accessibilityLabel("Search")
-                Button(action: onClose) { Image(systemName: "xmark.circle.fill").foregroundStyle(.tertiary) }
-                    .buttonStyle(PressScale(scale: 0.96))
+                Button(action: onClose) { Image(systemName: "xmark.circle.fill").foregroundStyle(.tertiary).iconTarget(24) }
+                    .buttonStyle(HoverButtonStyle(radius: 12))
                     .help("Close search (Esc)")
                     .accessibilityLabel("Close search")
             }

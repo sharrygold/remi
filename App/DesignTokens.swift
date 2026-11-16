@@ -23,6 +23,8 @@ enum Tokens {
         static let edgeTab = CGSize(width: 24, height: 72)
         static let tile = CGSize(width: 44, height: 44)
         static let handleGap: CGFloat = 8
+        /// The hit box for icon buttons, about the size of a toolbar button.
+        static let iconTarget: CGFloat = 28
     }
 
     enum Surface {
