@@ -2,7 +2,6 @@ import Foundation
 import SwiftData
 
 extension LibraryStore {
-    /// Pinned first, then most recently edited, like Apple Notes.
     /// The notes whose text holds every word of `query`, ignoring case and accents, in the same order.
     static func filter(_ notes: [Note], by query: String) -> [Note] {
         let words = query.split(whereSeparator: \.isWhitespace).map(String.init)
@@ -12,12 +11,28 @@ extension LibraryStore {
         }
     }
 
+    /// Pinned first, the most recently pinned on top; then the rest by last edited, like Apple Notes.
     func notes(in space: Space?) -> [Note] {
-        notes.filter { space == nil || $0.space?.id == space?.id }
-            .sorted { lhs, rhs in
-                if lhs.isPinned != rhs.isPinned { return lhs.isPinned }
-                return lhs.updatedAt > rhs.updatedAt
+        Self.sorted(notes.filter { space == nil || $0.space?.id == space?.id })
+    }
+
+    static func sorted(_ notes: [Note]) -> [Note] {
+        notes.sorted { lhs, rhs in
+            if lhs.isPinned != rhs.isPinned { return lhs.isPinned }
+            if lhs.isPinned {
+                let left = lhs.pinnedAt ?? .distantPast, right = rhs.pinnedAt ?? .distantPast
+                if left != right { return left > right }
             }
+            return lhs.updatedAt > rhs.updatedAt
+        }
+    }
+
+    /// Notes pinned before `pinnedAt` existed get it from their last edit, which keeps today's order.
+    func backfillPinnedDates() {
+        let missing = notes.filter { $0.isPinned && $0.pinnedAt == nil }
+        guard !missing.isEmpty else { return }
+        for note in missing { note.pinnedAt = note.updatedAt }
+        try? context.save()
     }
 
     /// The heading a note sits under, by when it was last written in, like Apple Notes.
@@ -103,9 +118,15 @@ extension LibraryStore {
     }
 
     /// Pinning does not count as an edit, so the note keeps its place among the others.
-    func setPinned(_ note: Note, _ pinned: Bool) {
-        let previous = note.isPinned
-        change(note, { $0.isPinned = pinned }, undo: { $0.isPinned = previous })
+    func setPinned(_ note: Note, _ pinned: Bool, now: Date = Date()) {
+        let previous = (note.isPinned, note.pinnedAt)
+        change(note, {
+            $0.isPinned = pinned
+            $0.pinnedAt = pinned ? now : nil
+        }, undo: {
+            $0.isPinned = previous.0
+            $0.pinnedAt = previous.1
+        })
     }
 
     func move(_ note: Note, to space: Space) {

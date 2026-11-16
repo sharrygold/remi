@@ -74,6 +74,7 @@ final class LibraryStore: ObservableObject {
         tasks = all.filter { $0.deletedAt == nil }
         let allNotes = (try? context.fetch(FetchDescriptor<Note>())) ?? []
         notes = allNotes.filter { $0.deletedAt == nil }
+        backfillPinnedDates()
         let allLinks = (try? context.fetch(FetchDescriptor<LinkItem>(sortBy: [SortDescriptor(\.createdAt, order: .reverse)]))) ?? []
         links = allLinks.filter { $0.deletedAt == nil }
         linkGroups = (try? context.fetch(FetchDescriptor<LinkGroup>(sortBy: [SortDescriptor(\.sortOrder)]))) ?? []

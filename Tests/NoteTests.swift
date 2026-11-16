@@ -16,6 +16,17 @@ final class NoteTextTests: XCTestCase {
         XCTAssertEqual(NoteText.title(of: "   \n"), "")
     }
 
+    func testPinnedNotesSitNewestPinnedFirst() {
+        let old = Note(body: "Pinned long ago", space: nil)
+        old.isPinned = true; old.pinnedAt = Date(timeIntervalSince1970: 100); old.updatedAt = Date(timeIntervalSince1970: 900)
+        let new = Note(body: "Pinned just now", space: nil)
+        new.isPinned = true; new.pinnedAt = Date(timeIntervalSince1970: 500); new.updatedAt = Date(timeIntervalSince1970: 200)
+        let plain = Note(body: "Edited most recently", space: nil)
+        plain.updatedAt = Date(timeIntervalSince1970: 1000)
+        // Editing the old pinned note (latest updatedAt) doesn't lift it over the one pinned since.
+        XCTAssertEqual(LibraryStore.sorted([old, plain, new]).map(\.title), ["Pinned just now", "Pinned long ago", "Edited most recently"])
+    }
+
     func testFilterMatchesEveryWordAnywhere() {
         let notes = [Note(body: "Launch meeting\nAgree the date with Dana", space: nil),
                      Note(body: "Trip ideas\nLisbon in December", space: nil),

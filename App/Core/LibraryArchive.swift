@@ -72,6 +72,8 @@ struct LibraryArchive: Codable, Equatable {
         var createdAt: Date
         var updatedAt: Date
         var deletedAt: Date?
+        /// Optional so archives written before it existed still import.
+        var pinnedAt: Date? = nil
     }
 
     struct LinkRecord: Codable, Equatable {
@@ -139,7 +141,7 @@ extension LibraryStore {
             },
             notes: all(Note.self).sorted { $0.createdAt < $1.createdAt }.map {
                 .init(id: $0.id, body: $0.body, spaceID: $0.space?.id, isPinned: $0.isPinned, createdAt: $0.createdAt,
-                      updatedAt: $0.updatedAt, deletedAt: $0.deletedAt)
+                      updatedAt: $0.updatedAt, deletedAt: $0.deletedAt, pinnedAt: $0.pinnedAt)
             },
             links: all(LinkItem.self).sorted { $0.createdAt < $1.createdAt }.map {
                 .init(id: $0.id, url: $0.urlString, title: $0.title, iconData: $0.iconData, titleFetched: $0.titleFetched,
@@ -275,6 +277,7 @@ extension LibraryStore {
             note.body = record.body
             note.space = space(record.spaceID)
             note.isPinned = record.isPinned
+            note.pinnedAt = record.isPinned ? (record.pinnedAt ?? record.updatedAt) : nil
             note.createdAt = record.createdAt
             note.updatedAt = record.updatedAt
             note.deletedAt = record.deletedAt

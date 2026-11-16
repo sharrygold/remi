@@ -66,6 +66,8 @@ final class Note: Identifiable {
     var body: String = ""
     var space: Space?
     var isPinned: Bool = false
+    /// When it was last pinned: pinned notes sit newest-pinned first, so editing one doesn't reshuffle them.
+    var pinnedAt: Date?
     var createdAt: Date = Date()
     var updatedAt: Date = Date()
     var deletedAt: Date?
