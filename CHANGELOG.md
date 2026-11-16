@@ -19,6 +19,7 @@
 - Icon buttons across the panel have bigger targets and a soft grey highlight under the pointer, so you can see what a click will hit.
 - A Filter notes box above the notes list narrows it as you type, matching words anywhere in a note. ⌘F on the list jumps to it, Return opens the top note, Esc clears it. The filter stays while you open and leave notes.
 - An open note takes the whole panel: the tabs and the capture bar step aside until you go back to the list (‹ Notes, Esc or ⌘3).
+- Pinned notes stay in the order you pinned them, newest on top. Editing a pinned note no longer moves it above notes pinned since.
 
 ## 1.0 (November 2026)
 
