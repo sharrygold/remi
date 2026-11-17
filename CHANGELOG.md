@@ -1,5 +1,9 @@
 # Changelog
 
+## Unreleased
+
+- Fixed: copying text from a note left the clipboard empty, so it couldn't be pasted into other apps.
+
 ## 1.1 (November 2026)
 
 - The panel and the companion move together. Carry the bird and the panel comes along; drag the panel by the bar at its top and the bird comes along.

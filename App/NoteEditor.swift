@@ -164,10 +164,16 @@ final class NoteTextView: NSTextView {
         return super.performDragOperation(sender)
     }
 
+    /// AppKit may ask for plain text by its old name (NSStringPboardType) rather than `.string`;
+    /// both are the same text, and missing the old name left the clipboard empty after ⌘C.
+    static func isPlainText(_ type: NSPasteboard.PasteboardType) -> Bool {
+        type == .string || type.rawValue == "NSStringPboardType"
+    }
+
     /// Copies as the note's Markdown, so pasting into another note keeps checkboxes and pictures.
     /// A single picture on its own is copied as the picture too.
     override func writeSelection(to pboard: NSPasteboard, type: NSPasteboard.PasteboardType) -> Bool {
-        guard type == .string, let markdownFor else { return super.writeSelection(to: pboard, type: type) }
+        guard Self.isPlainText(type), let markdownFor else { return super.writeSelection(to: pboard, type: type) }
         let range = selectedRange()
         guard range.length > 0 else { return false }
         return pboard.setString(markdownFor(range), forType: .string)
@@ -182,10 +188,10 @@ final class NoteTextView: NSTextView {
     }
 
     override func writeSelection(to pboard: NSPasteboard, types: [NSPasteboard.PasteboardType]) -> Bool {
+        guard types.contains(where: Self.isPlainText) else { return super.writeSelection(to: pboard, types: types) }
         pboard.clearContents()
         let range = selectedRange()
-        var wrote = false
-        if types.contains(.string) { wrote = writeSelection(to: pboard, type: .string) || wrote }
+        var wrote = writeSelection(to: pboard, type: .string)
         if types.contains(.tiff), range.length == 1,
            let image = (textStorage?.attribute(.attachment, at: range.location, effectiveRange: nil) as? ImageAttachment)?.picture,
            let tiff = image.tiffRepresentation {

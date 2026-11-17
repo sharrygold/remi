@@ -262,6 +262,33 @@ final class AppController: NSObject, NSApplicationDelegate {
                 NSApp.terminate(nil)
             }
         }
+        // --copy-selftest: selects the open note and runs Copy, then reports what landed on the
+        // clipboard. The clipboard's previous contents are put back afterwards.
+        if CommandLine.arguments.contains("--copy-selftest") {
+            DispatchQueue.main.asyncAfter(deadline: .now() + 1.2) {
+                guard let editor = NoteEditorController.current else { print("copy no editor"); NSApp.terminate(nil); return }
+                let board = NSPasteboard.general
+                let saved = (board.pasteboardItems ?? []).map { item in
+                    item.types.reduce(into: [NSPasteboard.PasteboardType: Data]()) { $0[$1] = item.data(forType: $1) }
+                }
+                let item = NSMenuItem(title: "Copy", action: #selector(NSText.copy(_:)), keyEquivalent: "c")
+                editor.textView.selectAll(nil)
+                let enabled = editor.textView.validateUserInterfaceItem(item)
+                let before = board.changeCount
+                editor.textView.copy(nil)
+                let types = board.types ?? []
+                let text = board.string(forType: .string) ?? "<nil>"
+                print("copy enabled=\(enabled) changed=\(board.changeCount != before) types=\(types.map(\.rawValue))")
+                print("copy string=\(text.prefix(80).debugDescription) matches=\(text == editor.markdown)")
+                board.clearContents()
+                board.writeObjects(saved.map { types in
+                    let restored = NSPasteboardItem()
+                    for (type, data) in types { restored.setData(data, forType: type) }
+                    return restored
+                })
+                NSApp.terminate(nil)
+            }
+        }
         // For screenshots: --demo-image=PATH puts a picture into the open note, as a paste would.
         if let path = CommandLine.arguments.first(where: { $0.hasPrefix("--demo-image=") })?.dropFirst("--demo-image=".count) {
             DispatchQueue.main.asyncAfter(deadline: .now() + 1.2) {
