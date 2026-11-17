@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 1.1.1 (November 2026)
 
 - Fixed: copying text from a note left the clipboard empty, so it couldn't be pasted into other apps.
 
